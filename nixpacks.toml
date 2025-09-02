@@ -1,8 +1,8 @@
-# Nixpacks configuration for Prowl
+# Nixpacks configuration for Prowl (Astro Static Site)
 # https://nixpacks.com/docs/configuration/file
 
 [phases.setup]
-nixPkgs = ["nodejs", "npm"]
+nixPkgs = ["nodejs"]
 
 [phases.install]
 cmds = ["npm ci"]
@@ -10,5 +10,10 @@ cmds = ["npm ci"]
 [phases.build]
 cmds = ["npm run build"]
 
+[staticDirs]
+"/" = "dist"
+
 [start]
-cmd = "npx astro preview --host 0.0.0.0 --port ${PORT:-4321}"
+# For static sites, Nixpacks automatically uses nginx
+# This is only used if static mode is not enabled
+cmd = "npx serve dist -l ${PORT:-3000}"
