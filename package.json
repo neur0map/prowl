@@ -6,7 +6,8 @@
         "dev": "astro dev",
         "build": "astro build",
         "preview": "astro preview",
-        "astro": "astro"
+        "astro": "astro",
+        "start": "astro preview --host 0.0.0.0 --port $PORT"
     },
     "dependencies": {
         "astro": "^5.4.2",

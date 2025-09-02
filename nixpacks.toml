@@ -1,0 +1,23 @@
+# Nixpacks configuration for Prowl
+# https://nixpacks.com/docs/configuration/file
+
+# Specify providers - Node.js for Astro
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+# Install dependencies
+[phases.install]
+cmds = ["npm ci --include=dev"]
+
+# Build the Astro site
+[phases.build]
+cmds = ["npm run build"]
+
+# Start configuration - uses the start script from package.json
+[start]
+cmd = "npm run start"
+
+# Environment variables
+[variables]
+NODE_ENV = "production"
+PORT = "4321"
