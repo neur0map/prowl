@@ -9,6 +9,5 @@ cmds = ["npm ci"]
 [phases.build]
 cmds = ["npm run build"]
 
-# Tell Nixpacks this is a static site
-[staticDirs]
-"/" = "dist"
+[phases.start]
+cmd = "npx serve dist -l 0.0.0.0:${PORT:-80} --no-request-logging --no-clipboard"
