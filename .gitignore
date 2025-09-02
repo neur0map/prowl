@@ -25,4 +25,3 @@ pnpm-debug.log*
 
 .wrangler/
 .vscode/
-package-lock.json
