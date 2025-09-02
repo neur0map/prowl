@@ -1,0 +1,53 @@
+---
+// Centipede mascot for IPCrawler (predator)
+interface Props {
+    class?: string;
+    size?: number;
+}
+
+const { class: className = "", size = 80 } = Astro.props;
+---
+
+<div class={`centipede-mascot ${className}`} style={`width: ${size}px; height: ${size}px;`}>
+    <img 
+        src="/img/ipcrawler.png"
+        alt="IPCrawler Centipede"
+        width={size}
+        height={size}
+        class="centipede-image"
+    />
+</div>
+
+<style>
+    .centipede-mascot {
+        display: inline-block;
+        position: relative;
+    }
+    
+    .centipede-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        filter: invert(1) drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+    }
+    
+    @media (prefers-reduced-motion: no-preference) {
+        .centipede-mascot {
+            animation: centipedeFloat 3s ease-in-out infinite;
+        }
+        
+        .centipede-image {
+            animation: centipedeTwitch 4s ease-in-out infinite;
+        }
+    }
+    
+    @keyframes centipedeFloat {
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        50% { transform: translateY(-3px) rotate(0.5deg); }
+    }
+    
+    @keyframes centipedeTwitch {
+        0%, 95%, 100% { transform: scale(1); }
+        97% { transform: scale(1.02); }
+    }
+</style>

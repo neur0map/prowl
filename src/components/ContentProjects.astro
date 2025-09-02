@@ -1,77 +1,343 @@
 ---
-interface Project {
+import CentipedeMascot from './CentipedeMascot.astro';
+import ManxMascot from './ManxMascot.astro';
+
+interface Tool {
     name: string;
+    type: 'predator' | 'companion';
+    category: string;
     description: string;
+    status: 'active' | 'development' | 'planned';
+    mascot: 'centipede' | 'manx';
     link: {
         url?: string;
         target?: string;
         title?: string;
         buttonLabel?: string;
     };
-};
+    github?: string;
+    crates?: string;
+}
 
-const projects: Project[] = [{
-    name: 'Papersend.io',
-    description: 'Papersend is the free alternative to DocSend for secure document sharing, tracking, and Data Rooms. Customize branding, control access, and protect your documents.',
+const predatorTools: Tool[] = [{
+    name: 'IPCrawler',
+    type: 'predator',
+    category: 'Security',
+    description: 'Automated network reconnaissance tool built in Rust. Features real-time TUI, concurrent scanning across DNS, host discovery, port scanning, and web analysis. Generates professional artifacts for cybersecurity professionals and penetration testers.',
+    status: 'active',
+    mascot: 'centipede',
     link: {
-        url: 'https://papersend.io/',
-    }
-}, {
-    name: 'Qivi.io',
-    description: 'Qivi is an all-in-one application designed to streamline business operations, enhance productivity, and maximize success. Data security is a priority.',
+        url: 'https://github.com/neur0map/ipcrawler',
+        buttonLabel: 'View on GitHub'
+    },
+    github: 'neur0map/ipcrawler'
+}];
+
+const companionTools: Tool[] = [{
+    name: 'Manx',
+    type: 'companion',
+    category: 'Developer',
+    description: 'Blazing-fast CLI documentation finder for developers. Lightning-fast search (< 1 second), minimal memory usage (< 10MB), offline functionality with intelligent caching. Single 2.9MB binary with no dependencies.',
+    status: 'active',
+    mascot: 'manx',
     link: {
-        url: 'https://qivi.io/'
-    }
-}, {
-    name: 'TECHPOINT.de',
-    description: 'TECHPOINT is a local IT service provider based in the Starnberg district and the Fünfseenland region, specializing in delivering reliable and modern IT solutions.',
-    link: {
-        url: 'https://techpoint.de/'
-    }
+        url: 'https://github.com/neur0map/manx',
+        buttonLabel: 'View on GitHub'
+    },
+    github: 'neur0map/manx',
+    crates: 'manx-cli'
 }];
 ---
 
-<div>
+<div class="space-y-8">
 
-    <!-- <h2 class="text-2xl font-bold text-white mb-4">Latest Projects</h2> -->
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-        {projects.map(project =>
-
-            <div class="flex flex-col justify-center items-start border border-gray-700 rounded-lg p-4 bg-black">
-
-                <h3 class="text-xl font-semibold text-white mb-2">
-                    {project.name}
-                </h3>
-
-                <p class="text-gray-400">
-                    {project.description}
-                </p>
-
-                {
-                    project.link?.url ?
-                        <a
-                            href={project.link.url}
-                            title={project.link.title || project.name}
-                            target={project.link.target || '_blank'}
-                            class="
-                                w-full px-4 py-2.5 mt-4 text-center
-
-                                border border-gray-600 rounded-lg
-
-                                hover:text-primary
-                                hover:border-primary
-                            ">
-                            {project.link.buttonLabel || 'Open Project Website'}
-                        </a>
-                    : null
-                }
-
+    <!-- Predator Tools Section -->
+    <div>
+        <div class="flex items-center space-x-3 mb-6">
+            <div class="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
             </div>
+            <h2 class="text-2xl font-bold text-white">Predators</h2>
+            <span class="px-3 py-1 bg-amber-900/30 text-amber-400 rounded-full text-xs font-medium">Security Tools</span>
+        </div>
 
-        )}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+            {predatorTools.map(tool =>
+                <div class="flex flex-col justify-between border border-amber-700/30 rounded-lg p-6 bg-black hover:border-amber-600/50 transition-all duration-300 group hover:shadow-lg hover:shadow-amber-500/5">
 
+                    <!-- Mascot and Tool Header -->
+                    <div class="flex items-center space-x-4 mb-4">
+                        <div class="group-hover:scale-105 transition-transform duration-300">
+                            <CentipedeMascot size={60} />
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-white mb-1">
+                                {tool.name}
+                            </h3>
+                            <div class="flex items-center space-x-2">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-900/30 text-amber-400">
+                                    {tool.category} • Predator
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <p class="text-gray-300 leading-relaxed mb-4 flex-grow">
+                        {tool.description}
+                    </p>
+
+                    <!-- Stats -->
+                    <div class="flex items-center space-x-4 mb-4">
+                        {tool.github && (
+                            <div class={`flex items-center space-x-1 text-xs ${
+                                tool.type === 'predator' ? 'text-amber-400' : 'text-blue-400'
+                            }`}>
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                                </svg>
+                                <span class="github-stars" data-repo={tool.github}>★ --</span>
+                            </div>
+                        )}
+                        
+                        {tool.crates && (
+                            <div class="flex items-center space-x-1 text-xs text-orange-400">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                                </svg>
+                                <span class="crates-downloads" data-crate={tool.crates}>⬇ --</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <!-- Status and Link -->
+                    <div class="flex items-center justify-between">
+                        <span class={`px-3 py-1 rounded-full text-xs font-medium ${
+                            tool.status === 'active' 
+                                ? 'bg-green-900/30 text-green-400' 
+                                : tool.status === 'development'
+                                ? 'bg-yellow-900/30 text-yellow-400'
+                                : 'bg-gray-900/30 text-gray-400'
+                        }`}>
+                            {tool.status === 'active' ? 'Available' : 
+                             tool.status === 'development' ? 'In Development' : 'Planned'}
+                        </span>
+
+                        <div class="flex space-x-2">
+                            {tool.crates && (
+                                <a
+                                    href={`https://crates.io/crates/${tool.crates}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`Install ${tool.name} from crates.io`}
+                                    class="px-3 py-2 bg-orange-800/20 hover:bg-orange-700/30 text-orange-300 hover:text-orange-200 rounded-lg text-xs font-medium transition-colors border border-orange-700/30"
+                                >
+                                    crates.io
+                                </a>
+                            )}
+                            
+                            {tool.link?.url && tool.link.url !== '#' ?
+                                <a
+                                    href={tool.link.url}
+                                    title={tool.link.title || tool.name}
+                                    target={tool.link.target || '_blank'}
+                                    class="px-4 py-2 bg-amber-800/20 hover:bg-amber-700/30 text-amber-300 hover:text-amber-200 rounded-lg text-sm font-medium transition-colors border border-amber-700/30"
+                                >
+                                    {tool.link.buttonLabel || 'View Tool'}
+                                </a>
+                            :
+                                <span class="px-4 py-2 bg-gray-900 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed">
+                                    {tool.link.buttonLabel || 'Coming Soon'}
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                </div>
+            )}
+        </div>
+        <p class="text-amber-400/60 text-sm italic">Built for the hunt — precise, powerful, predatory</p>
+    </div>
+
+    <!-- Divider -->
+    <div class="border-t border-gray-800 relative">
+        <div class="absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black px-4">
+            <span class="text-gray-600 text-xs font-mono">vs</span>
+        </div>
+    </div>
+
+    <!-- Companion Tools Section -->
+    <div>
+        <div class="flex items-center space-x-3 mb-6">
+            <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-white">Companions</h2>
+            <span class="px-3 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium">Helper Tools</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+            {companionTools.map(tool =>
+                <div class="flex flex-col justify-between border border-blue-700/30 rounded-lg p-6 bg-black hover:border-blue-600/50 transition-all duration-300 group hover:shadow-lg hover:shadow-blue-500/5">
+
+                    <!-- Mascot and Tool Header -->
+                    <div class="flex items-center space-x-4 mb-4">
+                        <div class="group-hover:scale-105 transition-transform duration-300">
+                            <ManxMascot size={60} />
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-white mb-1">
+                                {tool.name}
+                            </h3>
+                            <div class="flex items-center space-x-2">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-900/30 text-blue-400">
+                                    {tool.category} • Companion
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <p class="text-gray-300 leading-relaxed mb-4 flex-grow">
+                        {tool.description}
+                    </p>
+
+                    <!-- Stats -->
+                    <div class="flex items-center space-x-4 mb-4">
+                        {tool.github && (
+                            <div class="flex items-center space-x-1 text-xs text-blue-400">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                                </svg>
+                                <span class="github-stars" data-repo={tool.github}>★ --</span>
+                            </div>
+                        )}
+                        
+                        {tool.crates && (
+                            <div class="flex items-center space-x-1 text-xs text-orange-400">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                                </svg>
+                                <span class="crates-downloads" data-crate={tool.crates}>⬇ --</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <!-- Status and Link -->
+                    <div class="flex items-center justify-between">
+                        <span class={`px-3 py-1 rounded-full text-xs font-medium ${
+                            tool.status === 'active' 
+                                ? 'bg-green-900/30 text-green-400' 
+                                : tool.status === 'development'
+                                ? 'bg-yellow-900/30 text-yellow-400'
+                                : 'bg-gray-900/30 text-gray-400'
+                        }`}>
+                            {tool.status === 'active' ? 'Available' : 
+                             tool.status === 'development' ? 'In Development' : 'Planned'}
+                        </span>
+
+                        <div class="flex space-x-2">
+                            {tool.crates && (
+                                <a
+                                    href={`https://crates.io/crates/${tool.crates}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`Install ${tool.name} from crates.io`}
+                                    class="px-3 py-2 bg-orange-800/20 hover:bg-orange-700/30 text-orange-300 hover:text-orange-200 rounded-lg text-xs font-medium transition-colors border border-orange-700/30"
+                                >
+                                    crates.io
+                                </a>
+                            )}
+                            
+                            {tool.link?.url && tool.link.url !== '#' ?
+                                <a
+                                    href={tool.link.url}
+                                    title={tool.link.title || tool.name}
+                                    target={tool.link.target || '_blank'}
+                                    class="px-4 py-2 bg-blue-800/20 hover:bg-blue-700/30 text-blue-300 hover:text-blue-200 rounded-lg text-sm font-medium transition-colors border border-blue-700/30"
+                                >
+                                    {tool.link.buttonLabel || 'View Tool'}
+                                </a>
+                            :
+                                <span class="px-4 py-2 bg-gray-900 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed">
+                                    {tool.link.buttonLabel || 'Coming Soon'}
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                </div>
+            )}
+        </div>
+        <p class="text-blue-400/60 text-sm italic">Built to assist — agile, helpful, harmonious</p>
+    </div>
+
+    <!-- Philosophy Note -->
+    <div class="mt-8 p-4 border border-gray-800 rounded-lg bg-gray-950/50">
+        <p class="text-gray-400 text-sm italic text-center">
+            "In nature, every creature has evolved for a specific role. My tools follow the same principle—each one perfectly adapted for its hunt."
+        </p>
     </div>
 
 </div>
+
+<script>
+    // Fetch GitHub stars
+    async function fetchGitHubStars(repo) {
+        try {
+            const response = await fetch(`https://api.github.com/repos/${repo}`);
+            const data = await response.json();
+            return data.stargazers_count || 0;
+        } catch (error) {
+            console.error('Error fetching GitHub stars:', error);
+            return 0;
+        }
+    }
+
+    // Fetch crates.io download count
+    async function fetchCratesDownloads(crateName) {
+        try {
+            const response = await fetch(`https://crates.io/api/v1/crates/${crateName}`);
+            const data = await response.json();
+            return data.crate.downloads || 0;
+        } catch (error) {
+            console.error('Error fetching crates downloads:', error);
+            return 0;
+        }
+    }
+
+    // Format number with K suffix
+    function formatNumber(num) {
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1).replace('.0', '') + 'k';
+        }
+        return num.toString();
+    }
+
+    // Update stats on page load
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Update GitHub stars
+        const githubElements = document.querySelectorAll('.github-stars');
+        for (const element of githubElements) {
+            const repo = element.getAttribute('data-repo');
+            if (repo) {
+                const stars = await fetchGitHubStars(repo);
+                element.textContent = `★ ${formatNumber(stars)}`;
+            }
+        }
+
+        // Update crates downloads
+        const cratesElements = document.querySelectorAll('.crates-downloads');
+        for (const element of cratesElements) {
+            const crateName = element.getAttribute('data-crate');
+            if (crateName) {
+                const downloads = await fetchCratesDownloads(crateName);
+                element.textContent = `⬇ ${formatNumber(downloads)}`;
+            }
+        }
+    });
+</script>

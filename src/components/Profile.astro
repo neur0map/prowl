@@ -1,12 +1,9 @@
 ---
-import { Picture } from 'astro:assets';
-import ProfilePicture from '../assets/profile.png';
-
 const profile = {
-    name: 'Dejan Vi.',
-    title: 'Full Stack Developer',
-    location: 'Munich, Germany',
-    description: 'Passionate web developer focused on creating clean, efficient, and scalable web applications with a modern tech stack. Specialized in Angular, TypeScript, and Supabase, delivering responsive and intuitive user interfaces. Even my name includes "dev".'
+    name: 'Prowl',
+    title: 'Developer & Security Tools',
+    location: 'by neur0map',
+    description: 'Predators: tools built to attack.\nCompanions: tools built to assist'
 };
 ---
 
@@ -14,15 +11,9 @@ const profile = {
 
     <div class="flex flex-col sm:flex-row gap-4 sm:items-center">
 
-        <Picture
-            src={ProfilePicture}
-            formats={['webp']}
-            width={96}
-            height={96}
-            alt={'Profile picture ' + profile.name}
-            title={profile.name}
-            class="w-24 h-24 rounded-xl object-cover border-2 border-primary mx-auto sm:mx-0"
-        />
+        <div class="w-24 h-24 rounded-xl bg-black border-2 border-primary mx-auto sm:mx-0 flex items-center justify-center">
+            <span class="text-3xl font-mono text-amber-400 font-bold">:}</span>
+        </div>
 
         <div>
 
@@ -34,17 +25,26 @@ const profile = {
                 {profile.title}
             </p>
 
-            <p class="flex items-center justify-center sm:justify-start text-sm text-gray-400">
-                <svg class="-mt-0.5 inline mr-2"fill=none height=14 stroke=currentColor stroke-linecap=round stroke-linejoin=round stroke-width=2 viewBox="0 0 24 24"width=14 xmlns=http://www.w3.org/2000/svg><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx=12 cy=10 r=3></circle></svg>
+            <a 
+                href="https://github.com/neur0map" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                title="View neur0map's GitHub profile"
+                class="flex items-center justify-center sm:justify-start text-sm text-gray-400 hover:text-amber-400 transition-colors duration-200 cursor-pointer group"
+            >
+                <svg class="-mt-0.5 inline mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="14" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
                 {profile.location}
-            </p>
+            </a>
 
         </div>
 
     </div>
 
-    <p class="text-sm leading-relaxed mt-4 text-gray-400">
-        {profile.description}
-    </p>
+    <div class="text-sm leading-relaxed mt-4 text-gray-400">
+        <span class="text-amber-400 font-medium">Predators:</span> tools built to attack.<br/>
+        <span class="text-amber-400 font-medium">Companions:</span> tools built to assist
+    </div>
 
 </div>

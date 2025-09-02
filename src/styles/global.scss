@@ -1,5 +1,247 @@
+// Prowl Global Styles
+// Dark theme with hunting/prowling aesthetic
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+// Root variables for consistent theming
+:root {
+    // Prowl Brand Colors
+    --prowl-primary: #f59e0b;        // Amber - main brand color
+    --prowl-primary-dark: #d97706;   // Darker amber for hover states
+    --prowl-secondary: #3b82f6;      // Blue for helper tools
+    --prowl-danger: #ef4444;         // Red for alerts/warnings
+    --prowl-success: #10b981;        // Green for success states
+    
+    // Dark Theme Palette
+    --bg-primary: #000000;           // Pure black background
+    --bg-secondary: #0a0a0a;         // Slightly lighter black
+    --bg-tertiary: #111827;          // Dark gray
+    --bg-card: #1f2937;             // Card backgrounds
+    --bg-hover: #374151;            // Hover states
+    
+    // Text Colors
+    --text-primary: #ffffff;         // Pure white for headings
+    --text-secondary: #d1d5db;       // Light gray for body text
+    --text-muted: #9ca3af;          // Muted gray for less important text
+    --text-subtle: #6b7280;         // Subtle gray for hints/placeholders
+    
+    // Border Colors
+    --border-primary: #374151;      // Main border color
+    --border-secondary: #4b5563;    // Lighter borders
+    --border-accent: #f59e0b;       // Accent borders
+    
+    // Shadows
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    --shadow-accent: 0 4px 14px 0 rgba(245, 158, 11, 0.15);
+    
+    // Animation timings
+    --duration-fast: 0.15s;
+    --duration-normal: 0.3s;
+    --duration-slow: 0.5s;
+    
+    // Easing functions
+    --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+// Base HTML and Body styles
+html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-secondary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+}
+
+// Typography improvements
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+// Focus styles for accessibility
+*:focus {
+    outline: 2px solid var(--prowl-primary);
+    outline-offset: 2px;
+}
+
+// Selection styles
+::selection {
+    background-color: var(--prowl-primary);
+    color: var(--bg-primary);
+}
+
+::-moz-selection {
+    background-color: var(--prowl-primary);
+    color: var(--bg-primary);
+}
+
+// Custom scrollbar
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-hover);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-secondary);
+}
+
+// Utility classes for consistent spacing
+.prowl-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+// Animation utilities
+.prowl-fade-in {
+    animation: prowlFadeIn var(--duration-normal) var(--ease-out);
+}
+
+.prowl-slide-up {
+    animation: prowlSlideUp var(--duration-normal) var(--ease-out);
+}
+
+.prowl-scale-in {
+    animation: prowlScaleIn var(--duration-normal) var(--ease-bounce);
+}
+
+// Reduce motion for accessibility
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+// Dark theme specific adjustments
+@media (prefers-color-scheme: dark) {
+    // Already optimized for dark theme
+}
+
+// High contrast mode support
+@media (prefers-contrast: high) {
+    :root {
+        --text-primary: #ffffff;
+        --text-secondary: #ffffff;
+        --border-primary: #ffffff;
+        --prowl-primary: #ffff00;
+    }
+}
+
+// Animation keyframes
+@keyframes prowlFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes prowlSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes prowlScaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+// Prowl-specific component base styles
+.prowl-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all var(--duration-normal) var(--ease-in-out);
+    cursor: pointer;
+    border: none;
+    
+    &.primary {
+        background-color: var(--prowl-primary);
+        color: var(--bg-primary);
+        
+        &:hover {
+            background-color: var(--prowl-primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-accent);
+        }
+    }
+    
+    &.secondary {
+        background-color: transparent;
+        color: var(--text-secondary);
+        border: 2px solid var(--border-primary);
+        
+        &:hover {
+            border-color: var(--border-secondary);
+            color: var(--text-primary);
+        }
+    }
+}
+
+.prowl-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition: all var(--duration-normal) var(--ease-in-out);
+    
+    &:hover {
+        border-color: var(--border-secondary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+}
+
+// Brand mark styling for : } 
+.prowl-brand-mark {
+    font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    color: var(--prowl-primary);
+    font-weight: 400;
 }

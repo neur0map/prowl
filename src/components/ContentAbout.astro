@@ -1,119 +1,43 @@
 ---
-import { Code } from 'astro:components';
-
-const code = `interface Developer {
-    name: string;
-    skills: string[];
-    interests: string[];
-};
-
-interface TechStack {
-    devOps: string[];
-    backend: string[];
-   frontend: string[];
-};
-
-type ContactType = 'github' | 'twitter' | 'linkedIn' | 'xing' | 'email';
-
-const techStack: TechStack = {
-    devOps: [
-        'GitLab',
-        'GitHub',
-        'Cloudflare',
-        'Docker'
-    ],
-    frontend: [
-        'Angular',
-        'JavaScript',
-        'TypeScript',
-        'TailwindCSS',
-        'PrimeNG',
-        'Astro',
-        'Ionic',
-        'Stencil',
-        'Capacitor',
-        'SCSS',
-        'Markdown',
-        'WordPress'
-    ],
-    backend: [
-        'Supabase',
-        'Node.js',
-        'Bun',
-        'Deno',
-        'PostgreSQL',
-        'MySQL',
-        'S3 Storage',
-        'Resend'
-    ]
-};
-
-// Developer profile
-const me: Developer = {
-    name: 'Dejan Vi.',
-    skills: [
-        ...techStack.devOps,
-        ...techStack.backend,
-        ...techStack.frontend
-    ],
-    interests: [
-        'Open Source',
-        'Security',
-        'Privacy',
-        'Performance',
-        'Self-Hosting',
-        'Networking'
-    ]
-};
-
-// Contact function
-const contact = (type: ContactType): string => {
-    switch (type) {
-        case 'github':
-            return 'https://github.com/devidevio';
-        case 'twitter':
-            return 'https://x.com/devidev_io';
-        case 'linkedIn':
-            return 'https://www.linkedin.com/in/dejan-vi';
-        case 'xing':
-            return 'https://www.xing.com/profile/Dejan_Vintonjiv';
-        case 'email':
-            return 'hi@devidev.io';
-        default:
-            return 'Send fax.';
-    }
-};
-
-`;
+// Simple about section that complements the left design
 ---
 
-<Code
-    code={code}
-    lang="js"
-    wrap={true}
-/>
+<div class="space-y-8 text-gray-300">
 
-<style is:global>
+    <div class="space-y-4">
+        <h2 class="text-2xl font-semibold text-white">About Prowl</h2>
+        <p class="leading-relaxed">
+            Prowl is an evolving suite of tools shaped by the predator–companion philosophy.
+        </p>
+        <ul class="space-y-2 text-sm leading-relaxed ml-4">
+            <li><span class="text-amber-400 font-medium">•    Predators</span> are built for cybersecurity — sharp, offensive, and focused on the hunt.</li>
+            <li><span class="text-blue-400 font-medium">•    Companions</span> are developer-oriented — supportive utilities that make work simpler and faster.</li>
+        </ul>
+        <p class="text-sm leading-relaxed">
+            These projects began as personal experiments with AI coders, and continue to grow as I work toward a career in cybersecurity.
+        </p>
+    </div>
 
-    /* Custom styling for code block line numbers */
-    pre.astro-code {
-        @apply bg-transparent !important;
-    }
+    <div class="w-full text-center text-gray-600 text-sm">⸻</div>
 
-    pre.astro-code code {
-        @apply block;
-        counter-reset: step;
-        counter-increment: step 0;
-    }
+    <div class="space-y-4">
+        <h3 class="text-lg font-medium text-white">The Goal</h3>
+        <p class="text-sm leading-relaxed">
+            Create tools that are <span class="text-amber-400">quick to start</span>, 
+            <span class="text-blue-400">clear in purpose</span>, and 
+            <span class="text-green-400">easy to trust</span>. Each release is designed 
+            to do one thing well — no clutter, no bloat.
+        </p>
+    </div>
 
-    pre.astro-code code .line {
-        @apply relative;
-    }
+    <div class="w-full text-center text-gray-600 text-sm">⸻</div>
 
-    pre.astro-code code .line::before {
-        content: counter(step);
-        counter-increment: step;
-        @apply text-gray-600 pr-2;
-    }
+    <div class="space-y-4">
+        <h3 class="text-lg font-medium text-white">Development Process</h3>
+        <p class="text-sm leading-relaxed">
+            What started as experiments for personal use grew into a hobby, and now I plan to put all tools I create under the umbrella of the Prowl name. The stack is kept lean (Rust for speed and reliability) and 
+            development is guided by AI pair programming for fast iteration without sacrificing quality.
+        </p>
+    </div>
 
-</style>
+</div>

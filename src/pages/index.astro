@@ -53,12 +53,12 @@ import ContentProjects from '../components/ContentProjects.astro';
 
                         <ContentLink
                             contentId="tab1"
-                            contentName="about.ts"
+                            contentName="tools.md"
                         />
 
                         <ContentLink
                             contentId="tab2"
-                            contentName="projects.md"
+                            contentName="about.ts"
                         />
 
                     </div>
@@ -67,17 +67,17 @@ import ContentProjects from '../components/ContentProjects.astro';
                     <!-- Start: Tab content -->
                     <div class="p-6 flex-grow overflow-y-auto bg-black">
 
-                        <!-- Start: About content -->
+                        <!-- Start: Tools content -->
                         <div id="content1" class="tab-content">
+                            <ContentProjects />
+                        </div>
+                        <!-- End: Tools content -->
+
+                        <!-- Start: About content -->
+                        <div id="content2" class="tab-content">
                             <ContentCode />
                         </div>
                         <!-- End: About content -->
-
-                        <!-- Start: Projects content -->
-                        <div id="content2" class="tab-content">
-                            <ContentProjects />
-                        </div>
-                        <!-- End: Projects content -->
 
                     </div>
                     <!-- End: Tab content -->
@@ -95,7 +95,7 @@ import ContentProjects from '../components/ContentProjects.astro';
 
     <!-- Credits -->
     <div class="fixed md:absolute bottom-0 left-0 right-0 w-full text-center bg-black py-2">
-        Built with <a href="https://astro.build" title="Astro" target="_blank" class="text-primary hover:underline">Astro</a> by <a href="https://devidev.io/" target="_blank" title="devi|dev|io" class="text-primary hover:underline">devi|dev|io</a>
+        Made with code and <a href="https://buymeacoffee.com/neur0map" title="Buy me a coffee" target="_blank" class="text-amber-400 hover:text-amber-300 transition-colors duration-200">coffee</a> <span class="text-amber-400 font-bold">:}</span>
     </div>
 
 </Layout>

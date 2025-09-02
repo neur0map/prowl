@@ -2,25 +2,25 @@
 import '../styles/global.scss';
 
 // Base domain URL without trailing slash
-const domainBaseURL = 'https://devidev.io';
-const ogImageUrl    = 'https://devidev.io/img/meta.png';
+const domainBaseURL = 'https://prowl.dev';
+const ogImageUrl    = 'https://prowl.dev/og.png';
 
 // Website publisher & region
-const authorPublisher   = 'Dejan Vi.';
-const geoRegion         = 'DE-BY';
+const authorPublisher   = 'Prowl';
+const geoRegion         = 'US';
 
 // SEO title, description and keywords
-const seoTitle          = 'devi|dev|io | Dejan Vi. | Full Stack Developer';
-const seoDescription    = 'Passionate web developer focused on creating clean, efficient, and scalable web applications with a modern tech stack. Specialized in Angular, TypeScript, and Supabase.';
-const seoKeywords       = 'Full Stack Developer, Dejan Vi, Munich, Papersend, Qivi, TECHPOINT, Angular, Typescript, Supabase';
+const seoTitle          = 'Prowl | Developer & Security Tools';
+const seoDescription    = 'Fast, focused, and simple developer and cybersecurity tools. Each tool designed with a predator-prey philosophy for maximum efficiency.';
+const seoKeywords       = 'developer tools, cybersecurity, security tools, IPCrawler, Manx, command line tools, penetration testing, developer utilities';
 
 // Twitter card data
 const twitter = {
     title:          seoTitle,
     description:    seoDescription,
     image:          ogImageUrl,
-    site:           '@devidev_io',
-    creator:        '@devidev_io'
+    site:           '@prowltools',
+    creator:        '@prowltools'
 };
 
 // Open graph data
@@ -31,12 +31,12 @@ const openGraph = {
     image:          ogImageUrl,
     type:           'website',
     locale:         'en_US',
-    siteName:       'devi|dev|io'
+    siteName:       'Prowl'
 };
 
 // Dublin core
 const dublinCore = {
-    title:          'devi|dev|io',
+    title:          'Prowl',
     creator:        authorPublisher,
     publisher:      authorPublisher,
     rights:         authorPublisher,
@@ -68,16 +68,11 @@ const dublinCore = {
 
         <!-- Start: DNS prefetch and preconnect -->
         <!-- <link rel="preload" as="image" href="/img/logo.svg" /> -->
-        <link rel="preconnect" href="https://brain.papersend.io" />
+        <!-- <link rel="preconnect" href="https://prowl.dev" /> -->
         <!-- End: DNS prefetch and preconnect -->
 
         <!-- Start: Theming and Favicons -->
-        <link rel="icon" type="image/svg+xml" crossorigin="anonymous" href="/img/logo.svg" />
-        <!-- <link rel="alternate icon" type="image/png" sizes="32x32" href="/img/favicon/favicon-32x32.png">
-        <link rel="alternate icon" type="image/png" sizes="16x16" href="/img/favicon/favicon-16x16.png">
-        <link rel="icon" type="image/x-icon" href="/img/favicon/favicon.ico">
-        <link rel="apple-touch-icon" sizes="180x180" href="/img/favicon/apple-touch-icon.png">
-        <link rel="manifest" href="/img/favicon/site.webmanifest"> -->
+        <link rel="icon" type="image/png" href="/favicon.png" />
         <!-- End: Theming and Favicons -->
 
         <!-- Start: Misc meta tags -->
