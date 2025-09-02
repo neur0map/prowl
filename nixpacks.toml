@@ -7,10 +7,7 @@ nixPkgs = ["nodejs"]
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npm run build"]
-
-[staticDirs]
-"/" = "dist"
+cmds = ["npm run build", "npm install -g http-server"]
 
 [start]
-cmd = "npx serve dist -l 0.0.0.0:${PORT:-80}"
+cmd = "http-server dist -p ${PORT:-80} -a 0.0.0.0 --no-dotfiles -c-1"
