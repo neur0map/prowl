@@ -7,7 +7,7 @@ nixPkgs = ["nodejs_20"]
 
 # Install dependencies
 [phases.install]
-cmds = ["npm ci --include=dev"]
+cmds = ["npm ci"]
 
 # Build the Astro site
 [phases.build]
