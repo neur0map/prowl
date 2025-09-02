@@ -9,5 +9,8 @@ cmds = ["npm ci"]
 [phases.build]
 cmds = ["npm run build"]
 
-[phases.start]
-cmd = "npx serve dist -l 0.0.0.0:${PORT:-80} --no-request-logging --no-clipboard"
+[staticDirs]
+"/" = "dist"
+
+[start]
+cmd = "npx serve dist -l 0.0.0.0:${PORT:-80}"
