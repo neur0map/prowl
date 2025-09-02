@@ -7,7 +7,7 @@
         "build": "astro build",
         "preview": "astro preview",
         "astro": "astro",
-        "start": "astro preview --host 0.0.0.0 --port $PORT"
+        "start": "astro preview --host 0.0.0.0 --port ${PORT:-4321}"
     },
     "dependencies": {
         "astro": "^5.4.2",
