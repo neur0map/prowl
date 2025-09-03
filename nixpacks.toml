@@ -1,13 +1,13 @@
-# Nixpacks configuration for Prowl (Astro Static Site)
-
-[phases.setup]
-nixPkgs = ["nodejs"]
+# Nixpacks configuration for Astro Static Site
+[providers]
+nodejs = "20"
 
 [phases.install]
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npm run build", "npm install -g http-server"]
+cmds = ["npm run build"]
 
-[start]
-cmd = "http-server dist -p ${PORT:-80} -a 0.0.0.0 --no-dotfiles -c-1"
+# Specify the static directory
+[staticDirs]
+"/" = "dist"
