@@ -15,7 +15,7 @@ export default defineConfig({
     // Allow external hosts in preview mode
     vite: {
         preview: {
-            allowedHosts: ['prowl.sh', 'localhost']
+            allowedHosts: true
         }
     },
 
