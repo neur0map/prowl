@@ -1,9 +1,9 @@
-# Nixpacks configuration for Astro Static Site
+# Nixpacks configuration for Astro Preview Server
 [phases.install]
 cmds = ["npm ci"]
 
-[phases.build]
+[phases.build] 
 cmds = ["npm run build"]
 
-[staticDirs]
-"/" = "dist"
+[start]
+cmd = "npm start"
