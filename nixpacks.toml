@@ -1,12 +1,9 @@
 # Nixpacks configuration for Astro Static Site
-providers = ["node"]
-
 [phases.install]
 cmds = ["npm ci"]
 
 [phases.build]
 cmds = ["npm run build"]
 
-# Specify the static directory
 [staticDirs]
 "/" = "dist"
