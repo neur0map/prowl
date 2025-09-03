@@ -7,10 +7,11 @@
         "build": "astro build",
         "preview": "astro preview",
         "astro": "astro",
-        "start": "astro preview --host 0.0.0.0 --port ${PORT:-4321}"
+        "start": "http-server dist -p ${PORT:-80} -a 0.0.0.0 --cors"
     },
     "dependencies": {
         "astro": "^5.4.2",
+        "http-server": "^14.1.1",
         "shiki": "^3.1.0",
         "swetrix": "^3.5.4",
         "tailwindcss": "^3.4.17"
