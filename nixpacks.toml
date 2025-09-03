@@ -1,6 +1,5 @@
 # Nixpacks configuration for Astro Static Site
-[providers]
-nodejs = "20"
+providers = ["node"]
 
 [phases.install]
 cmds = ["npm ci"]
