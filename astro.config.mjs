@@ -7,10 +7,17 @@ import sitemap from '@astrojs/sitemap';
 export default defineConfig({
     output: 'static',
     trailingSlash: 'always',
-    site: 'https://devidev.io',
+    site: 'https://prowl.sh',
 
     // Single page, no prefetch needed
     prefetch: false,
+    
+    // Allow external hosts in preview mode
+    vite: {
+        preview: {
+            allowedHosts: ['prowl.sh', 'localhost']
+        }
+    },
 
     integrations: [
         tailwind(),
