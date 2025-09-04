@@ -14,8 +14,9 @@ COPY --from=builder /app/dist/ /var/www/html/
 COPY api/ /var/www/html/api/
 
 # Install PostgreSQL extension
-RUN apt-get update && apt-get install -y libpq-dev
+RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/*
 RUN docker-php-ext-install pdo pdo_pgsql
+RUN php -m | grep pdo
 
 # Enable Apache modules
 RUN a2enmod rewrite
