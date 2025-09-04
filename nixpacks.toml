@@ -1,9 +1,13 @@
-# Nixpacks configuration for Astro with http-server
+# Nixpacks configuration for Astro with PHP
+[providers]
+node = "18"
+php = "8.2"
+
 [phases.install]
-cmds = ["npm ci"]
+cmds = ["npm ci", "apt-get update", "apt-get install -y libpq-dev", "docker-php-ext-install pdo pdo_pgsql"]
 
 [phases.build]
 cmds = ["npm run build"]
 
 [start]
-cmd = "npm start"
+cmd = "php -S 0.0.0.0:${PORT:-80} -t dist"
