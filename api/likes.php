@@ -34,23 +34,21 @@ try {
         exit;
     }
     
-    // Parse the DATABASE_URL for better error handling
-    $url_parts = parse_url($database_url);
-    if (!$url_parts) {
+    // Handle special characters in DATABASE_URL by URL encoding the password part
+    if (preg_match('/^postgresql:\/\/([^:]+):([^@]+)@([^:\/]+):?(\d+)?\/(.+)$/', $database_url, $matches)) {
+        $user = $matches[1];
+        $password = rawurldecode($matches[2]); // Decode URL-encoded password
+        $host = $matches[3];
+        $port = $matches[4] ?? 5432;
+        $dbname = $matches[5];
+        
+        $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
+        $pdo = new PDO($dsn, $user, $password);
+    } else {
         http_response_code(503);
-        echo json_encode(['error' => 'Service unavailable', 'count' => 0, 'debug' => 'INVALID_DB_URL_FORMAT']);
+        echo json_encode(['error' => 'Service unavailable', 'count' => 0, 'debug' => 'INVALID_DB_URL_FORMAT: ' . substr($database_url, 0, 50) . '...']);
         exit;
     }
-    
-    // Build PDO DSN
-    $host = $url_parts['host'] ?? 'localhost';
-    $port = $url_parts['port'] ?? 5432;
-    $dbname = ltrim($url_parts['path'] ?? '', '/');
-    $user = $url_parts['user'] ?? '';
-    $password = $url_parts['pass'] ?? '';
-    
-    $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
-    $pdo = new PDO($dsn, $user, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Create table if not exists
