@@ -13,7 +13,7 @@ COPY --from=builder /app/dist/ /var/www/html/
 # Copy PHP API
 COPY api/ /var/www/html/api/
 
-# Install PostgreSQL extension
+# Install PostgreSQL extension and dependencies
 RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/*
 RUN docker-php-ext-install pdo pdo_pgsql
 RUN php -m | grep pdo
