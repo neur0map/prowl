@@ -127,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         
         $pdo->commit();
         
-        // Update rate limit
+        // Update rate limit (with error handling)
         $current_count = 1;
         if (file_exists($rate_file)) {
             $data = file_get_contents($rate_file);
@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $current_count = (int)$parts[0] + 1;
             }
         }
-        file_put_contents($rate_file, $current_count . ':' . $now);
+        @file_put_contents($rate_file, $current_count . ':' . $now); // Suppress warnings
         
         echo json_encode(['count' => $count]);
         

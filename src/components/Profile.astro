@@ -263,6 +263,7 @@ const profile = {
                 
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Loaded count from server:', data);
                     currentCount = data.count || 0;
                     loveCountElement.textContent = currentCount.toLocaleString();
                     updateLoveMeter(currentCount);
@@ -311,6 +312,7 @@ const profile = {
                 
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Increment response from server:', data);
                     if (data.count !== undefined) {
                         // Always use server count in production
                         currentCount = data.count;
@@ -319,6 +321,7 @@ const profile = {
                         localStorage.setItem('prowl-love-count', currentCount.toString());
                     }
                 } else {
+                    console.log('Server increment failed, reverting');
                     // Server failed, revert optimistic update
                     currentCount--;
                     loveCountElement.textContent = currentCount.toLocaleString();
