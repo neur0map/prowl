@@ -34,6 +34,9 @@ try {
         exit;
     }
     
+    // URL-decode the database URL to handle special characters in password
+    $database_url = rawurldecode($database_url);
+    
     $pdo = new PDO($database_url);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
