@@ -1,0 +1,61 @@
+---
+interface Props {
+    size?: number;
+}
+
+const { size = 40 } = Astro.props;
+---
+
+<div class="flex items-center justify-center" style={`width: ${size}px; height: ${size}px;`}>
+    <svg 
+        width={size} 
+        height={size} 
+        viewBox="0 0 100 100" 
+        fill="none" 
+        xmlns="http://www.w3.org/2000/svg"
+        class="transform hover:scale-110 transition-transform duration-200"
+    >
+        <!-- Fox body -->
+        <ellipse cx="50" cy="65" rx="18" ry="20" fill="#dc2626" stroke="#ef4444" stroke-width="2"/>
+        
+        <!-- Fox head -->
+        <ellipse cx="50" cy="40" rx="16" ry="15" fill="#dc2626" stroke="#ef4444" stroke-width="2"/>
+        
+        <!-- Ears -->
+        <path d="M40 30 L35 20 L45 25 Z" fill="#dc2626" stroke="#ef4444" stroke-width="2"/>
+        <path d="M60 30 L55 25 L65 20 Z" fill="#dc2626" stroke="#ef4444" stroke-width="2"/>
+        <path d="M40 27 L37 22 L43 26 Z" fill="#fbbf24"/>
+        <path d="M60 27 L57 26 L63 22 Z" fill="#fbbf24"/>
+        
+        <!-- Snout -->
+        <ellipse cx="50" cy="45" rx="6" ry="4" fill="#f97316" stroke="#ea580c" stroke-width="1"/>
+        
+        <!-- Nose -->
+        <circle cx="50" cy="43" r="1.5" fill="#000"/>
+        
+        <!-- Eyes -->
+        <circle cx="46" cy="38" r="2" fill="#fbbf24"/>
+        <circle cx="54" cy="38" r="2" fill="#fbbf24"/>
+        <circle cx="46" cy="37" r="1" fill="#000"/>
+        <circle cx="54" cy="37" r="1" fill="#000"/>
+        
+        <!-- Tail -->
+        <path d="M65 70 Q75 60 85 65 Q80 75 75 80 Q70 75 65 70" fill="#dc2626" stroke="#ef4444" stroke-width="2"/>
+        <path d="M75 68 Q82 63 85 65 Q82 72 78 75" fill="#fbbf24"/>
+        
+        <!-- Legs -->
+        <ellipse cx="42" cy="80" rx="3" ry="8" fill="#7c2d12"/>
+        <ellipse cx="58" cy="80" rx="3" ry="8" fill="#7c2d12"/>
+        <ellipse cx="45" cy="82" rx="3" ry="6" fill="#7c2d12"/>
+        <ellipse cx="55" cy="82" rx="3" ry="6" fill="#7c2d12"/>
+        
+        <!-- Chest marking -->
+        <ellipse cx="50" cy="60" rx="8" ry="12" fill="#fbbf24" opacity="0.8"/>
+        
+        <!-- Whiskers -->
+        <path d="M35 42 L42 41 M35 45 L42 45 M58 41 L65 42 M58 45 L65 45" stroke="#000" stroke-width="1" fill="none"/>
+        
+        <!-- Stealth lines (predator effect) -->
+        <path d="M25 35 Q30 40 25 45 M85 55 Q80 60 85 65" stroke="#ef4444" stroke-width="1" opacity="0.3" fill="none"/>
+    </svg>
+</div>

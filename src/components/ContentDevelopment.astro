@@ -1,0 +1,170 @@
+---
+import SwallowMascot from './SwallowMascot.astro';
+import FoxMascot from './FoxMascot.astro';
+
+interface DevTool {
+    name: string;
+    type: 'predator' | 'companion';
+    category: string;
+    tagline: string;
+    teaser: string;
+    mascot: 'swallow' | 'fox';
+    status: 'planning' | 'early-dev' | 'alpha';
+    comingSoon: string;
+}
+
+const developmentTools: DevTool[] = [
+    {
+        name: 'Sorafile',
+        type: 'companion',
+        category: 'Project Management',
+        tagline: 'One file. One command. Infinite possibilities.',
+        teaser: 'Say goodbye to juggling scripts and makefiles. Sorafile brings declarative task management to your fingertips—define once in TOML, execute anywhere with smart watch modes and auto-discovery.',
+        mascot: 'swallow',
+        status: 'planning',
+        comingSoon: 'Q2 2025'
+    },
+    {
+        name: 'Snare',
+        type: 'predator',
+        category: 'Security Research',
+        tagline: 'The hunter becomes the hunted.',
+        teaser: 'Deploy honeypots like spinning up a dev server. Snare creates isolated, tempting targets that capture every move attackers make—then vanishes without a trace, leaving only evidence.',
+        mascot: 'fox',
+        status: 'early-dev',
+        comingSoon: 'Q3 2025'
+    }
+];
+---
+
+<div class="space-y-8">
+
+    <!-- Header Section -->
+    <div class="text-center space-y-4 border-b border-gray-800 pb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">
+            <span class="text-amber-400">In Development</span>
+        </h1>
+        <p class="text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            The next generation of Prowl tools is taking shape. These aren't just ideas—they're carefully crafted solutions waiting for their moment to hunt.
+        </p>
+        <div class="flex justify-center items-center space-x-2 text-sm text-gray-500">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>Updates posted to GitHub when ready</span>
+        </div>
+    </div>
+
+    <!-- Development Tools -->
+    <div class="space-y-8">
+        {developmentTools.map(tool => 
+            <div class={`relative border rounded-lg p-6 bg-gradient-to-br transition-all duration-300 group hover:shadow-lg ${
+                tool.type === 'predator' 
+                    ? 'from-amber-950/10 to-red-950/5 border-amber-700/20 hover:border-amber-600/40 hover:shadow-amber-500/5' 
+                    : 'from-blue-950/10 to-indigo-950/5 border-blue-700/20 hover:border-blue-600/40 hover:shadow-blue-500/5'
+            }`}>
+                
+                <!-- Status Badge -->
+                <div class="absolute top-4 right-4">
+                    <span class={`px-3 py-1 rounded-full text-xs font-medium ${
+                        tool.status === 'planning' ? 'bg-gray-900/50 text-gray-400' :
+                        tool.status === 'early-dev' ? 'bg-yellow-900/30 text-yellow-400' :
+                        'bg-blue-900/30 text-blue-400'
+                    }`}>
+                        {tool.status === 'planning' ? '📋 Planning' :
+                         tool.status === 'early-dev' ? '⚡ Early Development' :
+                         '🧪 Alpha'}
+                    </span>
+                </div>
+
+                <!-- Main Content -->
+                <div class="flex items-start space-x-6">
+                    
+                    <!-- Mascot -->
+                    <div class="group-hover:scale-105 transition-transform duration-300 flex-shrink-0">
+                        {tool.mascot === 'swallow' ? (
+                            <SwallowMascot size={80} />
+                        ) : (
+                            <FoxMascot size={80} />
+                        )}
+                    </div>
+
+                    <!-- Content -->
+                    <div class="flex-1 space-y-4">
+                        
+                        <!-- Header -->
+                        <div>
+                            <div class="flex items-center space-x-3 mb-2">
+                                <h2 class="text-2xl font-bold text-white">{tool.name}</h2>
+                                <span class={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    tool.type === 'predator' 
+                                        ? 'bg-amber-900/30 text-amber-400' 
+                                        : 'bg-blue-900/30 text-blue-400'
+                                }`}>
+                                    {tool.category} • {tool.type === 'predator' ? 'Predator' : 'Companion'}
+                                </span>
+                            </div>
+                            <p class={`text-lg font-medium italic ${
+                                tool.type === 'predator' ? 'text-amber-300' : 'text-blue-300'
+                            }`}>
+                                "{tool.tagline}"
+                            </p>
+                        </div>
+
+                        <!-- Teaser -->
+                        <p class="text-gray-300 leading-relaxed">
+                            {tool.teaser}
+                        </p>
+
+                        <!-- Coming Soon -->
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2 text-sm text-gray-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                <span>Expected: {tool.comingSoon}</span>
+                            </div>
+                            
+                            <button class={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                                tool.type === 'predator' 
+                                    ? 'bg-amber-900/20 hover:bg-amber-800/30 text-amber-300 border-amber-700/30 hover:border-amber-600/50' 
+                                    : 'bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 border-blue-700/30 hover:border-blue-600/50'
+                            } cursor-not-allowed opacity-75`} disabled>
+                                Coming Soon
+                            </button>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Subtle glow effect -->
+                <div class={`absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none ${
+                    tool.type === 'predator' 
+                        ? 'bg-gradient-to-r from-amber-500/5 via-transparent to-red-500/5' 
+                        : 'bg-gradient-to-r from-blue-500/5 via-transparent to-indigo-500/5'
+                }`}></div>
+            </div>
+        )}
+    </div>
+
+    <!-- Footer CTA -->
+    <div class="text-center space-y-4 pt-8 border-t border-gray-800">
+        <h3 class="text-xl font-semibold text-white">Want early access?</h3>
+        <p class="text-gray-400 max-w-lg mx-auto text-sm">
+            Follow the development process on GitHub. Star the repos to get notified when these tools drop.
+        </p>
+        <a 
+            href="https://github.com/neur0map" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            class="inline-flex items-center space-x-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-sm font-medium transition-colors border border-gray-700 hover:border-gray-600"
+        >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+            </svg>
+            <span>Follow on GitHub</span>
+        </a>
+    </div>
+
+</div>

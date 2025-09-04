@@ -17,6 +17,8 @@ interface Tool {
     };
     github?: string;
     crates?: string;
+    installCommand?: string;
+    installSteps?: string[];
 }
 
 const predatorTools: Tool[] = [{
@@ -30,14 +32,15 @@ const predatorTools: Tool[] = [{
         url: 'https://github.com/neur0map/ipcrawler',
         buttonLabel: 'View on GitHub'
     },
-    github: 'neur0map/ipcrawler'
+    github: 'neur0map/ipcrawler',
+    installCommand: 'git clone https://github.com/ipcrawler/ipcrawler.git && cd ipcrawler && make build'
 }];
 
 const companionTools: Tool[] = [{
     name: 'Manx',
     type: 'companion',
     category: 'Developer',
-    description: 'Blazing-fast CLI documentation finder for developers. Lightning-fast search (< 1 second), minimal memory usage (< 10MB), offline functionality with intelligent caching. Single 2.9MB binary with no dependencies.',
+    description: 'Blazing-fast CLI documentation finder for developers and overall productivity. Lightning-fast search (< 1 second), minimal memory usage (< 10MB), offline functionality with intelligent caching. Single 2.9MB binary with no dependencies.',
     status: 'active',
     mascot: 'manx',
     link: {
@@ -45,7 +48,8 @@ const companionTools: Tool[] = [{
         buttonLabel: 'View on GitHub'
     },
     github: 'neur0map/manx',
-    crates: 'manx-cli'
+    crates: 'manx-cli',
+    installCommand: 'cargo install manx-cli'
 }];
 ---
 
@@ -88,6 +92,44 @@ const companionTools: Tool[] = [{
                     <p class="text-gray-300 leading-relaxed mb-4 flex-grow">
                         {tool.description}
                     </p>
+
+                    <!-- Install Commands -->
+                    {(tool.installCommand || tool.installSteps) && (
+                        <div class="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700/30">
+                            <h4 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Install</h4>
+                            {tool.installCommand ? (
+                                <div class="flex items-center bg-black/50 rounded px-3 py-2 group">
+                                    <code class="text-sm font-mono text-amber-300 overflow-x-auto whitespace-nowrap flex-1 mr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">{tool.installCommand}</code>
+                                    <button 
+                                        onclick={`navigator.clipboard.writeText('${tool.installCommand}')`}
+                                        class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-amber-400 transition-all p-1 rounded flex-shrink-0"
+                                        title="Copy to clipboard"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            ) : tool.installSteps && (
+                                <div class="space-y-1">
+                                    {tool.installSteps.map((step, index) => (
+                                        <div class="flex items-center justify-between bg-black/50 rounded px-3 py-2 group">
+                                            <code class="text-sm font-mono text-amber-300">{step}</code>
+                                            <button 
+                                                onclick={`navigator.clipboard.writeText('${step}')`}
+                                                class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-amber-400 transition-all p-1 rounded"
+                                                title="Copy to clipboard"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <!-- Stats -->
                     <div class="flex items-center space-x-4 mb-4">
@@ -205,6 +247,44 @@ const companionTools: Tool[] = [{
                     <p class="text-gray-300 leading-relaxed mb-4 flex-grow">
                         {tool.description}
                     </p>
+
+                    <!-- Install Commands -->
+                    {(tool.installCommand || tool.installSteps) && (
+                        <div class="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700/30">
+                            <h4 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Install</h4>
+                            {tool.installCommand ? (
+                                <div class="flex items-center bg-black/50 rounded px-3 py-2 group">
+                                    <code class="text-sm font-mono text-blue-300 overflow-x-auto whitespace-nowrap flex-1 mr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">{tool.installCommand}</code>
+                                    <button 
+                                        onclick={`navigator.clipboard.writeText('${tool.installCommand}')`}
+                                        class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-400 transition-all p-1 rounded flex-shrink-0"
+                                        title="Copy to clipboard"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            ) : tool.installSteps && (
+                                <div class="space-y-1">
+                                    {tool.installSteps.map((step, index) => (
+                                        <div class="flex items-center justify-between bg-black/50 rounded px-3 py-2 group">
+                                            <code class="text-sm font-mono text-blue-300">{step}</code>
+                                            <button 
+                                                onclick={`navigator.clipboard.writeText('${step}')`}
+                                                class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-400 transition-all p-1 rounded"
+                                                title="Copy to clipboard"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <!-- Stats -->
                     <div class="flex items-center space-x-4 mb-4">
