@@ -30,7 +30,7 @@ import ContentShowcase from '../components/ContentShowcase.astro';
         <div class="w-full md:w-4/5 p-0">
 
             <!-- Start: Inner wrapper -->
-            <div class="min-h-full h-[90vh] flex flex-col overflow-y-scroll">
+            <div class="min-h-full h-[90vh] flex flex-col overflow-hidden md:overflow-y-scroll">
 
                 <!-- Use hidden radio buttons to control the tabs -->
                 <div class="tab-controls">
@@ -65,7 +65,7 @@ import ContentShowcase from '../components/ContentShowcase.astro';
                     />
 
                     <!-- Start: Tab bar -->
-                    <div class="flex bg-black border-b border-gray-600 sticky top-0 z-10">
+                    <div class="flex bg-black border-b border-gray-600 sticky top-0 z-10 overflow-x-auto scrollbar-hide snap-x snap-mandatory md:overflow-x-visible">
 
                         <ContentLink
                             contentId="tab1"
@@ -91,7 +91,7 @@ import ContentShowcase from '../components/ContentShowcase.astro';
                     <!-- End: Tab bar -->
 
                     <!-- Start: Tab content -->
-                    <div class="p-6 flex-grow overflow-y-auto bg-black">
+                    <div class="p-6 flex-grow overflow-y-auto overflow-x-hidden bg-black touch-pan-y">
 
                         <!-- Start: Tools content -->
                         <div id="content1" class="tab-content">
@@ -191,6 +191,44 @@ import ContentShowcase from '../components/ContentShowcase.astro';
 
     #tab4:checked ~ .flex .tab-link:nth-child(4) {
         @apply border-b-2 border-b-primary;
+    }
+
+    /* Mobile scroll fixes */
+    @media (max-width: 768px) {
+        /* Hide scrollbars but keep functionality */
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Constrain touch interactions */
+        .touch-pan-y {
+            touch-action: pan-y;
+        }
+
+        /* Snap scrolling for tabs */
+        .snap-x {
+            scroll-snap-type: x mandatory;
+        }
+        .snap-mandatory {
+            scroll-snap-type: x mandatory;
+        }
+
+        /* Prevent overscroll bounce on mobile */
+        body {
+            overscroll-behavior: contain;
+        }
+
+        /* Fix content scrolling on mobile */
+        .tab-content {
+            max-height: calc(90vh - 120px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
     }
 
 </style>
