@@ -350,8 +350,45 @@ const profile = {
         setTimeout(loadCount, 100); // Small delay to ensure DOM is ready
     });
 
-    // Auto-refresh count every 30 seconds (only in production)
+    // Smart polling for real-time updates (only in production)
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        setInterval(loadCount, 30000);
+        let isUserActive = true;
+        let lastActivity = Date.now();
+        let pollInterval;
+        
+        // Track user activity
+        ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'].forEach(event => {
+            document.addEventListener(event, () => {
+                isUserActive = true;
+                lastActivity = Date.now();
+            }, { passive: true });
+        });
+        
+        // Check if user is inactive (no activity for 2 minutes)
+        setInterval(() => {
+            isUserActive = (Date.now() - lastActivity) < 120000; // 2 minutes
+        }, 10000);
+        
+        // Smart polling function
+        function startSmartPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            
+            const interval = isUserActive ? 3000 : 30000; // 3s active, 30s inactive
+            pollInterval = setInterval(loadCount, interval);
+        }
+        
+        // Start polling and adjust based on activity
+        startSmartPolling();
+        setInterval(startSmartPolling, 10000); // Recheck every 10 seconds
+        
+        // Poll immediately when user becomes active
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                isUserActive = true;
+                lastActivity = Date.now();
+                loadCount(); // Immediate update when tab becomes visible
+                startSmartPolling();
+            }
+        });
     }
 </script>
