@@ -1,0 +1,6 @@
+Contact: https://github.com/neur0map/prowl/security
+Contact: https://github.com/neur0map
+Expires: 2025-12-31T23:59:59.000Z
+Acknowledgments: https://github.com/neur0map/prowl/security
+Preferred-Languages: en
+Canonical: https://prowl.sh/.well-known/security.txt

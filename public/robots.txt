@@ -1,3 +1,27 @@
 User-agent: *
+Allow: /
 
-Sitemap: https://devidev.io/sitemap-index.xml
+# High-crawl-rate for search engines
+Crawl-delay: 1
+
+# Block API endpoints from crawling (they're not useful for SEO)
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://prowl.sh/sitemap-index.xml
+
+# Additional search engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
