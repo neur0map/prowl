@@ -7,9 +7,10 @@
         "build": "astro build",
         "preview": "astro preview",
         "astro": "astro",
-        "start": "http-server dist -p ${PORT:-80} -a 0.0.0.0 --cors"
+        "start": "HOST=0.0.0.0 PORT=${PORT:-4321} node ./dist/server/entry.mjs"
     },
     "dependencies": {
+        "@astrojs/node": "^9.4.3",
         "astro": "^5.4.2",
         "http-server": "^14.1.1",
         "pg": "^8.11.3",
