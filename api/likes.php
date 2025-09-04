@@ -9,8 +9,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Rate limiting (simple file-based)
+// Get visitor info for tracking
 $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+
+// Function to get location data from IP (using free ipapi.co service)
+function getLocationData($ip) {
+    if ($ip === 'unknown' || $ip === '127.0.0.1' || strpos($ip, '192.168.') === 0) {
+        return ['country_code' => null, 'country_name' => 'Local/Private', 'city' => 'Unknown'];
+    }
+    
+    $url = "http://ipapi.co/{$ip}/json/";
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 3,
+            'method' => 'GET',
+            'header' => 'User-Agent: ProwlLoveCounter/1.0'
+        ]
+    ]);
+    
+    $response = @file_get_contents($url, false, $context);
+    if ($response) {
+        $data = json_decode($response, true);
+        if ($data && !isset($data['error'])) {
+            return [
+                'country_code' => $data['country_code'] ?? null,
+                'country_name' => $data['country_name'] ?? 'Unknown',
+                'city' => $data['city'] ?? 'Unknown'
+            ];
+        }
+    }
+    
+    return ['country_code' => null, 'country_name' => 'Unknown', 'city' => 'Unknown'];
+}
+
+// Rate limiting (simple file-based)
 $rate_file = __DIR__ . '/rate_' . md5($ip) . '.txt';
 $now = time();
 
@@ -51,11 +84,21 @@ try {
     }
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // Create table if not exists
+    // Create tables if not exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS likes (
         id SERIAL PRIMARY KEY,
         count INTEGER DEFAULT 0,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+    
+    $pdo->exec("CREATE TABLE IF NOT EXISTS like_origins (
+        id SERIAL PRIMARY KEY,
+        country_code VARCHAR(2),
+        country_name VARCHAR(100),
+        city VARCHAR(100),
+        ip_hash VARCHAR(64),
+        user_agent_hash VARCHAR(64),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
     
 } catch (PDOException $e) {
@@ -123,6 +166,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $stmt->execute();
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             $count = (int)$result['count'];
+        }
+        
+        // Track like origin (async, don't block on failures)
+        try {
+            $location = getLocationData($ip);
+            $ip_hash = hash('sha256', $ip . 'prowl_salt_2024'); // Hash IP for privacy
+            $ua_hash = hash('sha256', $user_agent . 'prowl_salt_2024'); // Hash user agent
+            
+            $stmt = $pdo->prepare("INSERT INTO like_origins (country_code, country_name, city, ip_hash, user_agent_hash) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $location['country_code'],
+                $location['country_name'],
+                $location['city'],
+                $ip_hash,
+                $ua_hash
+            ]);
+        } catch (Exception $e) {
+            // Don't fail the like if tracking fails
+            error_log("Like tracking failed: " . $e->getMessage());
         }
         
         $pdo->commit();
