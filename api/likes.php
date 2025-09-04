@@ -25,10 +25,12 @@ if (file_exists($rate_file)) {
 
 // Database connection
 try {
-    $database_url = getenv('DATABASE_URL');
+    // Try multiple ways to get DATABASE_URL
+    $database_url = getenv('DATABASE_URL') ?: $_ENV['DATABASE_URL'] ?: $_SERVER['DATABASE_URL'] ?: null;
+    
     if (!$database_url) {
         http_response_code(503);
-        echo json_encode(['error' => 'Service unavailable', 'count' => 0]);
+        echo json_encode(['error' => 'Service unavailable', 'count' => 0, 'debug' => 'DB_URL_MISSING']);
         exit;
     }
     
