@@ -249,17 +249,10 @@ const profile = {
 
     // Load initial count
     async function loadCount() {
-        // Always start with localStorage value for immediate display
-        const savedCount = localStorage.getItem('prowl-love-count') || '0';
-        currentCount = parseInt(savedCount);
-        loveCountElement.textContent = currentCount.toLocaleString();
-        updateLoveMeter(currentCount);
-        showStatus('❤️');
-        
-        // Try to sync with server in background (production only)
         const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
         
         if (isProduction) {
+            // Production: Database is the primary source
             try {
                 const response = await fetch('/api/likes/get', {
                     method: 'GET',
@@ -270,31 +263,35 @@ const profile = {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    const serverCount = data.count || 0;
-                    
-                    // Use server count if it's significantly higher
-                    if (serverCount > currentCount) {
-                        currentCount = serverCount;
-                        loveCountElement.textContent = currentCount.toLocaleString();
-                        updateLoveMeter(currentCount);
-                        localStorage.setItem('prowl-love-count', currentCount.toString());
-                    }
+                    currentCount = data.count || 0;
+                    loveCountElement.textContent = currentCount.toLocaleString();
+                    updateLoveMeter(currentCount);
+                    // Update localStorage with server value
+                    localStorage.setItem('prowl-love-count', currentCount.toString());
+                    showStatus('❤️');
+                    return;
                 }
             } catch (error) {
-                console.log('Server sync failed, using local count');
+                console.log('Server failed, using localStorage fallback');
             }
         }
+        
+        // Development or server failed: Use localStorage
+        const savedCount = localStorage.getItem('prowl-love-count') || '0';
+        currentCount = parseInt(savedCount);
+        loveCountElement.textContent = currentCount.toLocaleString();
+        updateLoveMeter(currentCount);
+        showStatus('❤️');
     }
 
     // Increment count - optimized for rapid clicking
     async function incrementCount() {
+        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        
         // Immediate visual feedback
         currentCount++;
         loveCountElement.textContent = currentCount.toLocaleString();
         updateLoveMeter(currentCount);
-        
-        // Always save to localStorage immediately
-        localStorage.setItem('prowl-love-count', currentCount.toString());
         
         // Quick visual effects
         heartIcon.style.transform = 'scale(1.3)';
@@ -302,10 +299,8 @@ const profile = {
             heartIcon.style.transform = 'scale(1)';
         }, 100);
         
-        // Try to send to server in background (production only)
-        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-        
         if (isProduction) {
+            // Production: Send to database immediately
             try {
                 const response = await fetch('/api/likes/increment', {
                     method: 'POST',
@@ -316,17 +311,31 @@ const profile = {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.count !== undefined && Math.abs(data.count - currentCount) > 5) {
-                        // Only update if server count is significantly different
+                    if (data.count !== undefined) {
+                        // Always use server count in production
                         currentCount = data.count;
                         loveCountElement.textContent = currentCount.toLocaleString();
                         updateLoveMeter(currentCount);
                         localStorage.setItem('prowl-love-count', currentCount.toString());
                     }
+                } else {
+                    // Server failed, revert optimistic update
+                    currentCount--;
+                    loveCountElement.textContent = currentCount.toLocaleString();
+                    updateLoveMeter(currentCount);
+                    localStorage.setItem('prowl-love-count', currentCount.toString());
                 }
             } catch (error) {
-                console.log('Background sync failed, using local count');
+                // Server failed, revert optimistic update
+                currentCount--;
+                loveCountElement.textContent = currentCount.toLocaleString();
+                updateLoveMeter(currentCount);
+                localStorage.setItem('prowl-love-count', currentCount.toString());
+                console.log('Server sync failed, reverted local count');
             }
+        } else {
+            // Development: Use localStorage only
+            localStorage.setItem('prowl-love-count', currentCount.toString());
         }
     }
 

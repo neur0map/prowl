@@ -32,9 +32,8 @@ function isRateLimited(ip: string): boolean {
 export const POST: APIRoute = async ({ request }) => {
   // Environment validation
   if (!process.env.DATABASE_URL) {
-    console.error('DATABASE_URL environment variable not set');
-    return new Response(JSON.stringify({ error: 'Server configuration error' }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: 'Service unavailable' }), {
+      status: 503,
       headers: { 'Content-Type': 'application/json' }
     });
   }
@@ -136,8 +135,7 @@ export const POST: APIRoute = async ({ request }) => {
         // Ignore rollback errors
       }
     }
-    // Don't log full error details to prevent info leakage
-    console.error('Database operation failed');
+    // No logging to prevent any info leakage
     return new Response(JSON.stringify({ error: 'Service unavailable' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' }
