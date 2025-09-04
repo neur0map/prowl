@@ -46,7 +46,7 @@ try {
     
 } catch (PDOException $e) {
     http_response_code(503);
-    echo json_encode(['error' => 'Service unavailable', 'count' => 0]);
+    echo json_encode(['error' => 'Service unavailable', 'count' => 0, 'debug' => 'PDO_ERROR: ' . $e->getMessage()]);
     exit;
 }
 
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         
     } catch (PDOException $e) {
         http_response_code(503);
-        echo json_encode(['error' => 'Service unavailable', 'count' => 0]);
+        echo json_encode(['error' => 'Service unavailable', 'count' => 0, 'debug' => 'GET_ERROR: ' . $e->getMessage()]);
     }
     
 } else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -129,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     } catch (PDOException $e) {
         $pdo->rollBack();
         http_response_code(503);
-        echo json_encode(['error' => 'Service unavailable']);
+        echo json_encode(['error' => 'Service unavailable', 'debug' => 'POST_ERROR: ' . $e->getMessage()]);
     }
     
 } else {
