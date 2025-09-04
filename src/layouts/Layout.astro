@@ -2,17 +2,17 @@
 import '../styles/global.scss';
 
 // Base domain URL without trailing slash
-const domainBaseURL = 'https://prowl.dev';
-const ogImageUrl    = 'https://prowl.dev/og.png';
+const domainBaseURL = 'https://prowl.sh';
+const ogImageUrl    = 'https://prowl.sh/og.png';
 
 // Website publisher & region
 const authorPublisher   = 'Prowl';
 const geoRegion         = 'US';
 
 // SEO title, description and keywords
-const seoTitle          = 'Prowl | Productivity & Security Tools';
-const seoDescription    = 'Fast, focused, and simple productivity and security tools. Each tool designed with a predator-prey philosophy for maximum efficiency.';
-const seoKeywords       = 'developer tools, cybersecurity, security tools, IPCrawler, Manx, command line tools, penetration testing, developer utilities';
+const seoTitle          = 'Prowl | Open Source Security & Productivity Tools by neur0map';
+const seoDescription    = 'Discover powerful open source security and productivity tools. Predators for offensive security, Companions for daily productivity. Built by neur0map for developers and security professionals.';
+const seoKeywords       = 'open source tools, security tools, productivity tools, neur0map, github tools, developer utilities, penetration testing, command line tools, cybersecurity, hacking tools, developer productivity, security research';
 
 // Twitter card data
 const twitter = {
@@ -88,9 +88,14 @@ const dublinCore = {
         <!-- Start: Facebook open graph -->
         <meta property="og:title"               content={openGraph.title}>
         <meta property="og:description"         content={openGraph.description}>
-        <meta property="og:url"                 content={openGraph.url}>
+        <meta property="og:url"                 content={Astro.url}>
         <meta property="og:type"                content={openGraph.type}>
         <meta property="og:image"               content={openGraph.image}>
+        <meta property="og:image:secure_url"    content={openGraph.image}>
+        <meta property="og:image:type"          content="image/png">
+        <meta property="og:image:width"         content="4606">
+        <meta property="og:image:height"        content="1536">
+        <meta property="og:image:alt"           content="Prowl - Open Source Security & Productivity Tools">
         <meta property="og:locale"              content={openGraph.locale}>
         <meta property="og:site_name"           content={openGraph.siteName}>
         <!-- End: Facebook open graph -->
@@ -100,6 +105,7 @@ const dublinCore = {
         <meta name="twitter:title"              content={twitter.title}>
         <meta name="twitter:description"        content={twitter.description}>
         <meta name="twitter:image"              content={twitter.image}>
+        <meta name="twitter:image:alt"          content="Prowl - Open Source Security & Productivity Tools">
         <meta name="twitter:site"               content={twitter.site}>
         <meta name="twitter:creator"            content={twitter.creator}>
         <!-- End: Twitter card -->
@@ -120,6 +126,89 @@ const dublinCore = {
         <meta name="description" content={seoDescription}>
         <meta name="abstract"    content={seoDescription}>
         <meta name="keywords"    content={seoKeywords}>
+
+        <!-- JSON-LD Structured Data -->
+        <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@graph": [
+                {
+                    "@type": "WebSite",
+                    "@id": "https://prowl.sh/#website",
+                    "url": "https://prowl.sh",
+                    "name": "Prowl",
+                    "description": "Open source security and productivity tools by neur0map",
+                    "publisher": {
+                        "@type": "Person",
+                        "name": "neur0map",
+                        "url": "https://github.com/neur0map"
+                    },
+                    "potentialAction": {
+                        "@type": "SearchAction",
+                        "target": "https://github.com/neur0map?q={search_term_string}",
+                        "query-input": "required name=search_term_string"
+                    }
+                },
+                {
+                    "@type": "WebPage",
+                    "@id": "https://prowl.sh/#webpage",
+                    "url": "https://prowl.sh",
+                    "name": "Prowl - Open Source Security & Productivity Tools",
+                    "isPartOf": {"@id": "https://prowl.sh/#website"},
+                    "about": {
+                        "@type": "SoftwareApplication",
+                        "name": "Prowl Tools",
+                        "applicationCategory": "DeveloperApplication",
+                        "operatingSystem": "Cross-platform",
+                        "description": "Collection of open source security and productivity tools",
+                        "author": {
+                            "@type": "Person",
+                            "name": "neur0map",
+                            "url": "https://github.com/neur0map"
+                        },
+                        "codeRepository": "https://github.com/neur0map/prowl"
+                    },
+                    "breadcrumb": {
+                        "@type": "BreadcrumbList",
+                        "itemListElement": [
+                            {
+                                "@type": "ListItem",
+                                "position": 1,
+                                "name": "Home",
+                                "item": "https://prowl.sh"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "@type": "Person",
+                    "@id": "https://prowl.sh/#author",
+                    "name": "neur0map",
+                    "url": "https://github.com/neur0map",
+                    "sameAs": [
+                        "https://github.com/neur0map"
+                    ],
+                    "jobTitle": "Software Developer",
+                    "worksFor": {
+                        "@type": "Organization",
+                        "name": "Open Source"
+                    }
+                }
+            ]
+        }
+        </script>
+
+        <!-- Performance Hints -->
+        <link rel="dns-prefetch" href="//github.com">
+        <link rel="preconnect" href="https://api.github.com">
+        
+        <!-- Additional SEO Meta Tags -->
+        <meta name="theme-color" content="#000000">
+        <meta name="msapplication-TileColor" content="#000000">
+        <meta name="application-name" content="Prowl">
+        <meta name="apple-mobile-web-app-title" content="Prowl">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="mobile-web-app-capable" content="yes">
 
     </head>
 
