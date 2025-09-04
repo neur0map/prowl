@@ -6,11 +6,8 @@ import sitemap from '@astrojs/sitemap';
 import node from '@astrojs/node';
 
 export default defineConfig({
-    output: 'server',
-    adapter: node({
-        mode: 'standalone'
-    }),
-    trailingSlash: 'always',
+    output: 'static',
+    trailingSlash: 'never',
     site: 'https://prowl.sh',
 
     // Single page, no prefetch needed

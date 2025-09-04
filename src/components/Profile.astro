@@ -254,7 +254,7 @@ const profile = {
         if (isProduction) {
             // Production: Database is the primary source
             try {
-                const response = await fetch('/api/likes/get', {
+                const response = await fetch('/api/likes.php', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -302,7 +302,7 @@ const profile = {
         if (isProduction) {
             // Production: Send to database immediately
             try {
-                const response = await fetch('/api/likes/increment', {
+                const response = await fetch('/api/likes.php', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
