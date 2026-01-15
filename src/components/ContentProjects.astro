@@ -4,7 +4,7 @@ import ManxMascot from './ManxMascot.astro';
 
 interface Tool {
     name: string;
-    type: 'predator' | 'companion';
+    type: 'security' | 'dev';
     category: string;
     description: string;
     status: 'active' | 'development' | 'planned';
@@ -21,11 +21,11 @@ interface Tool {
     installSteps?: string[];
 }
 
-const predatorTools: Tool[] = [{
+const securityTools: Tool[] = [{
     name: 'IPCrawler',
-    type: 'predator',
-    category: 'Security',
-    description: 'Automated network reconnaissance tool built in Rust. Features real-time TUI, concurrent scanning across DNS, host discovery, port scanning, and web analysis. Generates professional artifacts for cybersecurity professionals and penetration testers.',
+    type: 'security',
+    category: 'Network Recon',
+    description: 'Network reconnaissance with real-time TUI. Concurrent DNS, host discovery, port scanning, and web analysis. Built for pentesters.',
     status: 'active',
     mascot: 'centipede',
     link: {
@@ -36,11 +36,11 @@ const predatorTools: Tool[] = [{
     installCommand: 'git clone https://github.com/ipcrawler/ipcrawler.git && cd ipcrawler && make build'
 }];
 
-const companionTools: Tool[] = [{
+const devTools: Tool[] = [{
     name: 'Manx',
-    type: 'companion',
-    category: 'Developer',
-    description: 'Blazing-fast CLI documentation finder for developers and overall productivity. Lightning-fast search (< 1 second), minimal memory usage (< 10MB), offline functionality with intelligent caching. Single 2.9MB binary with no dependencies.',
+    type: 'dev',
+    category: 'Documentation',
+    description: 'CLI docs finder. Sub-second search, offline caching, 2.9MB binary. No dependencies.',
     status: 'active',
     mascot: 'manx',
     link: {
@@ -50,62 +50,104 @@ const companionTools: Tool[] = [{
     github: 'neur0map/manx',
     crates: 'manx-cli',
     installCommand: 'cargo install manx-cli'
+}, {
+    name: 'Cyx',
+    type: 'dev',
+    category: 'CLI Assistant',
+    description: 'LLM-powered security command lookup. ONNX semantic search, educational mode, supports Perplexity/Groq/Ollama. Quick command references for security work.',
+    status: 'active',
+    mascot: 'manx',
+    link: {
+        url: 'https://github.com/neur0map/cyx',
+        buttonLabel: 'View on GitHub'
+    },
+    github: 'neur0map/cyx',
+    crates: 'cyx',
+    installCommand: 'cargo install cyx'
+}, {
+    name: 'doCrawl',
+    type: 'dev',
+    category: 'Documentation',
+    description: 'Convert docs sites to clean Markdown. Auto-detects Docusaurus, MkDocs, Sphinx, Next.js. Sanitizes content, detects prompt injection, respects robots.txt.',
+    status: 'active',
+    mascot: 'manx',
+    link: {
+        url: 'https://github.com/neur0map/docrawl',
+        buttonLabel: 'View on GitHub'
+    },
+    github: 'neur0map/docrawl',
+    crates: 'docrawl',
+    installCommand: 'cargo install docrawl'
 }];
 ---
 
-<div class="space-y-8">
+<div class="space-y-6">
 
-    <!-- Predator Tools Section -->
+    <!-- Security Tools Section -->
     <div>
-        <div class="flex items-center space-x-3 mb-6">
-            <div class="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        <div class="flex items-center space-x-2 mb-4">
+            <div class="w-7 h-7 bg-gradient-to-br from-amber-500/20 to-amber-600/10 rounded-lg flex items-center justify-center">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                 </svg>
             </div>
-            <h2 class="text-2xl font-bold text-white">Predators</h2>
-            <span class="px-3 py-1 bg-amber-900/30 text-amber-400 rounded-full text-xs font-medium">Security Tools</span>
+            <h2 class="text-xl font-bold text-white">Security Tools</h2>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-            {predatorTools.map(tool =>
-                <div class="flex flex-col justify-between border border-amber-700/30 rounded-lg p-6 bg-black hover:border-amber-600/50 transition-all duration-300 group hover:shadow-lg hover:shadow-amber-500/5">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+            {securityTools.map(tool =>
+                <div class="flex flex-col border border-amber-700/30 rounded-xl p-4 bg-gradient-to-br from-amber-950/5 via-black to-amber-950/5 hover:border-amber-600/50 transition-all duration-300 group hover:shadow-xl hover:shadow-amber-500/10 relative overflow-hidden">
 
-                    <!-- Mascot and Tool Header -->
-                    <div class="flex items-center space-x-4 mb-4">
-                        <div class="group-hover:scale-105 transition-transform duration-300">
-                            <CentipedeMascot size={60} />
+                    <!-- Subtle glow effect -->
+                    <div class="absolute inset-0 bg-gradient-to-br from-amber-500/0 via-amber-500/5 to-amber-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+
+                    <!-- Header with Mascot -->
+                    <div class="flex items-start space-x-3 mb-3 relative z-10">
+                        <div class="group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                            <CentipedeMascot size={48} />
                         </div>
-                        <div>
-                            <h3 class="text-xl font-bold text-white mb-1">
-                                {tool.name}
-                            </h3>
-                            <div class="flex items-center space-x-2">
-                                <span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-900/30 text-amber-400">
-                                    {tool.category} • Predator
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between mb-1">
+                                <h3 class="text-lg font-bold text-white truncate">
+                                    {tool.name}
+                                </h3>
+                                <span class={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ml-2 ${
+                                    tool.status === 'active'
+                                        ? 'bg-green-900/30 text-green-400'
+                                        : tool.status === 'development'
+                                        ? 'bg-yellow-900/30 text-yellow-400'
+                                        : 'bg-gray-900/30 text-gray-400'
+                                }`}>
+                                    {tool.status === 'active' ? '✓ Active' :
+                                     tool.status === 'development' ? '⚡ Dev' : 'Planned'}
                                 </span>
                             </div>
+                            <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-amber-900/20 text-amber-400 inline-block">
+                                {tool.category}
+                            </span>
                         </div>
                     </div>
 
                     <!-- Description -->
-                    <p class="text-gray-300 leading-relaxed mb-4 flex-grow">
+                    <p class="text-sm text-gray-300 leading-relaxed mb-3 relative z-10">
                         {tool.description}
                     </p>
 
                     <!-- Install Commands -->
                     {(tool.installCommand || tool.installSteps) && (
-                        <div class="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700/30">
-                            <h4 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Install</h4>
+                        <div class="mb-3 relative z-10">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Quick Install</span>
+                            </div>
                             {tool.installCommand ? (
-                                <div class="flex items-center bg-black/50 rounded px-3 py-2 group">
-                                    <code class="text-sm font-mono text-amber-300 overflow-x-auto whitespace-nowrap flex-1 mr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">{tool.installCommand}</code>
-                                    <button 
+                                <div class="flex items-center bg-gray-900/70 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-700/50 group/install hover:border-amber-600/30 transition-colors">
+                                    <code class="text-xs font-mono text-amber-300/90 overflow-x-auto whitespace-nowrap flex-1 mr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">{tool.installCommand}</code>
+                                    <button
                                         onclick={`navigator.clipboard.writeText('${tool.installCommand}')`}
-                                        class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-amber-400 transition-all p-1 rounded flex-shrink-0"
+                                        class="opacity-0 group-hover/install:opacity-100 text-gray-500 hover:text-amber-400 transition-all p-1 rounded flex-shrink-0"
                                         title="Copy to clipboard"
                                     >
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                                         </svg>
                                     </button>
@@ -113,15 +155,15 @@ const companionTools: Tool[] = [{
                             ) : tool.installSteps && (
                                 <div class="space-y-1">
                                     {tool.installSteps.map((step, index) => (
-                                        <div class="flex items-center justify-between bg-black/50 rounded px-3 py-2 group">
-                                            <code class="text-sm font-mono text-amber-300">{step}</code>
-                                            <button 
+                                        <div class="flex items-center justify-between bg-gray-900/70 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-700/50 group/install hover:border-amber-600/30 transition-colors">
+                                            <code class="text-xs font-mono text-amber-300/90">{step}</code>
+                                            <button
                                                 onclick={`navigator.clipboard.writeText('${step}')`}
-                                                class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-amber-400 transition-all p-1 rounded"
+                                                class="opacity-0 group-hover/install:opacity-100 text-gray-500 hover:text-amber-400 transition-all p-1 rounded"
                                                 title="Copy to clipboard"
                                             >
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                                                 </svg>
                                             </button>
                                         </div>
@@ -131,67 +173,58 @@ const companionTools: Tool[] = [{
                         </div>
                     )}
 
-                    <!-- Stats -->
-                    <div class="flex items-center space-x-4 mb-4">
-                        {tool.github && (
-                            <div class={`flex items-center space-x-1 text-xs ${
-                                tool.type === 'predator' ? 'text-amber-400' : 'text-blue-400'
-                            }`}>
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
-                                </svg>
-                                <span class="github-stars" data-repo={tool.github}>★ --</span>
-                            </div>
-                        )}
-                        
-                        {tool.crates && (
-                            <div class="flex items-center space-x-1 text-xs text-orange-400">
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                                </svg>
-                                <span class="crates-downloads" data-crate={tool.crates}>⬇ --</span>
-                            </div>
-                        )}
-                    </div>
+                    <!-- Footer: Stats and Actions -->
+                    <div class="flex items-center justify-between relative z-10 mt-auto pt-3 border-t border-gray-800/50">
+                        <!-- Stats -->
+                        <div class="flex items-center gap-3">
+                            {tool.github && (
+                                <div class="flex items-center gap-1 text-xs text-amber-400/80">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                                    </svg>
+                                    <span class="github-stars font-mono" data-repo={tool.github}>--</span>
+                                </div>
+                            )}
+                            {tool.crates && (
+                                <div class="flex items-center gap-1 text-xs text-orange-400/80">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                                    </svg>
+                                    <span class="crates-downloads font-mono" data-crate={tool.crates}>--</span>
+                                </div>
+                            )}
+                        </div>
 
-                    <!-- Status and Link -->
-                    <div class="flex items-center justify-between">
-                        <span class={`px-3 py-1 rounded-full text-xs font-medium ${
-                            tool.status === 'active' 
-                                ? 'bg-green-900/30 text-green-400' 
-                                : tool.status === 'development'
-                                ? 'bg-yellow-900/30 text-yellow-400'
-                                : 'bg-gray-900/30 text-gray-400'
-                        }`}>
-                            {tool.status === 'active' ? 'Available' : 
-                             tool.status === 'development' ? 'In Development' : 'Planned'}
-                        </span>
-
-                        <div class="flex space-x-2">
+                        <!-- Actions -->
+                        <div class="flex gap-1.5">
                             {tool.crates && (
                                 <a
                                     href={`https://crates.io/crates/${tool.crates}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    title={`Install ${tool.name} from crates.io`}
-                                    class="px-3 py-2 bg-orange-800/20 hover:bg-orange-700/30 text-orange-300 hover:text-orange-200 rounded-lg text-xs font-medium transition-colors border border-orange-700/30"
+                                    title={`View ${tool.name} on crates.io`}
+                                    class="px-2.5 py-1.5 bg-orange-900/20 hover:bg-orange-800/30 text-orange-400 hover:text-orange-300 rounded-lg text-xs font-medium transition-all border border-orange-700/30 hover:border-orange-600/50"
                                 >
-                                    crates.io
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                                    </svg>
                                 </a>
                             )}
-                            
                             {tool.link?.url && tool.link.url !== '#' ?
                                 <a
                                     href={tool.link.url}
                                     title={tool.link.title || tool.name}
                                     target={tool.link.target || '_blank'}
-                                    class="px-4 py-2 bg-amber-800/20 hover:bg-amber-700/30 text-amber-300 hover:text-amber-200 rounded-lg text-sm font-medium transition-colors border border-amber-700/30"
+                                    class="px-3 py-1.5 bg-amber-900/20 hover:bg-amber-800/30 text-amber-400 hover:text-amber-300 rounded-lg text-xs font-medium transition-all border border-amber-700/30 hover:border-amber-600/50 flex items-center gap-1.5"
                                 >
-                                    {tool.link.buttonLabel || 'View Tool'}
+                                    <span>GitHub</span>
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                    </svg>
                                 </a>
                             :
-                                <span class="px-4 py-2 bg-gray-900 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed">
-                                    {tool.link.buttonLabel || 'Coming Soon'}
+                                <span class="px-3 py-1.5 bg-gray-900/50 text-gray-500 rounded-lg text-xs font-medium cursor-not-allowed border border-gray-700/30">
+                                    Coming Soon
                                 </span>
                             }
                         </div>
@@ -200,67 +233,76 @@ const companionTools: Tool[] = [{
                 </div>
             )}
         </div>
-        <p class="text-amber-400/60 text-sm italic">Built for the hunt — precise, powerful, predatory</p>
     </div>
 
     <!-- Divider -->
-    <div class="border-t border-gray-800 relative">
-        <div class="absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black px-4">
-            <span class="text-gray-600 text-xs font-mono">vs</span>
-        </div>
-    </div>
+    <div class="border-t border-gray-800/50"></div>
 
-    <!-- Companion Tools Section -->
+    <!-- Dev Tools Section -->
     <div>
-        <div class="flex items-center space-x-3 mb-6">
-            <div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        <div class="flex items-center space-x-2 mb-4">
+            <div class="w-7 h-7 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-lg flex items-center justify-center">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
                 </svg>
             </div>
-            <h2 class="text-2xl font-bold text-white">Companions</h2>
-            <span class="px-3 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium">Helper Tools</span>
+            <h2 class="text-xl font-bold text-white">Dev Tools</h2>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-            {companionTools.map(tool =>
-                <div class="flex flex-col justify-between border border-blue-700/30 rounded-lg p-6 bg-black hover:border-blue-600/50 transition-all duration-300 group hover:shadow-lg hover:shadow-blue-500/5">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+            {devTools.map(tool =>
+                <div class="flex flex-col border border-blue-700/30 rounded-xl p-4 bg-gradient-to-br from-blue-950/5 via-black to-blue-950/5 hover:border-blue-600/50 transition-all duration-300 group hover:shadow-xl hover:shadow-blue-500/10 relative overflow-hidden">
 
-                    <!-- Mascot and Tool Header -->
-                    <div class="flex items-center space-x-4 mb-4">
-                        <div class="group-hover:scale-105 transition-transform duration-300">
-                            <ManxMascot size={60} />
+                    <!-- Subtle glow effect -->
+                    <div class="absolute inset-0 bg-gradient-to-br from-blue-500/0 via-blue-500/5 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+
+                    <!-- Header with Mascot -->
+                    <div class="flex items-start space-x-3 mb-3 relative z-10">
+                        <div class="group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                            <ManxMascot size={48} />
                         </div>
-                        <div>
-                            <h3 class="text-xl font-bold text-white mb-1">
-                                {tool.name}
-                            </h3>
-                            <div class="flex items-center space-x-2">
-                                <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-900/30 text-blue-400">
-                                    {tool.category} • Companion
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between mb-1">
+                                <h3 class="text-lg font-bold text-white truncate">
+                                    {tool.name}
+                                </h3>
+                                <span class={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ml-2 ${
+                                    tool.status === 'active'
+                                        ? 'bg-green-900/30 text-green-400'
+                                        : tool.status === 'development'
+                                        ? 'bg-yellow-900/30 text-yellow-400'
+                                        : 'bg-gray-900/30 text-gray-400'
+                                }`}>
+                                    {tool.status === 'active' ? '✓ Active' :
+                                     tool.status === 'development' ? '⚡ Dev' : 'Planned'}
                                 </span>
                             </div>
+                            <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-blue-900/20 text-blue-400 inline-block">
+                                {tool.category}
+                            </span>
                         </div>
                     </div>
 
                     <!-- Description -->
-                    <p class="text-gray-300 leading-relaxed mb-4 flex-grow">
+                    <p class="text-sm text-gray-300 leading-relaxed mb-3 relative z-10">
                         {tool.description}
                     </p>
 
                     <!-- Install Commands -->
                     {(tool.installCommand || tool.installSteps) && (
-                        <div class="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700/30">
-                            <h4 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Install</h4>
+                        <div class="mb-3 relative z-10">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Quick Install</span>
+                            </div>
                             {tool.installCommand ? (
-                                <div class="flex items-center bg-black/50 rounded px-3 py-2 group">
-                                    <code class="text-sm font-mono text-blue-300 overflow-x-auto whitespace-nowrap flex-1 mr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">{tool.installCommand}</code>
-                                    <button 
+                                <div class="flex items-center bg-gray-900/70 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-700/50 group/install hover:border-blue-600/30 transition-colors">
+                                    <code class="text-xs font-mono text-blue-300/90 overflow-x-auto whitespace-nowrap flex-1 mr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">{tool.installCommand}</code>
+                                    <button
                                         onclick={`navigator.clipboard.writeText('${tool.installCommand}')`}
-                                        class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-400 transition-all p-1 rounded flex-shrink-0"
+                                        class="opacity-0 group-hover/install:opacity-100 text-gray-500 hover:text-blue-400 transition-all p-1 rounded flex-shrink-0"
                                         title="Copy to clipboard"
                                     >
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                                         </svg>
                                     </button>
@@ -268,15 +310,15 @@ const companionTools: Tool[] = [{
                             ) : tool.installSteps && (
                                 <div class="space-y-1">
                                     {tool.installSteps.map((step, index) => (
-                                        <div class="flex items-center justify-between bg-black/50 rounded px-3 py-2 group">
-                                            <code class="text-sm font-mono text-blue-300">{step}</code>
-                                            <button 
+                                        <div class="flex items-center justify-between bg-gray-900/70 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-700/50 group/install hover:border-blue-600/30 transition-colors">
+                                            <code class="text-xs font-mono text-blue-300/90">{step}</code>
+                                            <button
                                                 onclick={`navigator.clipboard.writeText('${step}')`}
-                                                class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-400 transition-all p-1 rounded"
+                                                class="opacity-0 group-hover/install:opacity-100 text-gray-500 hover:text-blue-400 transition-all p-1 rounded"
                                                 title="Copy to clipboard"
                                             >
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                                                 </svg>
                                             </button>
                                         </div>
@@ -286,65 +328,58 @@ const companionTools: Tool[] = [{
                         </div>
                     )}
 
-                    <!-- Stats -->
-                    <div class="flex items-center space-x-4 mb-4">
-                        {tool.github && (
-                            <div class="flex items-center space-x-1 text-xs text-blue-400">
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
-                                </svg>
-                                <span class="github-stars" data-repo={tool.github}>★ --</span>
-                            </div>
-                        )}
-                        
-                        {tool.crates && (
-                            <div class="flex items-center space-x-1 text-xs text-orange-400">
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                                </svg>
-                                <span class="crates-downloads" data-crate={tool.crates}>⬇ --</span>
-                            </div>
-                        )}
-                    </div>
+                    <!-- Footer: Stats and Actions -->
+                    <div class="flex items-center justify-between relative z-10 mt-auto pt-3 border-t border-gray-800/50">
+                        <!-- Stats -->
+                        <div class="flex items-center gap-3">
+                            {tool.github && (
+                                <div class="flex items-center gap-1 text-xs text-blue-400/80">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                                    </svg>
+                                    <span class="github-stars font-mono" data-repo={tool.github}>--</span>
+                                </div>
+                            )}
+                            {tool.crates && (
+                                <div class="flex items-center gap-1 text-xs text-orange-400/80">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                                    </svg>
+                                    <span class="crates-downloads font-mono" data-crate={tool.crates}>--</span>
+                                </div>
+                            )}
+                        </div>
 
-                    <!-- Status and Link -->
-                    <div class="flex items-center justify-between">
-                        <span class={`px-3 py-1 rounded-full text-xs font-medium ${
-                            tool.status === 'active' 
-                                ? 'bg-green-900/30 text-green-400' 
-                                : tool.status === 'development'
-                                ? 'bg-yellow-900/30 text-yellow-400'
-                                : 'bg-gray-900/30 text-gray-400'
-                        }`}>
-                            {tool.status === 'active' ? 'Available' : 
-                             tool.status === 'development' ? 'In Development' : 'Planned'}
-                        </span>
-
-                        <div class="flex space-x-2">
+                        <!-- Actions -->
+                        <div class="flex gap-1.5">
                             {tool.crates && (
                                 <a
                                     href={`https://crates.io/crates/${tool.crates}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    title={`Install ${tool.name} from crates.io`}
-                                    class="px-3 py-2 bg-orange-800/20 hover:bg-orange-700/30 text-orange-300 hover:text-orange-200 rounded-lg text-xs font-medium transition-colors border border-orange-700/30"
+                                    title={`View ${tool.name} on crates.io`}
+                                    class="px-2.5 py-1.5 bg-orange-900/20 hover:bg-orange-800/30 text-orange-400 hover:text-orange-300 rounded-lg text-xs font-medium transition-all border border-orange-700/30 hover:border-orange-600/50"
                                 >
-                                    crates.io
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                                    </svg>
                                 </a>
                             )}
-                            
                             {tool.link?.url && tool.link.url !== '#' ?
                                 <a
                                     href={tool.link.url}
                                     title={tool.link.title || tool.name}
                                     target={tool.link.target || '_blank'}
-                                    class="px-4 py-2 bg-blue-800/20 hover:bg-blue-700/30 text-blue-300 hover:text-blue-200 rounded-lg text-sm font-medium transition-colors border border-blue-700/30"
+                                    class="px-3 py-1.5 bg-blue-900/20 hover:bg-blue-800/30 text-blue-400 hover:text-blue-300 rounded-lg text-xs font-medium transition-all border border-blue-700/30 hover:border-blue-600/50 flex items-center gap-1.5"
                                 >
-                                    {tool.link.buttonLabel || 'View Tool'}
+                                    <span>GitHub</span>
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                    </svg>
                                 </a>
                             :
-                                <span class="px-4 py-2 bg-gray-900 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed">
-                                    {tool.link.buttonLabel || 'Coming Soon'}
+                                <span class="px-3 py-1.5 bg-gray-900/50 text-gray-500 rounded-lg text-xs font-medium cursor-not-allowed border border-gray-700/30">
+                                    Coming Soon
                                 </span>
                             }
                         </div>
@@ -353,14 +388,6 @@ const companionTools: Tool[] = [{
                 </div>
             )}
         </div>
-        <p class="text-blue-400/60 text-sm italic">Built to assist — agile, helpful, harmonious</p>
-    </div>
-
-    <!-- Philosophy Note -->
-    <div class="mt-8 p-4 border border-gray-800 rounded-lg bg-gray-950/50">
-        <p class="text-gray-400 text-sm italic text-center">
-            "In nature, every creature has evolved for a specific role. My tools follow the same principle—each one perfectly adapted for its hunt."
-        </p>
     </div>
 
 </div>

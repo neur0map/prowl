@@ -1,9 +1,9 @@
 ---
 const profile = {
     name: 'Prowl',
-    title: 'Productivity & Security Tools',
+    title: 'Security & Dev Tools',
     location: 'by neur0map',
-    description: 'Predators: tools built to attack.\nCompanions: tools built to assist'
+    description: 'CLI tools for security and development'
 };
 ---
 
@@ -43,380 +43,37 @@ const profile = {
     </div>
 
     <div class="text-sm leading-relaxed mt-4 text-gray-400">
-        <span class="text-amber-400 font-medium">Predators:</span> offensive security tools for penetration testing and red team operations.<br/>
-        <span class="text-blue-400 font-medium">Companions:</span> productivity tools that streamline workflows and enhance efficiency.
+        <span class="text-amber-400 font-medium">Security:</span> penetration testing and network reconnaissance tools.<br/>
+        <span class="text-blue-400 font-medium">Dev:</span> CLI utilities for documentation and productivity.
     </div>
 
     <!-- SEO content - hidden from users but visible to search engines -->
     <div class="sr-only">
-        <h2>Open Source Security & Productivity Tools</h2>
+        <h2>Open Source Security & Developer Tools</h2>
         <p>
-            Prowl is a collection of open source security tools and productivity utilities 
-            designed for developers, security researchers, and IT professionals. Built by neur0map, 
-            these tools follow a predator-prey philosophy for maximum efficiency.
+            Prowl is a collection of open source security tools and developer utilities
+            designed for security professionals, developers, and IT researchers. Built by neur0map
+            in Rust for speed and reliability.
         </p>
         <p>
-            Our security tools (Predators) include penetration testing utilities, 
-            network reconnaissance tools, and red team operation helpers. The productivity tools 
-            (Companions) focus on developer workflow optimization and system administration tasks.
+            Security tools include network reconnaissance, penetration testing utilities,
+            and intelligence gathering. Developer tools focus on CLI productivity,
+            documentation search, and workflow automation.
         </p>
         <p>
-            All tools are available on GitHub under open source licenses. Perfect for security professionals, 
-            developers, and anyone interested in command-line tools, cybersecurity research, and 
+            All tools are available on GitHub under open source licenses. Perfect for security professionals,
+            developers, and anyone interested in command-line tools, cybersecurity research, and
             developer productivity enhancement.
         </p>
-        
+
         <!-- Keywords for SEO -->
         <span>
-            cybersecurity tools, penetration testing, red team tools, security research, developer tools, 
-            productivity software, command line utilities, open source security, hacking tools, 
-            network tools, system administration, developer productivity, security utilities, 
-            cyber security, information security, ethical hacking, security testing, neur0map, prowl
+            cybersecurity tools, penetration testing, red team tools, security research, developer tools,
+            productivity software, command line utilities, open source security, hacking tools,
+            network tools, system administration, developer productivity, security utilities,
+            cyber security, information security, ethical hacking, security testing, neur0map, prowl,
+            rust cli tools, network reconnaissance, documentation search
         </span>
     </div>
 
-    <!-- Send Me Love Counter -->
-    <div class="mt-6 w-full flex justify-center">
-        <div class="max-w-xs bg-gradient-to-br from-pink-950/40 via-red-950/30 to-rose-900/20 backdrop-blur-sm border border-pink-700/20 rounded-2xl p-4 hover:border-pink-600/40 transition-all duration-300">
-            
-            <!-- Love Button -->
-            <button 
-                id="loveButton" 
-                class="group relative w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-pink-600/20 to-rose-600/20 hover:from-pink-500/30 hover:to-rose-500/30 border border-pink-500/30 hover:border-pink-400/50 rounded-xl transition-all duration-150 transform hover:scale-[1.02] active:scale-95"
-            >
-                <!-- Heart -->
-                <span class="text-2xl transition-transform duration-100" id="heartIcon">❤️</span>
-                
-                <!-- Text -->
-                <div class="text-center">
-                    <span class="text-pink-300 font-semibold text-sm block group-hover:text-pink-200 transition-colors duration-150">Send me love</span>
-                </div>
-            </button>
-            
-            <!-- Counter Display -->
-            <div class="mt-3 text-center p-2 bg-black/20 rounded-lg border border-pink-800/20">
-                <div class="flex items-center justify-center gap-2">
-                    <span class="text-pink-500/80 text-xs font-medium">Total:</span>
-                    <div class="relative">
-                        <span id="loveCount" class="text-pink-400 font-bold text-lg font-mono">0</span>
-                        <div class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-pink-400 rounded-full animate-pulse opacity-70"></div>
-                    </div>
-                </div>
-                
-                <!-- Love meter visual -->
-                <div class="mt-2 flex items-center justify-center gap-1">
-                    <div class="w-20 h-1 bg-pink-900/30 rounded-full overflow-hidden">
-                        <div id="loveMeter" class="h-full bg-gradient-to-r from-pink-500 to-rose-400 rounded-full transition-all duration-500 w-0"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Status indicator -->
-            <div class="mt-2 text-center">
-                <span id="loveStatus" class="text-pink-500/60 text-xs">❤️</span>
-            </div>
-        </div>
-    </div>
-
 </div>
-
-<script>
-    let currentCount = 0;
-    let isLoading = false;
-    const loveButton = document.getElementById('loveButton');
-    const loveCountElement = document.getElementById('loveCount');
-    const heartIcon = document.getElementById('heartIcon');
-    const loveStatus = document.getElementById('loveStatus');
-    const loveMeter = document.getElementById('loveMeter');
-
-    // Update love meter visual
-    function updateLoveMeter(count) {
-        if (loveMeter) {
-            const percentage = Math.min((count % 100), 100); // Reset every 100 likes
-            loveMeter.style.width = `${percentage}%`;
-            
-            // Check if bar is full (multiple of 100)
-            if (count > 0 && count % 100 === 0) {
-                triggerLoveExplosion(count);
-            }
-        }
-    }
-    
-    // Amazing celebration when hitting 100!
-    function triggerLoveExplosion(totalCount) {
-        const container = loveButton.parentElement;
-        
-        // Create explosion container
-        const explosionContainer = document.createElement('div');
-        explosionContainer.className = 'absolute inset-0 pointer-events-none z-50 overflow-hidden rounded-2xl';
-        container.appendChild(explosionContainer);
-        
-        // Celebration message
-        const celebMessage = document.createElement('div');
-        celebMessage.innerHTML = `
-            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center z-50">
-                <div class="text-4xl font-bold text-pink-300 animate-bounce mb-2">🎉 AMAZING! 🎉</div>
-                <div class="text-lg text-pink-400 font-semibold">${totalCount} LOVE HEARTS!</div>
-                <div class="text-sm text-pink-500/80 mt-1">You're spreading pure love! ✨</div>
-            </div>
-        `;
-        celebMessage.className = 'absolute inset-0';
-        explosionContainer.appendChild(celebMessage);
-        
-        // Create heart explosion
-        const hearts = ['❤️', '💖', '💕', '💗', '🧡', '💛', '💚', '💙', '💜', '🤍', '✨', '🌟', '⭐'];
-        for (let i = 0; i < 20; i++) {
-            setTimeout(() => {
-                const heart = document.createElement('div');
-                heart.innerHTML = hearts[Math.floor(Math.random() * hearts.length)];
-                heart.className = 'absolute text-2xl pointer-events-none animate-bounce';
-                
-                // Random position
-                heart.style.left = Math.random() * 100 + '%';
-                heart.style.top = Math.random() * 100 + '%';
-                heart.style.fontSize = (Math.random() * 20 + 15) + 'px';
-                
-                explosionContainer.appendChild(heart);
-                
-                // Animate outward
-                setTimeout(() => {
-                    const angle = Math.random() * 2 * Math.PI;
-                    const distance = 200 + Math.random() * 100;
-                    heart.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px) scale(0)`;
-                    heart.style.opacity = '0';
-                    heart.style.transition = 'all 2s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-                }, 100);
-                
-                // Remove heart
-                setTimeout(() => {
-                    if (heart.parentElement) {
-                        heart.parentElement.removeChild(heart);
-                    }
-                }, 2200);
-            }, i * 50);
-        }
-        
-        // Rainbow background flash
-        const flash = document.createElement('div');
-        flash.className = 'absolute inset-0 rounded-2xl opacity-0';
-        flash.style.background = 'linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #f9ca24, #f0932b, #eb4d4b, #6c5ce7)';
-        flash.style.backgroundSize = '400% 400%';
-        flash.style.animation = 'rainbow 1s ease-in-out';
-        explosionContainer.appendChild(flash);
-        
-        // Add rainbow animation keyframes
-        if (!document.querySelector('#rainbow-animation')) {
-            const style = document.createElement('style');
-            style.id = 'rainbow-animation';
-            style.textContent = `
-                @keyframes rainbow {
-                    0% { opacity: 0; background-position: 0% 50%; }
-                    50% { opacity: 0.3; background-position: 100% 50%; }
-                    100% { opacity: 0; background-position: 0% 50%; }
-                }
-                @keyframes sparkle {
-                    0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
-                    50% { opacity: 1; transform: scale(1) rotate(180deg); }
-                }
-            `;
-            document.head.appendChild(style);
-        }
-        
-        // Screen shake effect
-        document.body.style.animation = 'shake 0.5s ease-in-out';
-        setTimeout(() => {
-            document.body.style.animation = '';
-        }, 500);
-        
-        // Add shake animation if not exists
-        if (!document.querySelector('#shake-animation')) {
-            const shakeStyle = document.createElement('style');
-            shakeStyle.id = 'shake-animation';
-            shakeStyle.textContent = `
-                @keyframes shake {
-                    0%, 100% { transform: translateX(0); }
-                    25% { transform: translateX(-2px); }
-                    75% { transform: translateX(2px); }
-                }
-            `;
-            document.head.appendChild(shakeStyle);
-        }
-        
-        // Status celebration
-        showStatus(`🎉 ${totalCount} HEARTS OF LOVE! 🎉`);
-        
-        // Clean up after 3 seconds
-        setTimeout(() => {
-            if (explosionContainer.parentElement) {
-                explosionContainer.parentElement.removeChild(explosionContainer);
-            }
-            showStatus('❤️');
-        }, 3000);
-        
-        // Special milestone messages
-        const milestones = {
-            100: "First century of love! 💯",
-            200: "Double love power! 💯💯", 
-            500: "Love legend status! 🏆",
-            1000: "LOVE MASTER! 👑"
-        };
-        
-        if (milestones[totalCount]) {
-            setTimeout(() => {
-                showStatus(milestones[totalCount]);
-            }, 1500);
-        }
-    }
-
-    // Simple status update - no auto-reset
-    function showStatus(message) {
-        if (loveStatus) {
-            loveStatus.textContent = message;
-        }
-    }
-
-    // Load initial count
-    async function loadCount() {
-        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-        
-        if (isProduction) {
-            // Production: Database is the primary source
-            try {
-                const response = await fetch('/api/likes.php', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('Loaded count from server:', data);
-                    currentCount = data.count || 0;
-                    loveCountElement.textContent = currentCount.toLocaleString();
-                    updateLoveMeter(currentCount);
-                    // Update localStorage with server value
-                    localStorage.setItem('prowl-love-count', currentCount.toString());
-                    showStatus('❤️');
-                    return;
-                }
-            } catch (error) {
-                console.log('Server failed, using localStorage fallback');
-            }
-        }
-        
-        // Development or server failed: Use localStorage
-        const savedCount = localStorage.getItem('prowl-love-count') || '0';
-        currentCount = parseInt(savedCount);
-        loveCountElement.textContent = currentCount.toLocaleString();
-        updateLoveMeter(currentCount);
-        showStatus('❤️');
-    }
-
-    // Increment count - optimized for rapid clicking
-    async function incrementCount() {
-        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-        
-        // Immediate visual feedback
-        currentCount++;
-        loveCountElement.textContent = currentCount.toLocaleString();
-        updateLoveMeter(currentCount);
-        
-        // Quick visual effects
-        heartIcon.style.transform = 'scale(1.3)';
-        setTimeout(() => {
-            heartIcon.style.transform = 'scale(1)';
-        }, 100);
-        
-        if (isProduction) {
-            // Production: Send to database immediately
-            try {
-                const response = await fetch('/api/likes.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('Increment response from server:', data);
-                    if (data.count !== undefined) {
-                        // Always use server count in production
-                        currentCount = data.count;
-                        loveCountElement.textContent = currentCount.toLocaleString();
-                        updateLoveMeter(currentCount);
-                        localStorage.setItem('prowl-love-count', currentCount.toString());
-                    }
-                } else {
-                    console.log('Server increment failed, reverting');
-                    // Server failed, revert optimistic update
-                    currentCount--;
-                    loveCountElement.textContent = currentCount.toLocaleString();
-                    updateLoveMeter(currentCount);
-                    localStorage.setItem('prowl-love-count', currentCount.toString());
-                }
-            } catch (error) {
-                // Server failed, revert optimistic update
-                currentCount--;
-                loveCountElement.textContent = currentCount.toLocaleString();
-                updateLoveMeter(currentCount);
-                localStorage.setItem('prowl-love-count', currentCount.toString());
-                console.log('Server sync failed, reverted local count');
-            }
-        } else {
-            // Development: Use localStorage only
-            localStorage.setItem('prowl-love-count', currentCount.toString());
-        }
-    }
-
-    // Event listeners
-    loveButton.addEventListener('click', incrementCount);
-
-    // Load count on page load
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(loadCount, 100); // Small delay to ensure DOM is ready
-    });
-
-    // Smart polling for real-time updates (only in production)
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        let isUserActive = true;
-        let lastActivity = Date.now();
-        let pollInterval;
-        
-        // Track user activity
-        ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'].forEach(event => {
-            document.addEventListener(event, () => {
-                isUserActive = true;
-                lastActivity = Date.now();
-            }, { passive: true });
-        });
-        
-        // Check if user is inactive (no activity for 2 minutes)
-        setInterval(() => {
-            isUserActive = (Date.now() - lastActivity) < 120000; // 2 minutes
-        }, 10000);
-        
-        // Smart polling function
-        function startSmartPolling() {
-            if (pollInterval) clearInterval(pollInterval);
-            
-            const interval = isUserActive ? 3000 : 30000; // 3s active, 30s inactive
-            pollInterval = setInterval(loadCount, interval);
-        }
-        
-        // Start polling and adjust based on activity
-        startSmartPolling();
-        setInterval(startSmartPolling, 10000); // Recheck every 10 seconds
-        
-        // Poll immediately when user becomes active
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                isUserActive = true;
-                lastActivity = Date.now();
-                loadCount(); // Immediate update when tab becomes visible
-                startSmartPolling();
-            }
-        });
-    }
-</script>

@@ -2,7 +2,7 @@
 import SocialIcon from './SocialIcon.astro';
 
 interface Social {
-    icon: 'github' | 'twitter' | 'discord';
+    icon: 'github' | 'twitter' | 'reddit';
     link: string;
     title?: string;
 }
@@ -10,15 +10,15 @@ interface Social {
 const socials: Social[] = [{
     icon: 'github',
     link: 'https://github.com/neur0map',
-    title: 'Prowl Tools on GitHub coming soon'
+    title: 'Prowl Tools on GitHub'
 }, {
     icon: 'twitter',
     link: 'https://x.com/neur0map',
-    title: 'Follow @ProwlTools'
+    title: 'Follow @neur0map'
 }, {
-    icon: 'discord',
-    link: 'https://discord.gg/qcPcGXrk',
-    title: 'Join Prowl Discord'
+    icon: 'reddit',
+    link: 'https://www.reddit.com/r/prowl_sh/',
+    title: 'Join r/prowl_sh Community'
 }];
 
 ---

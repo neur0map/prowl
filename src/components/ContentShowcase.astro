@@ -1,153 +1,105 @@
 ---
-import CentipedeMascot from './CentipedeMascot.astro';
-import ManxMascot from './ManxMascot.astro';
-
 interface VideoShowcase {
-    id: string;
-    title: string;
+    name: string;
     description: string;
-    duration: string;
-    category: 'workflow' | 'integration' | 'demo';
-    tools: string[];
-    thumbnail: string;
-    videoUrl?: string; // For when you have actual videos
+    youtubeId?: string;
     isComingSoon?: boolean;
+    toolType: 'security' | 'dev';
 }
 
 const showcaseVideos: VideoShowcase[] = [
     {
-        id: 'rapid-research',
-        title: 'Lightning-Fast Vulnerability Research',
-        description: 'From zero to exploit in under 60 seconds using Manx',
-        duration: '2:15',
-        category: 'integration',
-        tools: ['Manx'],
-        thumbnail: 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
-        isComingSoon: true
+        name: 'Manx',
+        description: 'Fast CLI documentation search in action',
+        youtubeId: '3gINTsmHnYA',
+        toolType: 'dev'
     },
     {
-        id: 'recon-workflow',
-        title: 'Complete Reconnaissance Pipeline',
-        description: 'Watch IPCrawler and Manx work together for full-spectrum security assessment',
-        duration: '3:45',
-        category: 'workflow',
-        tools: ['IPCrawler', 'Manx'],
-        thumbnail: 'linear-gradient(135deg, #dc2626 0%, #7c2d12 100%)',
-        isComingSoon: true
+        name: 'Cyx',
+        description: 'LLM-powered security command lookup demo',
+        youtubeId: 'iikQZa36yYc',
+        toolType: 'dev'
     },
     {
-        id: 'automated-osint',
-        title: 'OSINT Collection in Action',
-        description: 'Real-time intelligence gathering with IPCrawler',
-        duration: '4:20',
-        category: 'demo',
-        tools: ['IPCrawler'],
-        thumbnail: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
-        isComingSoon: true
+        name: 'doCrawl',
+        description: 'Documentation crawler converting sites to Markdown',
+        youtubeId: 'aEBA0nFWaPE',
+        toolType: 'dev'
+    },
+    {
+        name: 'IPCrawler',
+        description: 'Network reconnaissance and scanning',
+        isComingSoon: true,
+        toolType: 'security'
     }
 ];
 ---
 
-<div class="space-y-8">
+<div class="space-y-5">
 
-    <!-- Header Section -->
-    <div class="text-center space-y-4 pb-8">
-        <h1 class="text-3xl font-bold text-white mb-2">
-            <span class="text-green-400">Video Showcase</span>
-        </h1>
-        <p class="text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Watch Prowl tools in action. Real demonstrations, live workflows, and expert techniques—learn by seeing the hunt unfold.
+    <!-- Header -->
+    <div class="space-y-2">
+        <h2 class="text-xl font-bold text-white">Video Demos</h2>
+        <p class="text-sm text-gray-400">
+            Watch the tools in action. Real usage, no fluff.
         </p>
-        <div class="flex flex-wrap justify-center gap-2 text-xs">
-            <span class="px-3 py-1 bg-amber-900/30 text-amber-400 rounded-full">🎬 Live Demos</span>
-            <span class="px-3 py-1 bg-blue-900/30 text-blue-400 rounded-full">⚡ Quick Tips</span>
-            <span class="px-3 py-1 bg-green-900/30 text-green-400 rounded-full">🔧 Workflows</span>
-        </div>
     </div>
 
-    <!-- Video Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {showcaseVideos.map(video => 
-            <div class="group cursor-pointer" onclick={`openVideoModal('${video.id}')`}>
-                <div class="relative overflow-hidden rounded-xl bg-gray-900 border border-gray-800 hover:border-green-500/50 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-green-500/10">
-                    
-                    <!-- Video Thumbnail -->
-                    <div class="relative aspect-video overflow-hidden">
-                        <!-- Gradient Background Thumbnail -->
-                        <div 
-                            class="w-full h-full flex items-center justify-center relative"
-                            style={`background: ${video.thumbnail}`}
-                        >
-                            <!-- Play Button Overlay -->
-                            <div class="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/10 transition-colors">
-                                <div class="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-lg">
-                                    <svg class="w-6 h-6 text-gray-900 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M8 5v14l11-7z"/>
-                                    </svg>
-                                </div>
-                            </div>
+    <!-- Videos Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {showcaseVideos.map(video =>
+            <div class="group">
+                <div class={`rounded-xl overflow-hidden border transition-all duration-300 ${
+                    video.toolType === 'security'
+                        ? 'border-amber-700/30 hover:border-amber-600/50 bg-gradient-to-br from-amber-950/5 to-black'
+                        : 'border-blue-700/30 hover:border-blue-600/50 bg-gradient-to-br from-blue-950/5 to-black'
+                }`}>
 
-                            <!-- Duration Badge -->
-                            <div class="absolute bottom-3 right-3 px-2 py-1 bg-black/80 text-white text-xs font-medium rounded backdrop-blur-sm">
-                                {video.duration}
-                            </div>
-
-                            <!-- Coming Soon Badge -->
-                            {video.isComingSoon && (
-                                <div class="absolute top-3 left-3 px-3 py-1 bg-yellow-600/90 text-yellow-100 text-xs font-medium rounded-full">
-                                    Coming Soon
-                                </div>
-                            )}
-
-                            <!-- Tool Icons Overlay -->
-                            <div class="absolute top-3 right-3 flex space-x-1">
-                                {video.tools.map(tool => (
-                                    <div class="w-6 h-6 bg-black/60 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                        {tool === 'IPCrawler' ? (
-                                            <CentipedeMascot size={14} />
-                                        ) : (
-                                            <ManxMascot size={14} />
-                                        )}
+                    <!-- Video Embed or Coming Soon -->
+                    <div class="relative aspect-video bg-gray-900">
+                        {video.youtubeId ? (
+                            <iframe
+                                class="w-full h-full"
+                                src={`https://www.youtube.com/embed/${video.youtubeId}`}
+                                title={`${video.name} demo`}
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowfullscreen
+                            ></iframe>
+                        ) : (
+                            <div class="w-full h-full flex items-center justify-center">
+                                <div class="text-center space-y-2">
+                                    <div class="w-12 h-12 bg-gray-800/50 rounded-lg flex items-center justify-center mx-auto">
+                                        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                        </svg>
                                     </div>
-                                ))}
+                                    <p class="text-sm text-gray-500 font-medium">Coming Soon</p>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     <!-- Video Info -->
-                    <div class="p-4 space-y-3">
+                    <div class="p-3 border-t border-gray-800/50">
                         <div class="flex items-center justify-between">
-                            <span class={`px-2 py-1 rounded-full text-xs font-medium ${
-                                video.category === 'workflow' ? 'bg-green-900/30 text-green-400' :
-                                video.category === 'integration' ? 'bg-blue-900/30 text-blue-400' :
-                                'bg-purple-900/30 text-purple-400'
-                            }`}>
-                                {video.category === 'workflow' ? '⚡ Workflow' :
-                                 video.category === 'integration' ? '🔗 Integration' :
-                                 '🎬 Demo'}
-                            </span>
-                        </div>
-
-                        <h3 class="text-lg font-bold text-white group-hover:text-green-400 transition-colors line-clamp-2">
-                            {video.title}
-                        </h3>
-
-                        <p class="text-gray-400 text-sm leading-relaxed line-clamp-2">
-                            {video.description}
-                        </p>
-
-                        <!-- Tools List -->
-                        <div class="flex items-center space-x-2 text-xs">
-                            <span class="text-gray-500">Tools:</span>
-                            <div class="flex space-x-2">
-                                {video.tools.map(tool => (
-                                    <span class={`font-medium ${
-                                        tool === 'IPCrawler' ? 'text-amber-400' : 'text-blue-400'
-                                    }`}>
-                                        {tool}
-                                    </span>
-                                ))}
+                            <div>
+                                <h3 class={`text-sm font-semibold mb-0.5 ${
+                                    video.toolType === 'security' ? 'text-amber-400' : 'text-blue-400'
+                                }`}>
+                                    {video.name}
+                                </h3>
+                                <p class="text-xs text-gray-400">
+                                    {video.description}
+                                </p>
                             </div>
+                            <span class={`px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap ${
+                                video.toolType === 'security'
+                                    ? 'bg-amber-900/20 text-amber-400'
+                                    : 'bg-blue-900/20 text-blue-400'
+                            }`}>
+                                {video.toolType === 'security' ? 'Security' : 'Dev'}
+                            </span>
                         </div>
                     </div>
 
@@ -156,138 +108,5 @@ const showcaseVideos: VideoShowcase[] = [
         )}
     </div>
 
-    <!-- Coming Soon Notice -->
-    <div class="bg-gradient-to-r from-yellow-950/20 to-orange-950/20 border border-yellow-700/30 rounded-lg p-6 text-center">
-        <div class="flex items-center justify-center space-x-3 mb-4">
-            <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-            </svg>
-            <h2 class="text-xl font-bold text-white">Videos In Production</h2>
-        </div>
-        <p class="text-gray-300 mb-4 max-w-2xl mx-auto">
-            These demonstration videos are currently being crafted to show you the full power of Prowl tools. 
-            Each video will feature real scenarios, expert techniques, and practical workflows.
-        </p>
-        <div class="flex flex-col sm:flex-row gap-3 justify-center items-center">
-            <a 
-                href="https://github.com/neur0map" 
-                target="_blank"
-                class="px-6 py-3 bg-yellow-800/20 hover:bg-yellow-700/30 text-yellow-300 hover:text-yellow-200 rounded-lg text-sm font-medium transition-colors border border-yellow-700/30 hover:border-yellow-600/50 inline-flex items-center space-x-2"
-            >
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
-                </svg>
-                <span>Get Notified on GitHub</span>
-            </a>
-            <button 
-                onclick="document.getElementById('tab1').click()"
-                class="px-6 py-3 bg-green-800/20 hover:bg-green-700/30 text-green-300 hover:text-green-200 rounded-lg text-sm font-medium transition-colors border border-green-700/30 hover:border-green-600/50"
-            >
-                Try The Tools Now
-            </button>
-        </div>
-    </div>
 
 </div>
-
-<!-- Video Modal -->
-<div id="videoModal" class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 opacity-0 pointer-events-none transition-all duration-300">
-    <div class="relative w-full max-w-6xl mx-4 bg-gray-900 rounded-xl overflow-hidden shadow-2xl transform scale-95 transition-transform duration-300" id="modalContent">
-        
-        <!-- Modal Header -->
-        <div class="flex items-center justify-between p-6 border-b border-gray-700">
-            <div>
-                <h3 id="modalTitle" class="text-xl font-bold text-white"></h3>
-                <p id="modalDescription" class="text-gray-400 text-sm mt-1"></p>
-            </div>
-            <button 
-                onclick="closeVideoModal()"
-                class="w-8 h-8 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg flex items-center justify-center transition-colors"
-            >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
-        </div>
-
-        <!-- Modal Content -->
-        <div class="p-6">
-            <div class="aspect-video bg-gray-800 rounded-lg flex items-center justify-center">
-                <div class="text-center space-y-4">
-                    <div class="w-16 h-16 bg-yellow-600/20 rounded-full flex items-center justify-center mx-auto">
-                        <svg class="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h4 class="text-white font-semibold mb-2">Video Coming Soon</h4>
-                        <p class="text-gray-400 text-sm max-w-md">
-                            This demonstration video is currently in production. 
-                            Follow our GitHub for updates when it's ready.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-</div>
-
-<script>
-    function openVideoModal(videoId) {
-        const modal = document.getElementById('videoModal');
-        const modalContent = document.getElementById('modalContent');
-        const titleEl = document.getElementById('modalTitle');
-        const descriptionEl = document.getElementById('modalDescription');
-        
-        // Find video data (you'll need to pass this data to the script)
-        const videos = {
-            'rapid-research': {
-                title: 'Lightning-Fast Vulnerability Research',
-                description: 'From zero to exploit in under 60 seconds using Manx'
-            },
-            'recon-workflow': {
-                title: 'Complete Reconnaissance Pipeline',
-                description: 'Watch IPCrawler and Manx work together for full-spectrum security assessment'
-            },
-            'automated-osint': {
-                title: 'OSINT Collection in Action',
-                description: 'Real-time intelligence gathering with IPCrawler'
-            }
-        };
-        
-        const video = videos[videoId];
-        if (video) {
-            titleEl.textContent = video.title;
-            descriptionEl.textContent = video.description;
-        }
-        
-        // Show modal
-        modal.classList.remove('opacity-0', 'pointer-events-none');
-        modalContent.classList.remove('scale-95');
-        document.body.style.overflow = 'hidden';
-    }
-    
-    function closeVideoModal() {
-        const modal = document.getElementById('videoModal');
-        const modalContent = document.getElementById('modalContent');
-        
-        modal.classList.add('opacity-0', 'pointer-events-none');
-        modalContent.classList.add('scale-95');
-        document.body.style.overflow = 'auto';
-    }
-    
-    // Close on escape key
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closeVideoModal();
-        }
-    });
-    
-    // Close on background click
-    document.getElementById('videoModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            closeVideoModal();
-        }
-    });
-</script>
