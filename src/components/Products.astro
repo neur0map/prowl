@@ -1,0 +1,202 @@
+---
+interface Product {
+    name: string;
+    tagline: string;
+    description: string;
+    category: string;
+    status: 'live' | 'beta' | 'coming-soon';
+    color: 'violet' | 'rose' | 'cyan';
+    icon: string;
+    url: string;
+    cta: string;
+    features: string[];
+}
+
+const products: Product[] = [
+    {
+        name: 'Synthidol',
+        tagline: 'AI Influencer Studio',
+        description: 'Create realistic AI-generated influencers without the complexity of ComfyUI. Intuitive interface, consistent characters, production-ready outputs.',
+        category: 'Creative AI',
+        status: 'live',
+        color: 'violet',
+        icon: 'sparkles',
+        url: 'https://synthidol.com',
+        cta: 'Visit Synthidol',
+        features: ['No-code workflow', 'Character consistency', 'Batch generation', 'Commercial license']
+    },
+    {
+        name: 'Chrome Extension',
+        tagline: 'Browser Toolkit',
+        description: 'Productivity extension for developers and security researchers. Streamline your browser workflow.',
+        category: 'Productivity',
+        status: 'coming-soon',
+        color: 'cyan',
+        icon: 'puzzle',
+        url: '#',
+        cta: 'Coming Soon',
+        features: ['Quick actions', 'Keyboard shortcuts', 'Dev tools integration', 'Privacy focused']
+    }
+];
+
+const colorClasses = {
+    violet: {
+        bg: 'from-violet-500/10 to-violet-600/5',
+        border: 'border-violet-500/20 hover:border-violet-400/40',
+        glow: 'group-hover:shadow-violet-500/10',
+        text: 'text-violet-400',
+        badge: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+        icon: 'text-violet-400'
+    },
+    rose: {
+        bg: 'from-rose-500/10 to-rose-600/5',
+        border: 'border-rose-500/20 hover:border-rose-400/40',
+        glow: 'group-hover:shadow-rose-500/10',
+        text: 'text-rose-400',
+        badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+        icon: 'text-rose-400'
+    },
+    cyan: {
+        bg: 'from-cyan-500/10 to-cyan-600/5',
+        border: 'border-cyan-500/20 hover:border-cyan-400/40',
+        glow: 'group-hover:shadow-cyan-500/10',
+        text: 'text-cyan-400',
+        badge: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+        icon: 'text-cyan-400'
+    }
+};
+
+const statusLabels = {
+    'live': { text: 'Live', class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+    'beta': { text: 'Beta', class: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+    'coming-soon': { text: 'Coming Soon', class: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' }
+};
+---
+
+<section id="products" class="px-6 py-24 md:py-32">
+    <div class="max-w-6xl mx-auto">
+
+        <!-- Section Header -->
+        <div class="text-center mb-16">
+            <span class="inline-block text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4 opacity-0 animate-fade-in-up" data-scroll>
+                Products
+            </span>
+            <h2 class="text-3xl md:text-5xl font-serif mb-4 opacity-0 animate-fade-in-up delay-1" data-scroll>
+                Focused Tools,<br class="sm:hidden" /> Real Solutions
+            </h2>
+            <p class="text-zinc-500 max-w-md mx-auto opacity-0 animate-fade-in-up delay-2" data-scroll>
+                Commercial products built with the same care as our open source work.
+            </p>
+        </div>
+
+        <!-- Products Grid -->
+        <div class="grid md:grid-cols-2 gap-6 lg:gap-8">
+            {products.map((product, index) => {
+                const colors = colorClasses[product.color];
+                const status = statusLabels[product.status];
+
+                return (
+                    <a
+                        href={product.url}
+                        target={product.status === 'live' ? '_blank' : undefined}
+                        rel={product.status === 'live' ? 'noopener noreferrer' : undefined}
+                        class={`group block relative overflow-hidden rounded-2xl bg-gradient-to-br ${colors.bg} border ${colors.border} p-6 md:p-8 transition-all duration-500 hover:shadow-2xl ${colors.glow} opacity-0 animate-fade-in-up`}
+                        style={`animation-delay: ${(index + 3) * 100}ms`}
+                        data-scroll
+                    >
+                        <!-- Shimmer effect on hover -->
+                        <div class="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
+
+                        <div class="relative z-10">
+                            <!-- Header -->
+                            <div class="flex items-start justify-between mb-6">
+                                <div class="flex items-center gap-3">
+                                    <!-- Icon -->
+                                    <div class={`w-12 h-12 rounded-xl bg-zinc-900/50 border border-zinc-800 flex items-center justify-center ${colors.icon}`}>
+                                        {product.icon === 'sparkles' && (
+                                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/>
+                                            </svg>
+                                        )}
+                                        {product.icon === 'puzzle' && (
+                                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.25 6.087c0-.355.186-.676.401-.959.221-.29.349-.634.349-1.003 0-1.036-1.007-1.875-2.25-1.875s-2.25.84-2.25 1.875c0 .369.128.713.349 1.003.215.283.401.604.401.959v0a.64.64 0 01-.657.643 48.39 48.39 0 01-4.163-.3c.186 1.613.293 3.25.315 4.907a.656.656 0 01-.658.663v0c-.355 0-.676-.186-.959-.401a1.647 1.647 0 00-1.003-.349c-1.036 0-1.875 1.007-1.875 2.25s.84 2.25 1.875 2.25c.369 0 .713-.128 1.003-.349.283-.215.604-.401.959-.401v0c.31 0 .555.26.532.57a48.039 48.039 0 01-.642 5.056c1.518.19 3.058.309 4.616.354a.64.64 0 00.657-.643v0c0-.355-.186-.676-.401-.959a1.647 1.647 0 01-.349-1.003c0-1.035 1.008-1.875 2.25-1.875 1.243 0 2.25.84 2.25 1.875 0 .369-.128.713-.349 1.003-.215.283-.4.604-.4.959v0c0 .333.277.599.61.58a48.1 48.1 0 005.427-.63 48.05 48.05 0 00.582-4.717.532.532 0 00-.533-.57v0c-.355 0-.676.186-.959.401-.29.221-.634.349-1.003.349-1.035 0-1.875-1.007-1.875-2.25s.84-2.25 1.875-2.25c.37 0 .713.128 1.003.349.283.215.604.401.959.401v0a.656.656 0 00.659-.663 47.703 47.703 0 00-.31-4.82 47.646 47.646 0 00-4.406.33.643.643 0 01-.657-.643v0z"/>
+                                            </svg>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-serif text-white">{product.name}</h3>
+                                        <p class={`text-sm ${colors.text}`}>{product.tagline}</p>
+                                    </div>
+                                </div>
+                                <!-- Status Badge -->
+                                <span class={`px-2.5 py-1 rounded-full text-xs font-medium border ${status.class}`}>
+                                    {status.text}
+                                </span>
+                            </div>
+
+                            <!-- Description -->
+                            <p class="text-sm text-zinc-400 leading-relaxed mb-6">
+                                {product.description}
+                            </p>
+
+                            <!-- Features -->
+                            <div class="flex flex-wrap gap-2 mb-6">
+                                {product.features.map(feature => (
+                                    <span class="px-2.5 py-1 rounded-lg text-xs bg-zinc-900/50 text-zinc-500 border border-zinc-800">
+                                        {feature}
+                                    </span>
+                                ))}
+                            </div>
+
+                            <!-- CTA -->
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-mono uppercase tracking-wider text-zinc-600">
+                                    {product.category}
+                                </span>
+                                <span class={`inline-flex items-center gap-2 text-sm font-medium ${colors.text} group-hover:gap-3 transition-all`}>
+                                    {product.cta}
+                                    {product.status === 'live' && (
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                                        </svg>
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                );
+            })}
+        </div>
+
+    </div>
+</section>
+
+<style>
+    [data-scroll] {
+        opacity: 0;
+    }
+
+    [data-scroll].is-visible {
+        opacity: 1;
+    }
+</style>
+
+<script>
+    // Intersection Observer for scroll animations
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                entry.target.style.opacity = '';
+            }
+        });
+    }, observerOptions);
+
+    document.querySelectorAll('[data-scroll]').forEach(el => observer.observe(el));
+</script>

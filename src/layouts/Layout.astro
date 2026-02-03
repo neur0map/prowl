@@ -10,17 +10,17 @@ const authorPublisher   = 'Prowl';
 const geoRegion         = 'US';
 
 // SEO title, description and keywords
-const seoTitle          = 'Prowl | Open Source Security & Productivity Tools by neur0map';
-const seoDescription    = 'Discover powerful open source security and productivity tools. Predators for offensive security, Companions for daily productivity. Built by neur0map for developers and security professionals.';
-const seoKeywords       = 'open source tools, security tools, productivity tools, neur0map, github tools, developer utilities, penetration testing, command line tools, cybersecurity, hacking tools, developer productivity, security research';
+const seoTitle          = 'Prowl | Indie Dev Studio by neur0map';
+const seoDescription    = 'Indie dev studio building focused tools for security, developer productivity, and creative AI. Open source CLI tools and focused products. Built by neur0map.';
+const seoKeywords       = 'prowl, indie dev studio, neur0map, open source tools, security tools, developer tools, CLI tools, rust, synthidol, ai influencer, cybersecurity, penetration testing, documentation, productivity';
 
 // Twitter card data
 const twitter = {
     title:          seoTitle,
     description:    seoDescription,
     image:          ogImageUrl,
-    site:           '@prowltools',
-    creator:        '@prowltools'
+    site:           '@neur0map',
+    creator:        '@neur0map'
 };
 
 // Open graph data
@@ -49,7 +49,7 @@ const dublinCore = {
 ---
 
 <!doctype html>
-<html lang="en" class="bg-black text-gray-100 font-mono">
+<html lang="en" class="dark">
 
     <head>
 
@@ -65,11 +65,6 @@ const dublinCore = {
         <meta http-equiv="X-UA-Compatible"      content="IE=edge">
         <meta name="viewport"                   content="width=device-width, initial-scale=1">
         <!-- End: Meta-Tags -->
-
-        <!-- Start: DNS prefetch and preconnect -->
-        <!-- <link rel="preload" as="image" href="/img/logo.svg" /> -->
-        <!-- <link rel="preconnect" href="https://prowl.dev" /> -->
-        <!-- End: DNS prefetch and preconnect -->
 
         <!-- Start: Theming and Favicons -->
         <link rel="icon" type="image/png" href="/favicon.png" />
@@ -95,7 +90,7 @@ const dublinCore = {
         <meta property="og:image:type"          content="image/png">
         <meta property="og:image:width"         content="4606">
         <meta property="og:image:height"        content="1536">
-        <meta property="og:image:alt"           content="Prowl - Open Source Security & Productivity Tools">
+        <meta property="og:image:alt"           content="Prowl - Indie Dev Studio">
         <meta property="og:locale"              content={openGraph.locale}>
         <meta property="og:site_name"           content={openGraph.siteName}>
         <!-- End: Facebook open graph -->
@@ -105,7 +100,7 @@ const dublinCore = {
         <meta name="twitter:title"              content={twitter.title}>
         <meta name="twitter:description"        content={twitter.description}>
         <meta name="twitter:image"              content={twitter.image}>
-        <meta name="twitter:image:alt"          content="Prowl - Open Source Security & Productivity Tools">
+        <meta name="twitter:image:alt"          content="Prowl - Indie Dev Studio">
         <meta name="twitter:site"               content={twitter.site}>
         <meta name="twitter:creator"            content={twitter.creator}>
         <!-- End: Twitter card -->
@@ -137,62 +132,65 @@ const dublinCore = {
                     "@id": "https://prowl.sh/#website",
                     "url": "https://prowl.sh",
                     "name": "Prowl",
-                    "description": "Open source security and productivity tools by neur0map",
+                    "description": "Indie dev studio building tools for security, productivity, and creative AI",
                     "publisher": {
                         "@type": "Person",
                         "name": "neur0map",
                         "url": "https://github.com/neur0map"
-                    },
-                    "potentialAction": {
-                        "@type": "SearchAction",
-                        "target": "https://github.com/neur0map?q={search_term_string}",
-                        "query-input": "required name=search_term_string"
                     }
+                },
+                {
+                    "@type": "Organization",
+                    "@id": "https://prowl.sh/#organization",
+                    "name": "Prowl",
+                    "url": "https://prowl.sh",
+                    "logo": "https://prowl.sh/favicon.png",
+                    "description": "Indie dev studio by neur0map",
+                    "founder": {
+                        "@type": "Person",
+                        "name": "neur0map"
+                    },
+                    "sameAs": [
+                        "https://github.com/neur0map",
+                        "https://twitter.com/neur0map"
+                    ]
                 },
                 {
                     "@type": "WebPage",
                     "@id": "https://prowl.sh/#webpage",
                     "url": "https://prowl.sh",
-                    "name": "Prowl - Open Source Security & Productivity Tools",
+                    "name": "Prowl - Indie Dev Studio",
                     "isPartOf": {"@id": "https://prowl.sh/#website"},
-                    "about": {
-                        "@type": "SoftwareApplication",
-                        "name": "Prowl Tools",
-                        "applicationCategory": "DeveloperApplication",
-                        "operatingSystem": "Cross-platform",
-                        "description": "Collection of open source security and productivity tools",
-                        "author": {
-                            "@type": "Person",
-                            "name": "neur0map",
-                            "url": "https://github.com/neur0map"
-                        },
-                        "codeRepository": "https://github.com/neur0map/prowl"
-                    },
-                    "breadcrumb": {
-                        "@type": "BreadcrumbList",
-                        "itemListElement": [
-                            {
-                                "@type": "ListItem",
-                                "position": 1,
-                                "name": "Home",
-                                "item": "https://prowl.sh"
-                            }
-                        ]
-                    }
+                    "about": {"@id": "https://prowl.sh/#organization"}
                 },
                 {
-                    "@type": "Person",
-                    "@id": "https://prowl.sh/#author",
-                    "name": "neur0map",
-                    "url": "https://github.com/neur0map",
-                    "sameAs": [
-                        "https://github.com/neur0map"
-                    ],
-                    "jobTitle": "Software Developer",
-                    "worksFor": {
-                        "@type": "Organization",
-                        "name": "Open Source"
-                    }
+                    "@type": "SoftwareApplication",
+                    "name": "Synthidol",
+                    "applicationCategory": "MultimediaApplication",
+                    "operatingSystem": "Web",
+                    "description": "AI influencer creation platform - easier alternative to ComfyUI",
+                    "url": "https://synthidol.com",
+                    "author": {"@id": "https://prowl.sh/#organization"}
+                },
+                {
+                    "@type": "SoftwareApplication",
+                    "name": "IPCrawler",
+                    "applicationCategory": "SecurityApplication",
+                    "operatingSystem": "Cross-platform",
+                    "description": "TUI network reconnaissance tool with DNS, host discovery, and port scanning",
+                    "url": "https://github.com/neur0map/ipcrawler",
+                    "author": {"@id": "https://prowl.sh/#organization"},
+                    "isAccessibleForFree": true
+                },
+                {
+                    "@type": "SoftwareApplication",
+                    "name": "Manx",
+                    "applicationCategory": "DeveloperApplication",
+                    "operatingSystem": "Cross-platform",
+                    "description": "Sub-second CLI documentation finder",
+                    "url": "https://github.com/neur0map/manx",
+                    "author": {"@id": "https://prowl.sh/#organization"},
+                    "isAccessibleForFree": true
                 }
             ]
         }
@@ -200,11 +198,14 @@ const dublinCore = {
 
         <!-- Performance Hints -->
         <link rel="dns-prefetch" href="//github.com">
+        <link rel="dns-prefetch" href="//fonts.googleapis.com">
         <link rel="preconnect" href="https://api.github.com">
-        
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
         <!-- Additional SEO Meta Tags -->
-        <meta name="theme-color" content="#000000">
-        <meta name="msapplication-TileColor" content="#000000">
+        <meta name="theme-color" content="#050505">
+        <meta name="msapplication-TileColor" content="#050505">
         <meta name="application-name" content="Prowl">
         <meta name="apple-mobile-web-app-title" content="Prowl">
         <meta name="apple-mobile-web-app-capable" content="yes">
@@ -212,7 +213,7 @@ const dublinCore = {
 
     </head>
 
-    <body class="min-h-[100vh] flex items-center justify-center p-4">
+    <body class="min-h-screen bg-[#050505] text-zinc-300 antialiased">
         <slot />
     </body>
 

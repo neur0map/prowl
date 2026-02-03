@@ -1,5 +1,7 @@
-// Prowl Global Styles
-// Dark theme with hunting/prowling aesthetic
+// Prowl Studio Global Styles
+// Editorial dark theme with refined typography
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 
 * {
     margin: 0;
@@ -7,59 +9,54 @@
     box-sizing: border-box;
 }
 
-// Root variables for consistent theming
 :root {
-    // Prowl Brand Colors
-    --prowl-primary: #f59e0b;        // Amber - main brand color
-    --prowl-primary-dark: #d97706;   // Darker amber for hover states
-    --prowl-secondary: #3b82f6;      // Blue for helper tools
-    --prowl-danger: #ef4444;         // Red for alerts/warnings
-    --prowl-success: #10b981;        // Green for success states
-    
-    // Dark Theme Palette
-    --bg-primary: #000000;           // Pure black background
-    --bg-secondary: #0a0a0a;         // Slightly lighter black
-    --bg-tertiary: #111827;          // Dark gray
-    --bg-card: #1f2937;             // Card backgrounds
-    --bg-hover: #374151;            // Hover states
-    
-    // Text Colors
-    --text-primary: #ffffff;         // Pure white for headings
-    --text-secondary: #d1d5db;       // Light gray for body text
-    --text-muted: #9ca3af;          // Muted gray for less important text
-    --text-subtle: #6b7280;         // Subtle gray for hints/placeholders
-    
-    // Border Colors
-    --border-primary: #374151;      // Main border color
-    --border-secondary: #4b5563;    // Lighter borders
-    --border-accent: #f59e0b;       // Accent borders
-    
+    // Studio Brand Colors
+    --prowl-amber: #f59e0b;
+    --prowl-amber-dim: #d97706;
+    --prowl-cyan: #22d3ee;
+    --prowl-violet: #a78bfa;
+    --prowl-rose: #fb7185;
+    --prowl-emerald: #34d399;
+
+    // Dark Canvas
+    --bg-void: #050505;
+    --bg-base: #0a0a0a;
+    --bg-elevated: #111111;
+    --bg-surface: #171717;
+    --bg-hover: #1f1f1f;
+
+    // Text Hierarchy
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+    --text-subtle: #52525b;
+
+    // Borders
+    --border-dim: #27272a;
+    --border-default: #3f3f46;
+    --border-bright: #52525b;
+
     // Shadows
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.25);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-    --shadow-accent: 0 4px 14px 0 rgba(245, 158, 11, 0.15);
-    
-    // Animation timings
-    --duration-fast: 0.15s;
-    --duration-normal: 0.3s;
-    --duration-slow: 0.5s;
-    
-    // Easing functions
-    --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --shadow-glow: 0 0 60px -15px rgba(245, 158, 11, 0.15);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 4px 20px rgba(0,0,0,0.3);
+    --shadow-elevated: 0 25px 50px -12px rgba(0,0,0,0.5);
+
+    // Animation
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --duration-fast: 150ms;
+    --duration-normal: 300ms;
+    --duration-slow: 500ms;
 }
 
-// Base HTML and Body styles
 html {
     scroll-behavior: smooth;
     font-size: 16px;
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: var(--bg-primary);
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background-color: var(--bg-void);
     color: var(--text-secondary);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
@@ -67,110 +64,72 @@ body {
     overflow-x: hidden;
 }
 
-// Typography improvements
+// Typography
 h1, h2, h3, h4, h5, h6 {
+    font-family: 'Instrument Serif', Georgia, serif;
     color: var(--text-primary);
-    font-weight: 700;
-    line-height: 1.2;
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
 }
 
-// Focus styles for accessibility
-*:focus {
-    outline: 2px solid var(--prowl-primary);
+.font-sans {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.font-serif {
+    font-family: 'Instrument Serif', Georgia, serif;
+}
+
+.font-mono {
+    font-family: 'Geist Mono', 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+// Selection & Focus
+::selection {
+    background-color: var(--prowl-amber);
+    color: var(--bg-void);
+}
+
+*:focus-visible {
+    outline: 2px solid var(--prowl-amber);
     outline-offset: 2px;
 }
 
-// Selection styles
-::selection {
-    background-color: var(--prowl-primary);
-    color: var(--bg-primary);
-}
-
-::-moz-selection {
-    background-color: var(--prowl-primary);
-    color: var(--bg-primary);
-}
-
-// Custom scrollbar
+// Custom Scrollbar
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--bg-hover);
-    border-radius: 4px;
-}
+    background: var(--border-dim);
+    border-radius: 3px;
 
-::-webkit-scrollbar-thumb:hover {
-    background: var(--border-secondary);
-}
-
-// Utility classes for consistent spacing
-.prowl-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 1.5rem;
-}
-
-// Animation utilities
-.prowl-fade-in {
-    animation: prowlFadeIn var(--duration-normal) var(--ease-out);
-}
-
-.prowl-slide-up {
-    animation: prowlSlideUp var(--duration-normal) var(--ease-out);
-}
-
-.prowl-scale-in {
-    animation: prowlScaleIn var(--duration-normal) var(--ease-bounce);
-}
-
-// Reduce motion for accessibility
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
+    &:hover {
+        background: var(--border-default);
     }
 }
 
-// Dark theme specific adjustments
-@media (prefers-color-scheme: dark) {
-    // Already optimized for dark theme
+// Noise texture overlay
+.noise-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
 
-// High contrast mode support
-@media (prefers-contrast: high) {
-    :root {
-        --text-primary: #ffffff;
-        --text-secondary: #ffffff;
-        --border-primary: #ffffff;
-        --prowl-primary: #ffff00;
-    }
-}
-
-// Animation keyframes
-@keyframes prowlFadeIn {
+// Animations
+@keyframes fadeInUp {
     from {
         opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes prowlSlideUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
+        transform: translateY(20px);
     }
     to {
         opacity: 1;
@@ -178,10 +137,15 @@ h1, h2, h3, h4, h5, h6 {
     }
 }
 
-@keyframes prowlScaleIn {
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes scaleIn {
     from {
         opacity: 0;
-        transform: scale(0.9);
+        transform: scale(0.95);
     }
     to {
         opacity: 1;
@@ -189,59 +153,141 @@ h1, h2, h3, h4, h5, h6 {
     }
 }
 
-// Prowl-specific component base styles
-.prowl-button {
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.1); }
+    50% { box-shadow: 0 0 40px rgba(245, 158, 11, 0.2); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+// Reduce motion
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+// Utility Classes
+.animate-fade-in-up {
+    animation: fadeInUp 0.6s var(--ease-out-expo) forwards;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.4s var(--ease-out-expo) forwards;
+}
+
+.animate-scale-in {
+    animation: scaleIn 0.4s var(--ease-out-expo) forwards;
+}
+
+.animate-float {
+    animation: float 4s ease-in-out infinite;
+}
+
+// Stagger delays
+@for $i from 1 through 10 {
+    .delay-#{$i} {
+        animation-delay: #{$i * 75}ms;
+    }
+}
+
+// Gradient text
+.gradient-text {
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+// Glow effects
+.glow-amber {
+    box-shadow: 0 0 30px -5px rgba(245, 158, 11, 0.3);
+}
+
+.glow-cyan {
+    box-shadow: 0 0 30px -5px rgba(34, 211, 238, 0.3);
+}
+
+.glow-violet {
+    box-shadow: 0 0 30px -5px rgba(167, 139, 250, 0.3);
+}
+
+// Card hover lift
+.hover-lift {
+    transition: transform var(--duration-normal) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo);
+
+    &:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-elevated);
+    }
+}
+
+// Button styles
+.btn-primary {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 0.5rem;
     padding: 0.75rem 1.5rem;
-    border-radius: 0.5rem;
+    background: var(--prowl-amber);
+    color: var(--bg-void);
     font-weight: 600;
-    text-decoration: none;
-    transition: all var(--duration-normal) var(--ease-in-out);
-    cursor: pointer;
+    font-size: 0.875rem;
+    border-radius: 8px;
     border: none;
-    
-    &.primary {
-        background-color: var(--prowl-primary);
-        color: var(--bg-primary);
-        
-        &:hover {
-            background-color: var(--prowl-primary-dark);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-accent);
-        }
-    }
-    
-    &.secondary {
-        background-color: transparent;
-        color: var(--text-secondary);
-        border: 2px solid var(--border-primary);
-        
-        &:hover {
-            border-color: var(--border-secondary);
-            color: var(--text-primary);
-        }
-    }
-}
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out-expo);
 
-.prowl-card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-primary);
-    border-radius: 0.75rem;
-    padding: 1.5rem;
-    transition: all var(--duration-normal) var(--ease-in-out);
-    
     &:hover {
-        border-color: var(--border-secondary);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-lg);
+        background: var(--prowl-amber-dim);
+        transform: translateY(-1px);
     }
 }
 
-// Brand mark styling for : } 
-.prowl-brand-mark {
-    font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-    color: var(--prowl-primary);
-    font-weight: 400;
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-default);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out-expo);
+
+    &:hover {
+        border-color: var(--border-bright);
+        color: var(--text-primary);
+        background: var(--bg-hover);
+    }
+}
+
+// Brand mark
+.brand-mark {
+    font-family: 'Geist Mono', monospace;
+    color: var(--prowl-amber);
+    font-weight: 500;
+}
+
+// High contrast mode
+@media (prefers-contrast: high) {
+    :root {
+        --text-primary: #ffffff;
+        --text-secondary: #e4e4e7;
+        --border-default: #a1a1aa;
+    }
 }

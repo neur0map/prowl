@@ -1,0 +1,158 @@
+---
+const currentYear = new Date().getFullYear();
+
+const links = {
+    products: [
+        { name: 'Synthidol', url: 'https://synthidol.com' },
+    ],
+    opensource: [
+        { name: 'IPCrawler', url: 'https://github.com/neur0map/ipcrawler' },
+        { name: 'Manx', url: 'https://github.com/neur0map/manx' },
+        { name: 'Cyx', url: 'https://github.com/neur0map/cyx' },
+        { name: 'doCrawl', url: 'https://github.com/neur0map/docrawl' },
+    ],
+    social: [
+        { name: 'GitHub', url: 'https://github.com/neur0map' },
+        { name: 'Twitter', url: 'https://twitter.com/neur0map' },
+        { name: 'Reddit', url: 'https://reddit.com/r/prowl_sh' },
+    ]
+};
+---
+
+<footer class="relative px-6 py-16 border-t border-zinc-900">
+
+    <!-- Gradient fade -->
+    <div class="absolute inset-0 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none" aria-hidden="true"></div>
+
+    <div class="relative z-10 max-w-6xl mx-auto">
+
+        <!-- Main Footer Content -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+
+            <!-- Brand -->
+            <div class="col-span-2 md:col-span-1">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                        <span class="brand-mark text-lg">:}</span>
+                    </div>
+                    <div>
+                        <span class="text-lg font-serif text-white">Prowl</span>
+                        <p class="text-xs text-zinc-600">Indie Dev Studio</p>
+                    </div>
+                </div>
+                <p class="text-sm text-zinc-600 leading-relaxed max-w-xs">
+                    Building focused tools at the intersection of security, productivity, and creative AI.
+                </p>
+            </div>
+
+            <!-- Products -->
+            <div>
+                <h4 class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">Products</h4>
+                <ul class="space-y-2">
+                    {links.products.map(link => (
+                        <li>
+                            <a
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sm text-zinc-500 hover:text-white transition-colors inline-flex items-center gap-1 group"
+                            >
+                                {link.name}
+                                <svg class="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                </svg>
+                            </a>
+                        </li>
+                    ))}
+                    <li>
+                        <span class="text-sm text-zinc-700">Chrome Extension</span>
+                        <span class="ml-2 text-xs text-zinc-700">(soon)</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Open Source -->
+            <div>
+                <h4 class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">Open Source</h4>
+                <ul class="space-y-2">
+                    {links.opensource.map(link => (
+                        <li>
+                            <a
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sm text-zinc-500 hover:text-white transition-colors"
+                            >
+                                {link.name}
+                            </a>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+            <!-- Connect -->
+            <div>
+                <h4 class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">Connect</h4>
+                <ul class="space-y-2">
+                    {links.social.map(link => (
+                        <li>
+                            <a
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sm text-zinc-500 hover:text-white transition-colors"
+                            >
+                                {link.name}
+                            </a>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+
+        </div>
+
+        <!-- Bottom Bar -->
+        <div class="pt-8 border-t border-zinc-900 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p class="text-xs text-zinc-700">
+                &copy; {currentYear} Prowl. Built with code and
+                <a
+                    href="https://buymeacoffee.com/neur0map"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-amber-500/60 hover:text-amber-400 transition-colors"
+                    title="Buy me a coffee"
+                >
+                    coffee
+                </a>.
+            </p>
+
+            <div class="flex items-center gap-4">
+                <span class="text-xs text-zinc-800">@neur0map</span>
+                <span class="brand-mark text-sm opacity-60">:}</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SEO content -->
+    <div class="sr-only">
+        <h2>Prowl - Indie Dev Studio</h2>
+        <p>
+            Prowl is an indie developer studio by neur0map, creating focused tools for
+            security professionals, developers, and creators. Our products include
+            Synthidol (AI influencer creation), open source CLI tools for network
+            reconnaissance, documentation search, and developer productivity.
+        </p>
+        <p>
+            Open source tools: IPCrawler (network reconnaissance), Manx (documentation search),
+            Cyx (LLM-powered command lookup), doCrawl (docs to markdown converter).
+            All built in Rust for speed and reliability.
+        </p>
+        <span>
+            prowl, neur0map, indie dev, developer tools, security tools, open source,
+            rust cli, network reconnaissance, ai influencer, synthidol, cybersecurity,
+            penetration testing, developer productivity, documentation tools
+        </span>
+    </div>
+
+</footer>

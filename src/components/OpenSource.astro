@@ -1,0 +1,293 @@
+---
+interface Tool {
+    name: string;
+    category: string;
+    description: string;
+    type: 'security' | 'dev';
+    github: string;
+    crates?: string;
+    installCommand: string;
+}
+
+const tools: Tool[] = [
+    {
+        name: 'IPCrawler',
+        category: 'Network Recon',
+        description: 'TUI network reconnaissance tool. Concurrent DNS resolution, host discovery, port scanning, and web analysis.',
+        type: 'security',
+        github: 'neur0map/ipcrawler',
+        installCommand: 'git clone https://github.com/neur0map/ipcrawler.git && cd ipcrawler && make build'
+    },
+    {
+        name: 'Manx',
+        category: 'Documentation',
+        description: 'Sub-second CLI docs finder. Offline caching, 2.9MB binary, zero dependencies.',
+        type: 'dev',
+        github: 'neur0map/manx',
+        crates: 'manx-cli',
+        installCommand: 'cargo install manx-cli'
+    },
+    {
+        name: 'Cyx',
+        category: 'CLI Assistant',
+        description: 'LLM-powered security command lookup with ONNX semantic search. Supports Perplexity, Groq, Ollama.',
+        type: 'dev',
+        github: 'neur0map/cyx',
+        crates: 'cyx',
+        installCommand: 'cargo install cyx'
+    },
+    {
+        name: 'doCrawl',
+        category: 'Documentation',
+        description: 'Convert docs sites to clean Markdown. Auto-detects Docusaurus, MkDocs, Sphinx, Next.js.',
+        type: 'dev',
+        github: 'neur0map/docrawl',
+        crates: 'docrawl',
+        installCommand: 'cargo install docrawl'
+    }
+];
+
+const securityTools = tools.filter(t => t.type === 'security');
+const devTools = tools.filter(t => t.type === 'dev');
+---
+
+<section id="opensource" class="px-6 py-24 md:py-32 bg-gradient-to-b from-transparent via-zinc-950/50 to-transparent">
+    <div class="max-w-6xl mx-auto">
+
+        <!-- Section Header -->
+        <div class="text-center mb-16">
+            <span class="inline-block text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4 opacity-0 animate-fade-in-up" data-scroll>
+                Open Source
+            </span>
+            <h2 class="text-3xl md:text-5xl font-serif mb-4 opacity-0 animate-fade-in-up delay-1" data-scroll>
+                Built in the Open
+            </h2>
+            <p class="text-zinc-500 max-w-lg mx-auto opacity-0 animate-fade-in-up delay-2" data-scroll>
+                CLI tools for security research and developer productivity.
+                Small, fast, dependable. All written in Rust.
+            </p>
+        </div>
+
+        <!-- Security Tools -->
+        <div class="mb-12">
+            <div class="flex items-center gap-3 mb-6 opacity-0 animate-fade-in-up delay-3" data-scroll>
+                <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-white font-sans">Security</h3>
+                <div class="flex-1 h-px bg-gradient-to-r from-amber-500/20 to-transparent"></div>
+            </div>
+
+            <div class="grid gap-4">
+                {securityTools.map((tool, index) => (
+                    <div
+                        class="group relative overflow-hidden rounded-xl bg-zinc-900/30 border border-zinc-800/50 hover:border-amber-500/30 p-5 transition-all duration-300 opacity-0 animate-fade-in-up"
+                        style={`animation-delay: ${(index + 4) * 75}ms`}
+                        data-scroll
+                    >
+                        <div class="flex flex-col md:flex-row md:items-center gap-4">
+                            <!-- Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <h4 class="text-lg font-medium text-white font-sans">{tool.name}</h4>
+                                    <span class="px-2 py-0.5 rounded text-xs font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                        {tool.category}
+                                    </span>
+                                </div>
+                                <p class="text-sm text-zinc-500 leading-relaxed">{tool.description}</p>
+                            </div>
+
+                            <!-- Install Command -->
+                            <div class="flex-shrink-0 w-full md:w-auto">
+                                <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-950/50 border border-zinc-800 group/cmd hover:border-amber-500/30 transition-colors">
+                                    <code class="text-xs font-mono text-zinc-400 truncate max-w-[240px]">{tool.installCommand}</code>
+                                    <button
+                                        onclick={`navigator.clipboard.writeText('${tool.installCommand}'); this.querySelector('svg').classList.add('text-emerald-400'); setTimeout(() => this.querySelector('svg').classList.remove('text-emerald-400'), 1000);`}
+                                        class="p-1.5 rounded hover:bg-zinc-800 transition-colors flex-shrink-0"
+                                        title="Copy to clipboard"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-zinc-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <a
+                                    href={`https://github.com/${tool.github}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-sm text-zinc-400 hover:text-white transition-all"
+                                >
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                                    </svg>
+                                    <span class="github-stars font-mono text-xs" data-repo={tool.github}>--</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        <!-- Dev Tools -->
+        <div>
+            <div class="flex items-center gap-3 mb-6 opacity-0 animate-fade-in-up delay-4" data-scroll>
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-white font-sans">Developer Tools</h3>
+                <div class="flex-1 h-px bg-gradient-to-r from-cyan-500/20 to-transparent"></div>
+            </div>
+
+            <div class="grid gap-4">
+                {devTools.map((tool, index) => (
+                    <div
+                        class="group relative overflow-hidden rounded-xl bg-zinc-900/30 border border-zinc-800/50 hover:border-cyan-500/30 p-5 transition-all duration-300 opacity-0 animate-fade-in-up"
+                        style={`animation-delay: ${(index + 6) * 75}ms`}
+                        data-scroll
+                    >
+                        <div class="flex flex-col md:flex-row md:items-center gap-4">
+                            <!-- Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <h4 class="text-lg font-medium text-white font-sans">{tool.name}</h4>
+                                    <span class="px-2 py-0.5 rounded text-xs font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                        {tool.category}
+                                    </span>
+                                </div>
+                                <p class="text-sm text-zinc-500 leading-relaxed">{tool.description}</p>
+                            </div>
+
+                            <!-- Install Command -->
+                            <div class="flex-shrink-0 w-full md:w-auto">
+                                <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-950/50 border border-zinc-800 group/cmd hover:border-cyan-500/30 transition-colors">
+                                    <code class="text-xs font-mono text-zinc-400 truncate max-w-[240px]">{tool.installCommand}</code>
+                                    <button
+                                        onclick={`navigator.clipboard.writeText('${tool.installCommand}'); this.querySelector('svg').classList.add('text-emerald-400'); setTimeout(() => this.querySelector('svg').classList.remove('text-emerald-400'), 1000);`}
+                                        class="p-1.5 rounded hover:bg-zinc-800 transition-colors flex-shrink-0"
+                                        title="Copy to clipboard"
+                                    >
+                                        <svg class="w-3.5 h-3.5 text-zinc-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                {tool.crates && (
+                                    <a
+                                        href={`https://crates.io/crates/${tool.crates}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-sm text-zinc-400 hover:text-white transition-all"
+                                        title="View on crates.io"
+                                    >
+                                        <svg class="w-4 h-4 text-orange-400" viewBox="0 0 512 512" fill="currentColor">
+                                            <path d="M239.1 6.3l-208 78c-18.7 7-31.1 25-31.1 45v225.1c0 18.2 10.3 34.8 26.5 42.9l208 104c13.5 6.8 29.4 6.8 42.9 0l208-104c16.3-8.1 26.5-24.8 26.5-42.9V129.3c0-20-12.4-37.9-31.1-44.9l-208-78C262 2.2 250 2.2 239.1 6.3zM256 68.4l192 72v1.1l-192 78-192-78v-1.1l192-72zm32 356V275.5l160-65v133.9l-160 80z"/>
+                                        </svg>
+                                    </a>
+                                )}
+                                <a
+                                    href={`https://github.com/${tool.github}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-sm text-zinc-400 hover:text-white transition-all"
+                                >
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                                    </svg>
+                                    <span class="github-stars font-mono text-xs" data-repo={tool.github}>--</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        <!-- Philosophy Banner -->
+        <div class="mt-16 p-6 md:p-8 rounded-2xl bg-gradient-to-br from-zinc-900/50 to-zinc-950/50 border border-zinc-800/50 opacity-0 animate-fade-in-up delay-6" data-scroll>
+            <div class="flex flex-col md:flex-row md:items-center gap-6">
+                <div class="flex-1">
+                    <h4 class="text-lg font-serif text-white mb-2">Built for Learning, Shared to Help</h4>
+                    <p class="text-sm text-zinc-500 leading-relaxed">
+                        These tools are hobby projects built with AI pair programming.
+                        I define the ideas, review the code, wire everything together, and test thoroughly.
+                        <span class="text-zinc-400">Issues and PRs welcome.</span>
+                    </p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-center px-4">
+                        <div class="text-2xl font-serif text-amber-400">{tools.length}</div>
+                        <div class="text-xs text-zinc-600 uppercase tracking-wider">Tools</div>
+                    </div>
+                    <div class="w-px h-10 bg-zinc-800"></div>
+                    <div class="text-center px-4">
+                        <div class="text-2xl font-serif text-cyan-400">100%</div>
+                        <div class="text-xs text-zinc-600 uppercase tracking-wider">Rust</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<script>
+    // Intersection Observer for scroll animations
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                entry.target.style.opacity = '';
+            }
+        });
+    }, observerOptions);
+
+    document.querySelectorAll('[data-scroll]').forEach(el => observer.observe(el));
+
+    // Fetch GitHub stars
+    async function fetchGitHubStars(repo: string) {
+        try {
+            const response = await fetch(`https://api.github.com/repos/${repo}`);
+            const data = await response.json();
+            return data.stargazers_count || 0;
+        } catch (error) {
+            console.error('Error fetching GitHub stars:', error);
+            return 0;
+        }
+    }
+
+    function formatNumber(num: number) {
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1).replace('.0', '') + 'k';
+        }
+        return num.toString();
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const githubElements = document.querySelectorAll('.github-stars');
+        for (const element of githubElements) {
+            const repo = element.getAttribute('data-repo');
+            if (repo) {
+                const stars = await fetchGitHubStars(repo);
+                element.textContent = `★ ${formatNumber(stars)}`;
+            }
+        }
+    });
+</script>
