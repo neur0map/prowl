@@ -1,0 +1,241 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+
+const lastUpdated = 'February 3, 2025';
+---
+
+<Layout>
+    <!-- Grid overlay -->
+    <div class="grid-overlay"></div>
+
+    <!-- Orange accent bar at top -->
+    <div class="fixed top-0 left-0 right-0 h-1.5 bg-[#F96302] z-50"></div>
+
+    <main class="relative z-10 pt-1.5">
+
+        <!-- Header -->
+        <section class="px-6 py-16 bg-[#FDF8F3]">
+            <div class="max-w-3xl mx-auto">
+                <!-- Back links -->
+                <div class="flex items-center gap-4 mb-8">
+                    <a href="/" class="inline-flex items-center gap-2 text-sm font-bold text-[#6B6358] hover:text-[#F96302] transition-colors group">
+                        <svg class="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="square" d="M19 12H5m0 0l6-6m-6 6l6 6"/>
+                        </svg>
+                        Prowl
+                    </a>
+                    <span class="text-[#D4C8B8]">/</span>
+                    <a href="/cramly" class="text-sm font-bold text-[#6B6358] hover:text-[#F96302] transition-colors">
+                        Cramly
+                    </a>
+                </div>
+
+                <h1 class="text-4xl md:text-5xl font-display text-[#1A1915] mb-4">
+                    PRIVACY POLICY
+                </h1>
+                <p class="text-lg text-[#6B6358]">
+                    Cramly - Cram Smarter, Not Harder
+                </p>
+                <p class="text-sm font-mono text-[#8A8278] mt-2">
+                    Last updated: {lastUpdated}
+                </p>
+            </div>
+        </section>
+
+        <!-- Content -->
+        <section class="px-6 py-16 bg-white">
+            <div class="absolute top-0 left-0 right-0 h-2 bg-[#1A1915]"></div>
+
+            <article class="max-w-3xl mx-auto prose-custom">
+
+                <div class="space-y-12">
+
+                    <!-- Introduction -->
+                    <div>
+                        <p class="text-lg text-[#3D3930] leading-relaxed">
+                            This Privacy Policy describes how Cramly ("we", "our", or "the extension") collects, uses, and protects your information when you use our Chrome extension. We are committed to protecting your privacy and being transparent about our data practices.
+                        </p>
+                    </div>
+
+                    <!-- Section 1 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">1</span>
+                            INFORMATION WE COLLECT
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p><strong class="text-[#1A1915]">Text Selections:</strong> When you use Cramly to analyze text, we temporarily process the text you've selected on a webpage. This text is sent to our AI service to generate responses.</p>
+                            <p><strong class="text-[#1A1915]">Images:</strong> If you use the image analysis feature, the images you submit are temporarily processed to provide explanations and insights.</p>
+                            <p><strong class="text-[#1A1915]">Usage Data:</strong> We may collect anonymous usage statistics such as feature usage frequency to improve the extension. This data cannot be used to identify you.</p>
+                            <p><strong class="text-[#1A1915]">We do NOT collect:</strong></p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Personal identification information (name, email, etc.)</li>
+                                <li>Browsing history or the URLs you visit</li>
+                                <li>Passwords or login credentials</li>
+                                <li>Financial information</li>
+                                <li>Data from pages you don't actively use Cramly on</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Section 2 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">2</span>
+                            HOW WE USE YOUR INFORMATION
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>The information we process is used solely to:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Provide AI-powered answers and explanations to your questions</li>
+                                <li>Analyze images and diagrams you submit</li>
+                                <li>Improve the quality and accuracy of our responses</li>
+                                <li>Fix bugs and improve extension performance</li>
+                            </ul>
+                            <p>We do not sell, rent, or share your data with third parties for marketing purposes.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 3 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">3</span>
+                            THIRD-PARTY SERVICES
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>Cramly uses third-party AI services to process your requests and generate responses. When you use Cramly:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Your selected text or images are sent to AI service providers (such as OpenAI or similar services) for processing</li>
+                                <li>These services have their own privacy policies governing how they handle data</li>
+                                <li>We select providers that maintain strong privacy and security standards</li>
+                            </ul>
+                            <p>We recommend reviewing the privacy policies of these AI service providers if you have concerns about how your data is processed.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 4 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">4</span>
+                            DATA STORAGE & RETENTION
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p><strong class="text-[#1A1915]">Local Storage:</strong> User preferences and settings are stored locally in your browser using Chrome's storage API. This data never leaves your device unless you choose to sync it via Chrome.</p>
+                            <p><strong class="text-[#1A1915]">Conversation History:</strong> If the extension stores conversation history, it is kept locally on your device. You can clear this data at any time through the extension settings.</p>
+                            <p><strong class="text-[#1A1915]">Server-Side:</strong> Text and images sent for AI processing are not permanently stored on our servers. They are processed in real-time and discarded after generating a response.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 5 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">5</span>
+                            DATA SECURITY
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>We take reasonable measures to protect your information:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>All data transmission uses HTTPS encryption</li>
+                                <li>We follow security best practices in our code</li>
+                                <li>We regularly update the extension to address security vulnerabilities</li>
+                                <li>We minimize the data we collect to only what's necessary for functionality</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Section 6 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">6</span>
+                            YOUR RIGHTS & CHOICES
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>You have control over your data:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li><strong>Uninstall:</strong> You can remove Cramly at any time, which removes all locally stored data</li>
+                                <li><strong>Clear Data:</strong> You can clear your conversation history and preferences through the extension settings</li>
+                                <li><strong>Don't Use:</strong> The extension only processes data when you actively use it — simply not selecting text means no data is sent</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Section 7 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">7</span>
+                            CHILDREN'S PRIVACY
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>Cramly is designed for students of all ages. We do not knowingly collect personal information from children under 13. The extension does not require account creation or personal information to use. If you believe we have inadvertently collected information from a child under 13, please contact us so we can delete it.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 8 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">8</span>
+                            CHANGES TO THIS POLICY
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>We may update this Privacy Policy from time to time. When we make significant changes, we will:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Update the "Last updated" date at the top of this policy</li>
+                                <li>Notify users through the extension if the changes are material</li>
+                            </ul>
+                            <p>We encourage you to review this policy periodically.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 9 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">9</span>
+                            CONTACT US
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>If you have questions, concerns, or requests regarding this Privacy Policy or your data, please contact us:</p>
+                            <div class="mt-4 p-4 bg-[#FDF8F3] border-2 border-[#E8E0D5]">
+                                <p class="font-mono text-sm">
+                                    <strong class="text-[#1A1915]">Email:</strong> <a href="mailto:privacy@prowl.sh" class="text-[#F96302] hover:underline">privacy@prowl.sh</a>
+                                </p>
+                                <p class="font-mono text-sm mt-2">
+                                    <strong class="text-[#1A1915]">GitHub:</strong> <a href="https://github.com/neur0map" target="_blank" rel="noopener noreferrer" class="text-[#F96302] hover:underline">github.com/neur0map</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Back to Cramly -->
+                <div class="mt-16 pt-8 border-t-2 border-[#E8E0D5]">
+                    <a href="/cramly" class="btn-secondary inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="square" d="M19 12H5m0 0l6-6m-6 6l6 6"/>
+                        </svg>
+                        Back to Cramly
+                    </a>
+                </div>
+
+            </article>
+        </section>
+
+    </main>
+
+    <Footer />
+</Layout>
+
+<style>
+    .prose-custom p {
+        line-height: 1.75;
+    }
+
+    .prose-custom ul {
+        margin-top: 0.5rem;
+    }
+
+    .prose-custom strong {
+        font-weight: 600;
+    }
+</style>

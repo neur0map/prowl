@@ -5,82 +5,131 @@ const socials = [
 ];
 ---
 
-<section class="min-h-[85vh] flex items-center justify-center px-6 py-20">
-    <div class="max-w-4xl mx-auto text-center">
+<section class="min-h-[90vh] flex items-center px-6 py-20 relative overflow-hidden">
 
-        <!-- Brand Mark -->
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20 mb-8 opacity-0 animate-fade-in-up">
-            <span class="brand-mark text-3xl">:}</span>
-        </div>
-
-        <!-- Headline -->
-        <h1 class="text-5xl md:text-7xl lg:text-8xl font-serif mb-6 opacity-0 animate-fade-in-up delay-1">
-            Prowl
-        </h1>
-
-        <!-- Tagline -->
-        <p class="text-xl md:text-2xl text-zinc-400 font-serif italic mb-4 opacity-0 animate-fade-in-up delay-2">
-            Indie Dev Studio
-        </p>
-
-        <!-- Description -->
-        <p class="text-base md:text-lg text-zinc-500 max-w-xl mx-auto mb-10 leading-relaxed opacity-0 animate-fade-in-up delay-3">
-            Building tools at the intersection of <span class="text-amber-400">security</span>,
-            <span class="text-cyan-400">developer productivity</span>, and
-            <span class="text-violet-400">creative AI</span>.
-            Open source foundations, focused products.
-        </p>
-
-        <!-- CTA Buttons -->
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 opacity-0 animate-fade-in-up delay-4">
-            <a href="#products" class="btn-primary group">
-                <span>View Products</span>
-                <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-                </svg>
-            </a>
-            <a href="#opensource" class="btn-secondary">
-                Open Source Tools
-            </a>
-        </div>
-
-        <!-- Social Links -->
-        <div class="flex items-center justify-center gap-6 opacity-0 animate-fade-in-up delay-5">
-            {socials.map(social => (
-                <a
-                    href={social.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-zinc-600 hover:text-zinc-300 transition-colors duration-200"
-                    title={social.name}
-                >
-                    {social.icon === 'github' && (
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
-                        </svg>
-                    )}
-                    {social.icon === 'twitter' && (
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                        </svg>
-                    )}
-                </a>
-            ))}
-            <span class="text-zinc-700">|</span>
-            <a
-                href="https://github.com/neur0map"
-                class="text-xs font-mono text-zinc-600 hover:text-amber-400 transition-colors"
-            >
-                @neur0map
-            </a>
-        </div>
-
+    <!-- Large background text watermark -->
+    <div class="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden" aria-hidden="true">
+        <span class="text-[20vw] font-display text-[#1A1915] opacity-[0.03] whitespace-nowrap">PROWL</span>
     </div>
+
+    <div class="max-w-6xl mx-auto w-full">
+        <div class="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+
+            <!-- Left: Main Content -->
+            <div class="relative">
+
+                <!-- Overline badge -->
+                <div class="inline-flex items-center gap-2 mb-6 opacity-0 animate-fade-in-up flex-wrap">
+                    <span class="tag tag-orange text-[10px] sm:text-xs">Indie Dev Studio</span>
+                    <span class="w-8 sm:w-12 h-0.5 bg-[#F96302] hidden sm:block"></span>
+                </div>
+
+                <!-- Main headline - BOLD -->
+                <h1 class="text-6xl md:text-7xl lg:text-8xl font-display mb-6 opacity-0 animate-fade-in-up delay-1 leading-[0.9]">
+                    <span class="text-[#1A1915]">BUILD.</span><br/>
+                    <span class="text-[#F96302]">SHIP.</span><br/>
+                    <span class="text-[#1A1915]">REPEAT.</span>
+                </h1>
+
+                <!-- Subtitle -->
+                <p class="text-xl md:text-2xl text-[#3D3930] font-sans font-medium mb-4 opacity-0 animate-fade-in-up delay-2">
+                    Tools for <span class="text-[#F96302] font-bold">security</span>,
+                    <span class="text-[#0D7377] font-bold">productivity</span>, and
+                    <span class="text-[#A84520] font-bold">creative work</span>.
+                </p>
+
+                <!-- Description -->
+                <p class="text-base md:text-lg text-[#6B6358] max-w-lg mb-10 leading-relaxed opacity-0 animate-fade-in-up delay-3">
+                    Open source foundations. Focused products.
+                    All built by <span class="font-mono font-bold text-[#1A1915]">@neur0map</span>.
+                </p>
+
+                <!-- CTA Buttons - Bold industrial style -->
+                <div class="flex flex-col sm:flex-row items-start gap-4 mb-10 opacity-0 animate-fade-in-up delay-4">
+                    <a href="#products" class="btn-primary group">
+                        <span>View Products</span>
+                        <svg class="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                            <path stroke-linecap="square" stroke-linejoin="miter" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                        </svg>
+                    </a>
+                    <a href="#opensource" class="btn-secondary">
+                        Open Source
+                    </a>
+                </div>
+
+                <!-- Social Links - more visible -->
+                <div class="flex items-center gap-5 opacity-0 animate-fade-in-up delay-5">
+                    {socials.map(social => (
+                        <a
+                            href={social.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex items-center gap-2 text-[#3D3930] hover:text-[#F96302] transition-colors duration-200 group"
+                            title={social.name}
+                        >
+                            {social.icon === 'github' && (
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                                </svg>
+                            )}
+                            {social.icon === 'twitter' && (
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                                </svg>
+                            )}
+                            <span class="text-sm font-bold uppercase tracking-wide group-hover:underline underline-offset-4">{social.name}</span>
+                        </a>
+                    ))}
+                </div>
+
+            </div>
+
+            <!-- Right: Brand Mark / Visual -->
+            <div class="relative hidden lg:flex items-center justify-center opacity-0 animate-scale-in delay-3">
+
+                <!-- Main brand container -->
+                <div class="relative">
+                    <!-- Shadow layer -->
+                    <div class="absolute inset-0 bg-[#1A1915] transform translate-x-3 translate-y-3"></div>
+
+                    <!-- Main box -->
+                    <div class="relative w-72 h-72 bg-[#F96302] border-4 border-[#1A1915] flex items-center justify-center">
+                        <span class="font-mono font-bold text-8xl text-[#FDF8F3]">:}</span>
+
+                        <!-- Corner accents -->
+                        <div class="absolute -top-2 -left-2 w-4 h-4 bg-[#1A1915]"></div>
+                        <div class="absolute -top-2 -right-2 w-4 h-4 bg-[#1A1915]"></div>
+                        <div class="absolute -bottom-2 -left-2 w-4 h-4 bg-[#1A1915]"></div>
+                        <div class="absolute -bottom-2 -right-2 w-4 h-4 bg-[#1A1915]"></div>
+                    </div>
+
+                    <!-- Floating labels -->
+                    <div class="absolute -top-6 -right-8 transform rotate-3">
+                        <div class="px-3 py-1.5 bg-[#FDF8F3] border-2 border-[#1A1915] shadow-[3px_3px_0_#1A1915]">
+                            <span class="font-mono text-xs font-bold text-[#1A1915]">EST. 2024</span>
+                        </div>
+                    </div>
+
+                    <div class="absolute -bottom-4 -left-6 transform -rotate-2">
+                        <div class="px-3 py-1.5 bg-[#1A1915] border-2 border-[#1A1915]">
+                            <span class="font-mono text-xs font-bold text-[#F96302]">RUST + AI</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
 </section>
 
 <!-- Scroll indicator -->
 <div class="absolute bottom-8 left-1/2 -translate-x-1/2 opacity-0 animate-fade-in delay-6">
-    <div class="w-6 h-10 rounded-full border-2 border-zinc-700 flex items-start justify-center p-2">
-        <div class="w-1 h-2 bg-zinc-600 rounded-full animate-bounce"></div>
+    <div class="flex flex-col items-center gap-2">
+        <span class="font-mono text-xs text-[#6B6358] uppercase tracking-widest">Scroll</span>
+        <div class="w-6 h-10 border-3 border-[#1A1915] flex items-start justify-center p-2">
+            <div class="w-1.5 h-3 bg-[#F96302] animate-bounce"></div>
+        </div>
     </div>
 </div>

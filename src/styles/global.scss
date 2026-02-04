@@ -1,7 +1,7 @@
 // Prowl Studio Global Styles
-// Editorial dark theme with refined typography
+// Industrial Workshop - High visibility, Home Depot Orange
 
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Archivo+Black&family=Work+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
 * {
     margin: 0;
@@ -10,40 +10,52 @@
 }
 
 :root {
-    // Studio Brand Colors
-    --prowl-amber: #f59e0b;
-    --prowl-amber-dim: #d97706;
-    --prowl-cyan: #22d3ee;
-    --prowl-violet: #a78bfa;
-    --prowl-rose: #fb7185;
-    --prowl-emerald: #34d399;
+    // Home Depot Orange Palette
+    --hd-orange: #F96302;
+    --hd-orange-bright: #FF7519;
+    --hd-orange-dark: #D94F00;
+    --hd-orange-burnt: #B8400A;
 
-    // Dark Canvas
-    --bg-void: #050505;
-    --bg-base: #0a0a0a;
-    --bg-elevated: #111111;
-    --bg-surface: #171717;
-    --bg-hover: #1f1f1f;
+    // Warm neutrals (NOT typical AI grays)
+    --charcoal: #1A1915;
+    --graphite: #2D2A24;
+    --slate: #3D3930;
+    --ash: #5C554A;
 
-    // Text Hierarchy
-    --text-primary: #fafafa;
-    --text-secondary: #a1a1aa;
-    --text-muted: #71717a;
-    --text-subtle: #52525b;
+    // Light mode canvas
+    --cream: #FDF8F3;
+    --cream-warm: #F9F3EB;
+    --cream-deep: #F0E8DC;
+    --paper: #FFFFFF;
+
+    // Text Hierarchy (high contrast)
+    --text-primary: #1A1915;
+    --text-secondary: #3D3930;
+    --text-muted: #6B6358;
+    --text-subtle: #8A8278;
+    --text-inverse: #FDF8F3;
+
+    // Accent colors (not AI-typical)
+    --accent-teal: #0D7377;
+    --accent-rust: #A84520;
+    --accent-forest: #2D5A27;
+    --accent-navy: #1E3A5F;
 
     // Borders
-    --border-dim: #27272a;
-    --border-default: #3f3f46;
-    --border-bright: #52525b;
+    --border-light: #E8E0D5;
+    --border-default: #D4C8B8;
+    --border-strong: #3D3930;
 
-    // Shadows
-    --shadow-glow: 0 0 60px -15px rgba(245, 158, 11, 0.15);
-    --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 4px 20px rgba(0,0,0,0.3);
-    --shadow-elevated: 0 25px 50px -12px rgba(0,0,0,0.5);
+    // Shadows (warm tinted)
+    --shadow-sm: 0 1px 2px rgba(26, 25, 21, 0.06), 0 1px 3px rgba(26, 25, 21, 0.1);
+    --shadow-md: 0 4px 6px rgba(26, 25, 21, 0.07), 0 10px 15px rgba(26, 25, 21, 0.1);
+    --shadow-lg: 0 10px 25px rgba(26, 25, 21, 0.1), 0 20px 48px rgba(26, 25, 21, 0.1);
+    --shadow-orange: 0 4px 14px rgba(249, 99, 2, 0.25);
 
     // Animation
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
     --duration-fast: 150ms;
     --duration-normal: 300ms;
     --duration-slow: 500ms;
@@ -55,74 +67,79 @@ html {
 }
 
 body {
-    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-    background-color: var(--bg-void);
+    font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background-color: var(--cream);
     color: var(--text-secondary);
-    line-height: 1.6;
+    line-height: 1.65;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
 }
 
-// Typography
+// Typography - Industrial, bold, visible
 h1, h2, h3, h4, h5, h6 {
-    font-family: 'Instrument Serif', Georgia, serif;
+    font-family: 'Archivo Black', Impact, sans-serif;
     color: var(--text-primary);
     font-weight: 400;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
 }
 
 .font-sans {
-    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
-.font-serif {
-    font-family: 'Instrument Serif', Georgia, serif;
+.font-display {
+    font-family: 'Archivo Black', Impact, sans-serif;
 }
 
 .font-mono {
-    font-family: 'Geist Mono', 'JetBrains Mono', 'SF Mono', monospace;
+    font-family: 'Space Mono', 'Courier New', monospace;
 }
 
 // Selection & Focus
 ::selection {
-    background-color: var(--prowl-amber);
-    color: var(--bg-void);
+    background-color: var(--hd-orange);
+    color: var(--paper);
 }
 
 *:focus-visible {
-    outline: 2px solid var(--prowl-amber);
+    outline: 3px solid var(--hd-orange);
     outline-offset: 2px;
 }
 
-// Custom Scrollbar
+// Custom Scrollbar - bold orange
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--cream-deep);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--border-dim);
-    border-radius: 3px;
+    background: var(--hd-orange);
+    border-radius: 0;
+    border: 2px solid var(--cream-deep);
 
     &:hover {
-        background: var(--border-default);
+        background: var(--hd-orange-dark);
     }
 }
 
-// Noise texture overlay
-.noise-overlay {
+// Grid paper texture overlay (workshop blueprint feel)
+.grid-overlay {
     position: fixed;
     inset: 0;
     pointer-events: none;
     z-index: 9999;
-    opacity: 0.015;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    background-image:
+        linear-gradient(var(--border-light) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-light) 1px, transparent 1px);
+    background-size: 40px 40px;
 }
 
 // Animations
@@ -159,8 +176,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.1); }
-    50% { box-shadow: 0 0 40px rgba(245, 158, 11, 0.2); }
+    0%, 100% { box-shadow: 0 0 20px rgba(249, 99, 2, 0.15); }
+    50% { box-shadow: 0 0 40px rgba(249, 99, 2, 0.3); }
 }
 
 @keyframes shimmer {
@@ -204,90 +221,144 @@ h1, h2, h3, h4, h5, h6 {
 
 // Gradient text
 .gradient-text {
-    background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+    background: linear-gradient(135deg, var(--hd-orange) 0%, var(--hd-orange-dark) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
-// Glow effects
-.glow-amber {
-    box-shadow: 0 0 30px -5px rgba(245, 158, 11, 0.3);
+// Strong shadow utilities
+.shadow-hard {
+    box-shadow: 4px 4px 0 var(--charcoal);
 }
 
-.glow-cyan {
-    box-shadow: 0 0 30px -5px rgba(34, 211, 238, 0.3);
-}
-
-.glow-violet {
-    box-shadow: 0 0 30px -5px rgba(167, 139, 250, 0.3);
+.shadow-orange {
+    box-shadow: 4px 4px 0 var(--hd-orange);
 }
 
 // Card hover lift
 .hover-lift {
-    transition: transform var(--duration-normal) var(--ease-out-expo),
-                box-shadow var(--duration-normal) var(--ease-out-expo);
+    transition: transform var(--duration-fast) var(--ease-out-expo),
+                box-shadow var(--duration-fast) var(--ease-out-expo);
 
     &:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-elevated);
+        transform: translate(-2px, -2px);
+        box-shadow: 6px 6px 0 var(--charcoal);
     }
 }
 
-// Button styles
+// Button styles - Bold industrial
 .btn-primary {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    background: var(--prowl-amber);
-    color: var(--bg-void);
-    font-weight: 600;
-    font-size: 0.875rem;
-    border-radius: 8px;
-    border: none;
+    gap: 0.625rem;
+    padding: 0.875rem 1.75rem;
+    background: var(--hd-orange);
+    color: var(--paper);
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 700;
+    font-size: 0.9375rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-radius: 0;
+    border: 3px solid var(--charcoal);
+    box-shadow: 4px 4px 0 var(--charcoal);
     cursor: pointer;
     transition: all var(--duration-fast) var(--ease-out-expo);
 
     &:hover {
-        background: var(--prowl-amber-dim);
-        transform: translateY(-1px);
+        background: var(--hd-orange-bright);
+        transform: translate(-2px, -2px);
+        box-shadow: 6px 6px 0 var(--charcoal);
+    }
+
+    &:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 var(--charcoal);
     }
 }
 
 .btn-secondary {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    background: transparent;
-    color: var(--text-secondary);
-    font-weight: 500;
-    font-size: 0.875rem;
-    border-radius: 8px;
-    border: 1px solid var(--border-default);
+    gap: 0.625rem;
+    padding: 0.875rem 1.75rem;
+    background: var(--paper);
+    color: var(--text-primary);
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 700;
+    font-size: 0.9375rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-radius: 0;
+    border: 3px solid var(--charcoal);
+    box-shadow: 4px 4px 0 var(--charcoal);
     cursor: pointer;
     transition: all var(--duration-fast) var(--ease-out-expo);
 
     &:hover {
-        border-color: var(--border-bright);
-        color: var(--text-primary);
-        background: var(--bg-hover);
+        background: var(--cream-deep);
+        transform: translate(-2px, -2px);
+        box-shadow: 6px 6px 0 var(--charcoal);
+    }
+
+    &:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 var(--charcoal);
     }
 }
 
 // Brand mark
 .brand-mark {
-    font-family: 'Geist Mono', monospace;
-    color: var(--prowl-amber);
-    font-weight: 500;
+    font-family: 'Space Mono', monospace;
+    color: var(--hd-orange);
+    font-weight: 700;
 }
 
-// High contrast mode
+// Orange highlight stripe
+.stripe-accent {
+    position: relative;
+    &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 6px;
+        height: 100%;
+        background: var(--hd-orange);
+    }
+}
+
+// Workshop tag
+.tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 2px solid currentColor;
+}
+
+.tag-orange {
+    color: var(--hd-orange);
+    background: rgba(249, 99, 2, 0.1);
+    border-color: var(--hd-orange);
+}
+
+.tag-dark {
+    color: var(--charcoal);
+    background: var(--cream-deep);
+    border-color: var(--charcoal);
+}
+
+// High contrast mode - already high contrast by default
 @media (prefers-contrast: high) {
     :root {
-        --text-primary: #ffffff;
-        --text-secondary: #e4e4e7;
-        --border-default: #a1a1aa;
+        --hd-orange: #E55A00;
+        --text-primary: #000000;
+        --border-strong: #000000;
     }
 }

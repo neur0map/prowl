@@ -1,0 +1,309 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+
+const features = [
+    {
+        icon: 'check',
+        title: 'Solve MCQs Instantly',
+        description: 'Get accurate answers to multiple choice questions with detailed explanations of why each answer is correct.'
+    },
+    {
+        icon: 'chat',
+        title: 'Chat With Your Homework',
+        description: 'Highlight any text and start a conversation. Ask follow-up questions, get clarifications, dive deeper.'
+    },
+    {
+        icon: 'search',
+        title: 'Research & Summarize',
+        description: 'Quickly research any topic and get concise summaries. Perfect for essays, reports, and exam prep.'
+    },
+    {
+        icon: 'image',
+        title: 'Analyze Images & Diagrams',
+        description: 'Upload screenshots of graphs, charts, or diagrams. Cramly explains what you\'re looking at.'
+    },
+    {
+        icon: 'bolt',
+        title: 'Lightning Fast',
+        description: 'No waiting around. Get instant AI responses so you can keep your study momentum going.'
+    },
+    {
+        icon: 'learn',
+        title: 'Actually Learn',
+        description: 'Not just answers — explanations that help you understand the concepts for your exams.'
+    }
+];
+---
+
+<Layout>
+    <!-- Grid overlay -->
+    <div class="grid-overlay"></div>
+
+    <!-- Orange accent bar at top -->
+    <div class="fixed top-0 left-0 right-0 h-1.5 bg-[#F96302] z-50"></div>
+
+    <main class="relative z-10 pt-1.5">
+
+        <!-- Hero Section -->
+        <section class="min-h-[80vh] flex items-center px-6 py-20 bg-[#FDF8F3] relative overflow-hidden">
+
+            <!-- Background decoration -->
+            <div class="absolute top-20 right-10 w-64 h-64 bg-[#F96302] opacity-5 transform rotate-12" aria-hidden="true"></div>
+            <div class="absolute bottom-20 left-10 w-48 h-48 bg-[#0D7377] opacity-5 transform -rotate-6" aria-hidden="true"></div>
+
+            <div class="max-w-6xl mx-auto w-full">
+                <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+
+                    <!-- Left: Content -->
+                    <div>
+                        <!-- Back to Prowl -->
+                        <a href="/" class="inline-flex items-center gap-2 text-sm font-bold text-[#6B6358] hover:text-[#F96302] transition-colors mb-8 group">
+                            <svg class="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="square" d="M19 12H5m0 0l6-6m-6 6l6 6"/>
+                            </svg>
+                            Back to Prowl
+                        </a>
+
+                        <!-- Badge -->
+                        <div class="inline-flex items-center gap-3 mb-6">
+                            <span class="px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider bg-[#0D7377] text-white border-2 border-[#1A1915]">
+                                Chrome Extension
+                            </span>
+                            <span class="px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider bg-[#FDF8F3] text-[#1A1915] border-2 border-[#1A1915]">
+                                v3.0.0
+                            </span>
+                        </div>
+
+                        <!-- Title -->
+                        <h1 class="text-5xl md:text-6xl lg:text-7xl font-display mb-4 leading-[0.95]">
+                            <span class="text-[#1A1915]">CRAMLY</span>
+                        </h1>
+
+                        <p class="text-2xl md:text-3xl font-display text-[#F96302] mb-6">
+                            CRAM SMARTER, NOT HARDER
+                        </p>
+
+                        <!-- Description -->
+                        <p class="text-lg text-[#3D3930] mb-8 leading-relaxed max-w-lg">
+                            The ultimate homework helper for students. Solve multiple choice questions instantly, chat with your assignments, get clear explanations, and learn faster.
+                        </p>
+
+                        <!-- CTA -->
+                        <div class="flex flex-col sm:flex-row gap-4 mb-8">
+                            <a href="#" class="btn-primary group inline-flex items-center justify-center">
+                                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 0C8.21 0 4.831 1.757 2.632 4.501l3.953 3.953A5.998 5.998 0 0112 6c1.657 0 3.156.67 4.243 1.757l3.954-3.955C18.044 1.757 14.79 0 12 0zm9.369 4.632l-3.954 3.955A5.998 5.998 0 0118 12c0 1.657-.67 3.156-1.757 4.243l3.955 3.954C22.243 18.044 24 14.79 24 12c0-2.79-1.757-6.044-2.631-7.368zM12 18a5.998 5.998 0 01-4.243-1.757l-3.954 3.955C5.956 22.243 8.21 24 12 24c3.79 0 6.044-1.757 7.368-2.632l-3.954-3.954A5.998 5.998 0 0112 18zM4.501 2.632C1.757 4.831 0 8.21 0 12c0 3.79 1.757 7.044 4.501 9.368l3.953-3.953A5.998 5.998 0 016 12c0-1.657.67-3.156 1.757-4.243L4.501 2.632z"/>
+                                </svg>
+                                <span>Add to Chrome</span>
+                                <svg class="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                                    <path stroke-linecap="square" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+                                </svg>
+                            </a>
+                            <a href="/cramly/privacy" class="btn-secondary inline-flex items-center justify-center">
+                                Privacy Policy
+                            </a>
+                        </div>
+
+                        <!-- Trust badges -->
+                        <div class="flex items-center gap-6 text-sm text-[#6B6358]">
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-[#2D5A27]" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                Free to use
+                            </span>
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-[#2D5A27]" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                No signup required
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Right: Visual -->
+                    <div class="relative hidden lg:block">
+                        <!-- Extension preview mockup -->
+                        <div class="relative">
+                            <!-- Shadow -->
+                            <div class="absolute inset-0 bg-[#1A1915] transform translate-x-4 translate-y-4"></div>
+
+                            <!-- Main card -->
+                            <div class="relative bg-white border-4 border-[#1A1915] p-8">
+                                <!-- Browser bar mockup -->
+                                <div class="flex items-center gap-2 mb-6 pb-4 border-b-2 border-[#E8E0D5]">
+                                    <div class="flex gap-1.5">
+                                        <div class="w-3 h-3 rounded-full bg-[#ff5f57]"></div>
+                                        <div class="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
+                                        <div class="w-3 h-3 rounded-full bg-[#28ca41]"></div>
+                                    </div>
+                                    <div class="flex-1 ml-4 px-4 py-1.5 bg-[#F0E8DC] text-xs font-mono text-[#6B6358] truncate">
+                                        homework.edu/assignment
+                                    </div>
+                                </div>
+
+                                <!-- Extension popup mockup -->
+                                <div class="space-y-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center">
+                                            <span class="font-display text-white text-lg">C</span>
+                                        </div>
+                                        <div>
+                                            <div class="font-display text-[#1A1915]">CRAMLY</div>
+                                            <div class="text-xs text-[#6B6358]">Ready to help</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="p-4 bg-[#FDF8F3] border-2 border-[#E8E0D5]">
+                                        <p class="text-sm text-[#3D3930] mb-2">Selected text:</p>
+                                        <p class="text-sm font-medium text-[#1A1915] italic">"What is the primary function of mitochondria in a cell?"</p>
+                                    </div>
+
+                                    <div class="p-4 bg-[#0D7377] border-2 border-[#1A1915]">
+                                        <p class="text-sm text-white/80 mb-1">Answer:</p>
+                                        <p class="text-sm font-medium text-white">The mitochondria is the powerhouse of the cell, responsible for producing ATP through cellular respiration...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="px-6 py-24 bg-white relative">
+            <!-- Top border -->
+            <div class="absolute top-0 left-0 right-0 h-2 bg-[#1A1915]"></div>
+
+            <div class="max-w-6xl mx-auto">
+                <!-- Section header -->
+                <div class="mb-16">
+                    <div class="flex items-center gap-4 mb-6">
+                        <span class="px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider bg-[#F96302] text-white border-2 border-[#1A1915]">
+                            Features
+                        </span>
+                        <div class="flex-1 h-0.5 bg-[#E8E0D5]"></div>
+                    </div>
+
+                    <h2 class="text-4xl md:text-5xl font-display mb-4">
+                        <span class="text-[#1A1915]">EVERYTHING YOU NEED</span><br/>
+                        <span class="text-[#F96302]">TO STUDY SMARTER</span>
+                    </h2>
+                </div>
+
+                <!-- Features grid -->
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {features.map((feature, index) => (
+                        <div class="group relative">
+                            <!-- Shadow -->
+                            <div class="absolute inset-0 bg-[#1A1915] transform translate-x-1.5 translate-y-1.5 transition-transform group-hover:translate-x-2 group-hover:translate-y-2"></div>
+
+                            <!-- Card -->
+                            <div class="relative bg-[#FDF8F3] border-3 border-[#1A1915] p-6 h-full transition-transform group-hover:-translate-x-0.5 group-hover:-translate-y-0.5">
+                                <!-- Icon -->
+                                <div class="w-12 h-12 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center mb-4">
+                                    {feature.icon === 'check' && (
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    )}
+                                    {feature.icon === 'chat' && (
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                                        </svg>
+                                    )}
+                                    {feature.icon === 'search' && (
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                        </svg>
+                                    )}
+                                    {feature.icon === 'image' && (
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                        </svg>
+                                    )}
+                                    {feature.icon === 'bolt' && (
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                        </svg>
+                                    )}
+                                    {feature.icon === 'learn' && (
+                                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                        </svg>
+                                    )}
+                                </div>
+
+                                <h3 class="text-lg font-display text-[#1A1915] mb-2">{feature.title}</h3>
+                                <p class="text-sm text-[#6B6358] leading-relaxed">{feature.description}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works -->
+        <section class="px-6 py-24 bg-[#1A1915] relative">
+            <!-- Top border -->
+            <div class="absolute top-0 left-0 right-0 h-2 bg-[#F96302]"></div>
+
+            <div class="max-w-6xl mx-auto">
+                <div class="mb-16">
+                    <div class="flex items-center gap-4 mb-6">
+                        <span class="px-3 py-1 text-xs font-mono font-bold uppercase tracking-wider bg-[#F96302] text-white border-2 border-[#F96302]">
+                            How It Works
+                        </span>
+                        <div class="flex-1 h-0.5 bg-[#2D2A24]"></div>
+                    </div>
+
+                    <h2 class="text-4xl md:text-5xl font-display text-white mb-4">
+                        THREE SIMPLE STEPS
+                    </h2>
+                </div>
+
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div class="relative">
+                        <div class="text-8xl font-display text-[#F96302] opacity-20 absolute -top-4 -left-2">1</div>
+                        <div class="relative pt-12">
+                            <h3 class="text-xl font-display text-white mb-3">INSTALL CRAMLY</h3>
+                            <p class="text-[#8A8278]">Add Cramly to Chrome from the Web Store. One click, no account needed.</p>
+                        </div>
+                    </div>
+
+                    <div class="relative">
+                        <div class="text-8xl font-display text-[#F96302] opacity-20 absolute -top-4 -left-2">2</div>
+                        <div class="relative pt-12">
+                            <h3 class="text-xl font-display text-white mb-3">SELECT TEXT</h3>
+                            <p class="text-[#8A8278]">Highlight any question, paragraph, or problem on any webpage.</p>
+                        </div>
+                    </div>
+
+                    <div class="relative">
+                        <div class="text-8xl font-display text-[#F96302] opacity-20 absolute -top-4 -left-2">3</div>
+                        <div class="relative pt-12">
+                            <h3 class="text-xl font-display text-white mb-3">GET ANSWERS</h3>
+                            <p class="text-[#8A8278]">Click the Cramly icon and get instant explanations, answers, and insights.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CTA -->
+                <div class="mt-16 text-center">
+                    <a href="#" class="btn-primary inline-flex items-center gap-3 text-lg">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C8.21 0 4.831 1.757 2.632 4.501l3.953 3.953A5.998 5.998 0 0112 6c1.657 0 3.156.67 4.243 1.757l3.954-3.955C18.044 1.757 14.79 0 12 0zm9.369 4.632l-3.954 3.955A5.998 5.998 0 0118 12c0 1.657-.67 3.156-1.757 4.243l3.955 3.954C22.243 18.044 24 14.79 24 12c0-2.79-1.757-6.044-2.631-7.368zM12 18a5.998 5.998 0 01-4.243-1.757l-3.954 3.955C5.956 22.243 8.21 24 12 24c3.79 0 6.044-1.757 7.368-2.632l-3.954-3.954A5.998 5.998 0 0112 18zM4.501 2.632C1.757 4.831 0 8.21 0 12c0 3.79 1.757 7.044 4.501 9.368l3.953-3.953A5.998 5.998 0 016 12c0-1.657.67-3.156 1.757-4.243L4.501 2.632z"/>
+                        </svg>
+                        Get Cramly Free
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <Footer />
+</Layout>
