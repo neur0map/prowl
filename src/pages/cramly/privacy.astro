@@ -69,7 +69,7 @@ const lastUpdated = 'February 4, 2025';
                             <p><strong class="text-[#1A1915]">Text Selections:</strong> When you use Cramly to analyze text, we temporarily process the text you've selected on a webpage. This text is sent to our AI service to generate responses.</p>
                             <p><strong class="text-[#1A1915]">Images:</strong> If you use the image analysis feature, the images you submit are temporarily processed to provide explanations and insights.</p>
                             <p><strong class="text-[#1A1915]">Chat History (Optional):</strong> Cramly offers an optional feature to store your latest 5 chat conversations. This feature is opt-in and disabled by default. You can enable or disable it at any time through the extension settings.</p>
-                            <p><strong class="text-[#1A1915]">Payment Information:</strong> When you purchase credits or subscribe, payment processing is handled by third-party payment processors. We do not store your full credit card details. We only receive confirmation of successful transactions and maintain records of your credit balance and subscription status.</p>
+                            <p><strong class="text-[#1A1915]">Payment Information:</strong> When you purchase credits or subscribe, payment processing is handled securely by Stripe. We never receive or store your credit card details. Stripe provides us only with confirmation of successful transactions, and we maintain records of your credit balance and subscription status.</p>
                             <p><strong class="text-[#1A1915]">Usage Data:</strong> We may collect anonymous usage statistics such as feature usage frequency to improve the extension. This data cannot be used to identify you personally.</p>
                             <p><strong class="text-[#1A1915]">We do NOT collect:</strong></p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
@@ -117,11 +117,12 @@ const lastUpdated = 'February 4, 2025';
                                 <li>These services have their own privacy policies governing how they handle data</li>
                                 <li>We select providers that maintain strong privacy and security standards</li>
                             </ul>
-                            <p><strong class="text-[#1A1915]">Payment Processors:</strong></p>
+                            <p><strong class="text-[#1A1915]">Payment Processing (Stripe):</strong></p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
-                                <li>Credit and subscription payments are processed by secure third-party payment providers</li>
-                                <li>Your payment information is handled directly by these processors</li>
-                                <li>We recommend reviewing their privacy policies for details on payment data handling</li>
+                                <li>All payments are processed securely by <a href="https://stripe.com" target="_blank" rel="noopener noreferrer" class="text-[#F96302] hover:underline">Stripe</a></li>
+                                <li>Your payment information is entered directly into Stripe's secure payment form</li>
+                                <li>We never have access to your full card details</li>
+                                <li>Review <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" class="text-[#F96302] hover:underline">Stripe's Privacy Policy</a> for details on how they handle payment data</li>
                             </ul>
                         </div>
                     </div>
@@ -154,7 +155,7 @@ const lastUpdated = 'February 4, 2025';
                                 <li>Passwords are securely hashed and never stored in plain text</li>
                                 <li>We follow security best practices in our code</li>
                                 <li>We regularly update the extension to address security vulnerabilities</li>
-                                <li>Payment processing is handled by PCI-compliant providers</li>
+                                <li>Payment processing is handled by Stripe, a PCI Level 1 certified provider</li>
                             </ul>
                         </div>
                     </div>
