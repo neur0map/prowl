@@ -1,0 +1,304 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+
+const lastUpdated = 'February 4, 2025';
+---
+
+<Layout>
+    <!-- Grid overlay -->
+    <div class="grid-overlay"></div>
+
+    <!-- Orange accent bar at top -->
+    <div class="fixed top-0 left-0 right-0 h-1.5 bg-[#F96302] z-50"></div>
+
+    <main class="relative z-10 pt-1.5">
+
+        <!-- Header -->
+        <section class="px-6 py-16 bg-[#FDF8F3]">
+            <div class="max-w-3xl mx-auto">
+                <!-- Back links -->
+                <div class="flex items-center gap-4 mb-8">
+                    <a href="/" class="inline-flex items-center gap-2 text-sm font-bold text-[#6B6358] hover:text-[#F96302] transition-colors group">
+                        <svg class="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="square" d="M19 12H5m0 0l6-6m-6 6l6 6"/>
+                        </svg>
+                        Prowl
+                    </a>
+                    <span class="text-[#D4C8B8]">/</span>
+                    <a href="/cramly" class="text-sm font-bold text-[#6B6358] hover:text-[#F96302] transition-colors">
+                        Cramly
+                    </a>
+                </div>
+
+                <h1 class="text-4xl md:text-5xl font-display text-[#1A1915] mb-4">
+                    TERMS OF SERVICE
+                </h1>
+                <p class="text-lg text-[#6B6358]">
+                    Cramly - AI Study Buddy
+                </p>
+                <p class="text-sm font-mono text-[#8A8278] mt-2">
+                    Last updated: {lastUpdated}
+                </p>
+            </div>
+        </section>
+
+        <!-- Content -->
+        <section class="px-6 py-16 bg-white">
+            <div class="absolute top-0 left-0 right-0 h-2 bg-[#1A1915]"></div>
+
+            <article class="max-w-3xl mx-auto prose-custom">
+
+                <div class="space-y-12">
+
+                    <!-- Introduction -->
+                    <div>
+                        <p class="text-lg text-[#3D3930] leading-relaxed">
+                            These Terms of Service ("Terms") govern your use of Cramly ("we", "our", or "the Service"), an AI-powered study buddy Chrome extension. By creating an account or using Cramly, you agree to be bound by these Terms. If you do not agree, please do not use the Service.
+                        </p>
+                    </div>
+
+                    <!-- Section 1 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">1</span>
+                            ACCOUNT REGISTRATION
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>To use Cramly, you must create an account by providing a valid email address and password. You agree to:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Provide accurate and complete information during registration</li>
+                                <li>Keep your login credentials secure and confidential</li>
+                                <li>Notify us immediately of any unauthorized access to your account</li>
+                                <li>Accept responsibility for all activities that occur under your account</li>
+                            </ul>
+                            <p>We reserve the right to suspend or terminate accounts that violate these Terms or are used for fraudulent purposes.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 2 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">2</span>
+                            SERVICE DESCRIPTION
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>Cramly is an AI-powered study assistant that helps you understand and learn from text and images. The Service includes:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>AI-generated explanations and answers based on text you select</li>
+                                <li>Image analysis and explanation features</li>
+                                <li>Optional chat history storage (latest 5 conversations)</li>
+                            </ul>
+                            <p>Cramly is a study aid and should not be used as a substitute for your own learning, critical thinking, or academic integrity. You are responsible for how you use the information provided by the Service.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 3 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">3</span>
+                            CREDITS AND PAYMENTS
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p><strong class="text-[#1A1915]">Credits:</strong> Cramly operates on a credit-based system. Credits are consumed when you use AI features. You can purchase credits through in-app purchases.</p>
+                            <p><strong class="text-[#1A1915]">Subscriptions:</strong> We offer monthly subscription plans that provide credits on a recurring basis. Subscriptions renew automatically each month unless cancelled before the renewal date.</p>
+                            <p><strong class="text-[#1A1915]">Pricing:</strong> All prices are displayed in the extension at the time of purchase. We reserve the right to change pricing at any time, but changes will not affect active subscriptions until the next billing cycle.</p>
+                            <p><strong class="text-[#1A1915]">Payment Processing:</strong> Payments are processed by third-party payment providers. By making a purchase, you agree to their terms of service.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 4 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">4</span>
+                            REFUND POLICY
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p><strong class="text-[#1A1915]">No Refunds on Account Deletion:</strong> If you choose to delete your account, any unused credits in your account will not be refunded. Please use your credits before deleting your account.</p>
+                            <p><strong class="text-[#1A1915]">Subscription Cancellation:</strong> You may cancel your subscription at any time. Upon cancellation, you will retain access to subscription benefits until the end of your current billing period. No prorated refunds are provided for partial months.</p>
+                            <p><strong class="text-[#1A1915]">Technical Issues:</strong> If you experience technical issues that prevent you from using purchased credits, please contact us at support@prowl.sh within 14 days of purchase. We will evaluate refund requests on a case-by-case basis.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 5 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">5</span>
+                            ACCEPTABLE USE
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>You agree not to use Cramly to:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Violate any applicable laws or regulations</li>
+                                <li>Infringe on the intellectual property rights of others</li>
+                                <li>Submit content that is illegal, harmful, threatening, abusive, or otherwise objectionable</li>
+                                <li>Attempt to reverse engineer, decompile, or extract source code from the Service</li>
+                                <li>Circumvent any technical limitations or access restrictions</li>
+                                <li>Share your account credentials with others or allow multiple users to access your account</li>
+                                <li>Use automated systems or bots to access the Service</li>
+                                <li>Engage in academic dishonesty or violate your institution's honor code</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Section 6 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">6</span>
+                            INTELLECTUAL PROPERTY
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p><strong class="text-[#1A1915]">Our Property:</strong> The Cramly extension, including its design, code, features, and branding, is owned by Prowl (neur0map). You are granted a limited, non-exclusive, non-transferable license to use the Service for personal, non-commercial purposes.</p>
+                            <p><strong class="text-[#1A1915]">Your Content:</strong> You retain ownership of any text or images you submit to Cramly. By using the Service, you grant us a limited license to process your content solely for the purpose of providing the Service.</p>
+                            <p><strong class="text-[#1A1915]">AI-Generated Content:</strong> Responses generated by the AI are provided for your personal use. You may use these responses for your own studying and learning purposes.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 7 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">7</span>
+                            DISCLAIMERS
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p><strong class="text-[#1A1915]">No Warranty:</strong> Cramly is provided "as is" and "as available" without warranties of any kind, either express or implied. We do not guarantee that the Service will be uninterrupted, secure, or error-free.</p>
+                            <p><strong class="text-[#1A1915]">AI Limitations:</strong> AI-generated responses may contain errors, inaccuracies, or incomplete information. You should verify important information from authoritative sources. We are not responsible for any decisions you make based on AI-generated content.</p>
+                            <p><strong class="text-[#1A1915]">Academic Responsibility:</strong> You are solely responsible for how you use Cramly in academic settings. We do not encourage or condone academic dishonesty. Check your institution's policies regarding the use of AI study tools.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 8 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">8</span>
+                            LIMITATION OF LIABILITY
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>To the maximum extent permitted by law, Prowl and its affiliates shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Loss of profits, data, or goodwill</li>
+                                <li>Service interruption or computer damage</li>
+                                <li>Any damages arising from your use of or inability to use the Service</li>
+                            </ul>
+                            <p>Our total liability for any claims arising from these Terms or your use of the Service shall not exceed the amount you paid us in the 12 months preceding the claim.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 9 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">9</span>
+                            ACCOUNT DELETION
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>You may delete your account at any time through the extension settings. Upon deletion:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Your account and associated data will be permanently removed</li>
+                                <li>Any stored chat history will be deleted</li>
+                                <li>Unused credits will be forfeited and will not be refunded</li>
+                                <li>Active subscriptions will be cancelled</li>
+                            </ul>
+                            <p>Account deletion is irreversible. We recommend exporting any data you wish to keep before deleting your account.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 10 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">10</span>
+                            TERMINATION
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>We reserve the right to suspend or terminate your access to Cramly at any time, with or without cause, including but not limited to:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Violation of these Terms</li>
+                                <li>Fraudulent or illegal activity</li>
+                                <li>Abusive behavior toward the Service or other users</li>
+                                <li>Non-payment or payment disputes</li>
+                            </ul>
+                            <p>Upon termination by us for cause, you will not be entitled to any refund of unused credits.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 11 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">11</span>
+                            CHANGES TO TERMS
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>We may modify these Terms at any time. When we make material changes, we will:</p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Update the "Last updated" date at the top of these Terms</li>
+                                <li>Notify you via email or through the extension</li>
+                            </ul>
+                            <p>Your continued use of Cramly after changes become effective constitutes acceptance of the revised Terms. If you do not agree to the changes, you should stop using the Service and delete your account.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 12 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">12</span>
+                            GOVERNING LAW
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>These Terms shall be governed by and construed in accordance with the laws of the United States. Any disputes arising from these Terms or your use of the Service shall be resolved through binding arbitration or in the courts of competent jurisdiction.</p>
+                        </div>
+                    </div>
+
+                    <!-- Section 13 -->
+                    <div>
+                        <h2 class="text-2xl font-display text-[#1A1915] mb-4 flex items-center gap-3">
+                            <span class="w-8 h-8 bg-[#F96302] border-2 border-[#1A1915] flex items-center justify-center text-white text-sm">13</span>
+                            CONTACT US
+                        </h2>
+                        <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p>If you have questions about these Terms of Service, please contact us:</p>
+                            <div class="mt-4 p-4 bg-[#FDF8F3] border-2 border-[#E8E0D5]">
+                                <p class="font-mono text-sm">
+                                    <strong class="text-[#1A1915]">Email:</strong> <a href="mailto:support@prowl.sh" class="text-[#F96302] hover:underline">support@prowl.sh</a>
+                                </p>
+                                <p class="font-mono text-sm mt-2">
+                                    <strong class="text-[#1A1915]">GitHub:</strong> <a href="https://github.com/neur0map" target="_blank" rel="noopener noreferrer" class="text-[#F96302] hover:underline">github.com/neur0map</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Back to Cramly -->
+                <div class="mt-16 pt-8 border-t-2 border-[#E8E0D5] flex items-center gap-4">
+                    <a href="/cramly" class="btn-secondary inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="square" d="M19 12H5m0 0l6-6m-6 6l6 6"/>
+                        </svg>
+                        Back to Cramly
+                    </a>
+                    <a href="/cramly/privacy" class="text-sm font-bold text-[#6B6358] hover:text-[#F96302] transition-colors">
+                        Privacy Policy
+                    </a>
+                </div>
+
+            </article>
+        </section>
+
+    </main>
+
+    <Footer />
+</Layout>
+
+<style>
+    .prose-custom p {
+        line-height: 1.75;
+    }
+
+    .prose-custom ul {
+        margin-top: 0.5rem;
+    }
+
+    .prose-custom strong {
+        font-weight: 600;
+    }
+</style>

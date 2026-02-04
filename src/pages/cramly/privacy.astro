@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import Footer from '../../components/Footer.astro';
 
-const lastUpdated = 'February 3, 2025';
+const lastUpdated = 'February 4, 2025';
 ---
 
 <Layout>
@@ -35,7 +35,7 @@ const lastUpdated = 'February 3, 2025';
                     PRIVACY POLICY
                 </h1>
                 <p class="text-lg text-[#6B6358]">
-                    Cramly - Cram Smarter, Not Harder
+                    Cramly - AI Study Buddy
                 </p>
                 <p class="text-sm font-mono text-[#8A8278] mt-2">
                     Last updated: {lastUpdated}
@@ -65,16 +65,17 @@ const lastUpdated = 'February 3, 2025';
                             INFORMATION WE COLLECT
                         </h2>
                         <div class="pl-11 space-y-4 text-[#3D3930]">
+                            <p><strong class="text-[#1A1915]">Account Information:</strong> To use Cramly, you must create an account. We collect your email address and password (securely hashed) to authenticate you and manage your account.</p>
                             <p><strong class="text-[#1A1915]">Text Selections:</strong> When you use Cramly to analyze text, we temporarily process the text you've selected on a webpage. This text is sent to our AI service to generate responses.</p>
                             <p><strong class="text-[#1A1915]">Images:</strong> If you use the image analysis feature, the images you submit are temporarily processed to provide explanations and insights.</p>
-                            <p><strong class="text-[#1A1915]">Usage Data:</strong> We may collect anonymous usage statistics such as feature usage frequency to improve the extension. This data cannot be used to identify you.</p>
+                            <p><strong class="text-[#1A1915]">Chat History (Optional):</strong> Cramly offers an optional feature to store your latest 5 chat conversations. This feature is opt-in and disabled by default. You can enable or disable it at any time through the extension settings.</p>
+                            <p><strong class="text-[#1A1915]">Payment Information:</strong> When you purchase credits or subscribe, payment processing is handled by third-party payment processors. We do not store your full credit card details. We only receive confirmation of successful transactions and maintain records of your credit balance and subscription status.</p>
+                            <p><strong class="text-[#1A1915]">Usage Data:</strong> We may collect anonymous usage statistics such as feature usage frequency to improve the extension. This data cannot be used to identify you personally.</p>
                             <p><strong class="text-[#1A1915]">We do NOT collect:</strong></p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
-                                <li>Personal identification information (name, email, etc.)</li>
                                 <li>Browsing history or the URLs you visit</li>
-                                <li>Passwords or login credentials</li>
-                                <li>Financial information</li>
                                 <li>Data from pages you don't actively use Cramly on</li>
+                                <li>Full credit card or payment details</li>
                             </ul>
                         </div>
                     </div>
@@ -86,14 +87,19 @@ const lastUpdated = 'February 3, 2025';
                             HOW WE USE YOUR INFORMATION
                         </h2>
                         <div class="pl-11 space-y-4 text-[#3D3930]">
-                            <p>The information we process is used solely to:</p>
+                            <p>The information we collect is used to:</p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Create and manage your account</li>
+                                <li>Authenticate you when you use the extension</li>
                                 <li>Provide AI-powered answers and explanations to your questions</li>
                                 <li>Analyze images and diagrams you submit</li>
+                                <li>Process payments and manage your credit balance</li>
+                                <li>Store your chat history if you opt in to this feature</li>
                                 <li>Improve the quality and accuracy of our responses</li>
                                 <li>Fix bugs and improve extension performance</li>
+                                <li>Send important service-related communications</li>
                             </ul>
-                            <p>We do not sell, rent, or share your data with third parties for marketing purposes.</p>
+                            <p>We do not sell, rent, or share your personal data with third parties for marketing purposes.</p>
                         </div>
                     </div>
 
@@ -104,13 +110,19 @@ const lastUpdated = 'February 3, 2025';
                             THIRD-PARTY SERVICES
                         </h2>
                         <div class="pl-11 space-y-4 text-[#3D3930]">
-                            <p>Cramly uses third-party AI services to process your requests and generate responses. When you use Cramly:</p>
+                            <p>Cramly uses third-party services to provide functionality:</p>
+                            <p><strong class="text-[#1A1915]">AI Services:</strong></p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
                                 <li>Your selected text or images are sent to AI service providers (such as OpenAI or similar services) for processing</li>
                                 <li>These services have their own privacy policies governing how they handle data</li>
                                 <li>We select providers that maintain strong privacy and security standards</li>
                             </ul>
-                            <p>We recommend reviewing the privacy policies of these AI service providers if you have concerns about how your data is processed.</p>
+                            <p><strong class="text-[#1A1915]">Payment Processors:</strong></p>
+                            <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li>Credit and subscription payments are processed by secure third-party payment providers</li>
+                                <li>Your payment information is handled directly by these processors</li>
+                                <li>We recommend reviewing their privacy policies for details on payment data handling</li>
+                            </ul>
                         </div>
                     </div>
 
@@ -121,9 +133,11 @@ const lastUpdated = 'February 3, 2025';
                             DATA STORAGE & RETENTION
                         </h2>
                         <div class="pl-11 space-y-4 text-[#3D3930]">
-                            <p><strong class="text-[#1A1915]">Local Storage:</strong> User preferences and settings are stored locally in your browser using Chrome's storage API. This data never leaves your device unless you choose to sync it via Chrome.</p>
-                            <p><strong class="text-[#1A1915]">Conversation History:</strong> If the extension stores conversation history, it is kept locally on your device. You can clear this data at any time through the extension settings.</p>
-                            <p><strong class="text-[#1A1915]">Server-Side:</strong> Text and images sent for AI processing are not permanently stored on our servers. They are processed in real-time and discarded after generating a response.</p>
+                            <p><strong class="text-[#1A1915]">Account Data:</strong> Your email address and hashed password are stored securely in our database for as long as your account exists.</p>
+                            <p><strong class="text-[#1A1915]">Chat History:</strong> If you enable the optional chat history feature, your latest 5 conversations are stored on our servers. You can disable this feature at any time, which will delete your stored chat history.</p>
+                            <p><strong class="text-[#1A1915]">Local Storage:</strong> User preferences and settings are stored locally in your browser using Chrome's storage API.</p>
+                            <p><strong class="text-[#1A1915]">AI Processing:</strong> Text and images sent for AI processing are not permanently stored on our servers. They are processed in real-time and discarded after generating a response.</p>
+                            <p><strong class="text-[#1A1915]">Transaction Records:</strong> Records of your purchases and credit balance are retained for accounting and support purposes.</p>
                         </div>
                     </div>
 
@@ -137,9 +151,10 @@ const lastUpdated = 'February 3, 2025';
                             <p>We take reasonable measures to protect your information:</p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
                                 <li>All data transmission uses HTTPS encryption</li>
+                                <li>Passwords are securely hashed and never stored in plain text</li>
                                 <li>We follow security best practices in our code</li>
                                 <li>We regularly update the extension to address security vulnerabilities</li>
-                                <li>We minimize the data we collect to only what's necessary for functionality</li>
+                                <li>Payment processing is handled by PCI-compliant providers</li>
                             </ul>
                         </div>
                     </div>
@@ -153,9 +168,10 @@ const lastUpdated = 'February 3, 2025';
                         <div class="pl-11 space-y-4 text-[#3D3930]">
                             <p>You have control over your data:</p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
+                                <li><strong>Chat History:</strong> You can enable or disable chat history storage at any time through the extension settings</li>
+                                <li><strong>Account Deletion:</strong> You can delete your account at any time. This will permanently remove your account data, including email and stored chat history. Please note that unused credits will not be refunded upon account deletion.</li>
                                 <li><strong>Uninstall:</strong> You can remove Cramly at any time, which removes all locally stored data</li>
-                                <li><strong>Clear Data:</strong> You can clear your conversation history and preferences through the extension settings</li>
-                                <li><strong>Don't Use:</strong> The extension only processes data when you actively use it — simply not selecting text means no data is sent</li>
+                                <li><strong>Data Access:</strong> You can request a copy of the personal data we hold about you by contacting us</li>
                             </ul>
                         </div>
                     </div>
@@ -167,7 +183,7 @@ const lastUpdated = 'February 3, 2025';
                             CHILDREN'S PRIVACY
                         </h2>
                         <div class="pl-11 space-y-4 text-[#3D3930]">
-                            <p>Cramly is designed for students of all ages. We do not knowingly collect personal information from children under 13. The extension does not require account creation or personal information to use. If you believe we have inadvertently collected information from a child under 13, please contact us so we can delete it.</p>
+                            <p>Cramly is designed to help students study. Users under 13 years of age must have parental consent to create an account and use the service. If you are a parent or guardian and believe your child has created an account without your consent, please contact us so we can take appropriate action.</p>
                         </div>
                     </div>
 
@@ -181,7 +197,7 @@ const lastUpdated = 'February 3, 2025';
                             <p>We may update this Privacy Policy from time to time. When we make significant changes, we will:</p>
                             <ul class="list-disc pl-5 space-y-2 text-[#6B6358]">
                                 <li>Update the "Last updated" date at the top of this policy</li>
-                                <li>Notify users through the extension if the changes are material</li>
+                                <li>Notify users through the extension or via email if the changes are material</li>
                             </ul>
                             <p>We encourage you to review this policy periodically.</p>
                         </div>
@@ -209,12 +225,15 @@ const lastUpdated = 'February 3, 2025';
                 </div>
 
                 <!-- Back to Cramly -->
-                <div class="mt-16 pt-8 border-t-2 border-[#E8E0D5]">
+                <div class="mt-16 pt-8 border-t-2 border-[#E8E0D5] flex items-center gap-4">
                     <a href="/cramly" class="btn-secondary inline-flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                             <path stroke-linecap="square" d="M19 12H5m0 0l6-6m-6 6l6 6"/>
                         </svg>
                         Back to Cramly
+                    </a>
+                    <a href="/cramly/terms" class="text-sm font-bold text-[#6B6358] hover:text-[#F96302] transition-colors">
+                        Terms of Service
                     </a>
                 </div>
 
