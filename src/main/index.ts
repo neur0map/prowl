@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { join } from 'path'
 import { WorkspaceWatcher } from './watcher'
 import { LogParser } from './parser'
@@ -13,8 +13,12 @@ function createWindow(): void {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#00000000',
+    transparent: true,
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
     titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 16, y: 18 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -79,6 +83,23 @@ app.whenReady().then(() => {
     if (parser) parser.stop()
     initializeLogParser(logPath)
     return true
+  })
+
+  ipcMain.handle('dialog:openDirectory', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('dialog:openFile', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Log Files', extensions: ['log', 'txt'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
   })
 
   ipcMain.handle('file:read', async (_, filepath: string) => {

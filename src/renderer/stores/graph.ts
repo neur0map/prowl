@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
+import * as dagre from '@dagrejs/dagre'
+
+const NODE_WIDTH = 180
+const NODE_HEIGHT = 44
 
 interface NodeActivity {
   lastActive: number
@@ -17,35 +21,37 @@ export const useGraphStore = defineStore('graph', () => {
   const activeNodes = computed(() => {
     const now = Date.now()
     const activeIds: string[] = []
-    
+
     activity.value.forEach((data, id) => {
       if (now - data.lastActive < 2000) {
         activeIds.push(id)
       }
     })
-    
+
     return activeIds
   })
 
   async function loadWorkspace(path: string): Promise<void> {
     workspacePath.value = path
     const fileTree = await window.api.scanWorkspace(path)
-    buildGraph(fileTree)
+    const { collectedNodes, collectedEdges } = collectNodesAndEdges(fileTree)
+    applyDagreLayout(collectedNodes, collectedEdges)
   }
 
-  function buildGraph(fileTree: any[], parentId?: string, depth = 0): void {
-    const newNodes: Node[] = []
-    const newEdges: Edge[] = []
-    const positions = calculatePositions(fileTree.length, depth)
+  function collectNodesAndEdges(
+    fileTree: any[],
+    parentId?: string
+  ): { collectedNodes: Node[]; collectedEdges: Edge[] } {
+    const collectedNodes: Node[] = []
+    const collectedEdges: Edge[] = []
 
-    fileTree.forEach((file, index) => {
+    for (const file of fileTree) {
       const nodeId = file.path
-      const position = positions[index]
 
-      newNodes.push({
+      collectedNodes.push({
         id: nodeId,
         type: file.type === 'directory' ? 'directory' : getNodeType(file.extension),
-        position,
+        position: { x: 0, y: 0 },
         data: {
           label: file.name,
           path: file.path,
@@ -54,7 +60,7 @@ export const useGraphStore = defineStore('graph', () => {
       })
 
       if (parentId) {
-        newEdges.push({
+        collectedEdges.push({
           id: `${parentId}-${nodeId}`,
           source: parentId,
           target: nodeId,
@@ -63,68 +69,41 @@ export const useGraphStore = defineStore('graph', () => {
       }
 
       if (file.children) {
-        const childGraph = buildChildGraph(file.children, nodeId, depth + 1)
-        newNodes.push(...childGraph.nodes)
-        newEdges.push(...childGraph.edges)
+        const child = collectNodesAndEdges(file.children, nodeId)
+        collectedNodes.push(...child.collectedNodes)
+        collectedEdges.push(...child.collectedEdges)
       }
-    })
-
-    nodes.value = newNodes
-    edges.value = newEdges
-  }
-
-  function buildChildGraph(children: any[], parentId: string, depth: number): { nodes: Node[], edges: Edge[] } {
-    const result = { nodes: [] as Node[], edges: [] as Edge[] }
-    const positions = calculatePositions(children.length, depth)
-
-    children.forEach((file, index) => {
-      const nodeId = file.path
-      const position = positions[index]
-
-      result.nodes.push({
-        id: nodeId,
-        type: file.type === 'directory' ? 'directory' : getNodeType(file.extension),
-        position,
-        data: {
-          label: file.name,
-          path: file.path,
-          extension: file.extension
-        }
-      })
-
-      result.edges.push({
-        id: `${parentId}-${nodeId}`,
-        source: parentId,
-        target: nodeId,
-        type: 'smoothstep'
-      })
-
-      if (file.children) {
-        const childGraph = buildChildGraph(file.children, nodeId, depth + 1)
-        result.nodes.push(...childGraph.nodes)
-        result.edges.push(...childGraph.edges)
-      }
-    })
-
-    return result
-  }
-
-  function calculatePositions(count: number, depth: number): { x: number, y: number }[] {
-    const positions: { x: number, y: number }[] = []
-    const centerX = 400
-    const startY = depth * 150
-    const spacing = 200
-
-    const startX = centerX - ((count - 1) * spacing) / 2
-
-    for (let i = 0; i < count; i++) {
-      positions.push({
-        x: startX + i * spacing,
-        y: startY
-      })
     }
 
-    return positions
+    return { collectedNodes, collectedEdges }
+  }
+
+  function applyDagreLayout(collectedNodes: Node[], collectedEdges: Edge[]): void {
+    const g = new dagre.graphlib.Graph()
+    g.setDefaultEdgeLabel(() => ({}))
+    g.setGraph({ rankdir: 'TB', ranksep: 120, nodesep: 40 })
+
+    for (const node of collectedNodes) {
+      g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
+    }
+
+    for (const edge of collectedEdges) {
+      g.setEdge(edge.source, edge.target)
+    }
+
+    dagre.layout(g)
+
+    for (const node of collectedNodes) {
+      const dagreNode = g.node(node.id)
+      // dagre gives center coords; convert to top-left for Vue Flow
+      node.position = {
+        x: dagreNode.x - NODE_WIDTH / 2,
+        y: dagreNode.y - NODE_HEIGHT / 2
+      }
+    }
+
+    nodes.value = collectedNodes
+    edges.value = collectedEdges
   }
 
   function getNodeType(extension?: string): string {

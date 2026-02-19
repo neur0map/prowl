@@ -35,11 +35,11 @@ const edges = computed(() => graphStore.edges)
       fit-view-on-init
       class="flow"
     >
-      <Background :gap="20" :size="1" pattern-color="rgba(255, 255, 255, 0.03)" />
-      <MiniMap 
-        position="bottom-right" 
-        :node-color="() => 'rgba(99, 102, 241, 0.6)'"
-        :mask-color="'rgba(0, 0, 0, 0.8)'"
+      <Background :gap="28" :size="0.6" pattern-color="rgba(255, 255, 255, 0.018)" />
+      <MiniMap
+        position="bottom-right"
+        :node-color="() => 'rgba(255, 255, 255, 0.25)'"
+        :mask-color="'rgba(18, 18, 20, 0.88)'"
       />
     </VueFlow>
   </div>
@@ -52,17 +52,26 @@ const edges = computed(() => graphStore.edges)
 }
 
 .flow {
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 .flow :deep(.vue-flow__edge-path) {
-  stroke: var(--accent-dim);
-  stroke-width: 2;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
 }
 
 .flow :deep(.vue-flow__edge.animated path) {
   stroke-dasharray: 5;
-  animation: dash 0.5s linear infinite;
+  animation: dash 0.7s linear infinite;
+}
+
+.flow :deep(.vue-flow__minimap) {
+  background: var(--bg-secondary);
+  backdrop-filter: blur(40px) saturate(150%);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 @keyframes dash {

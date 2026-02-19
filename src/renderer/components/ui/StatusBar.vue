@@ -6,8 +6,10 @@ const graphStore = useGraphStore()
 
 const status = computed(() => {
   if (!graphStore.workspacePath) return 'Disconnected'
-  return `Watching: ${graphStore.workspacePath}`
+  return graphStore.workspacePath
 })
+
+const isConnected = computed(() => !!graphStore.workspacePath)
 
 const toolStatus = computed(() => {
   if (!graphStore.activeTool) return null
@@ -18,12 +20,14 @@ const toolStatus = computed(() => {
 <template>
   <footer class="status-bar">
     <div class="status-bar__left">
-      <span class="status-bar__indicator" :class="{ 'status-bar__indicator--active': graphStore.workspacePath }"></span>
+      <span
+        class="status-bar__dot"
+        :class="{ 'status-bar__dot--on': isConnected }"
+      />
       <span class="status-bar__text">{{ status }}</span>
     </div>
-    <div v-if="toolStatus" class="status-bar__tool">
-      <span class="status-bar__tool-label">Tool:</span>
-      <span class="status-bar__tool-name">{{ toolStatus }}</span>
+    <div v-if="toolStatus" class="status-bar__pill">
+      {{ toolStatus }}
     </div>
     <div class="status-bar__right">
       <span class="status-bar__text">v0.1.0</span>
@@ -37,60 +41,55 @@ const toolStatus = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 16px;
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border);
-  font-size: 12px;
+  padding: 0 16px;
+  height: 26px;
+  background: var(--glass-thin);
+  backdrop-filter: blur(40px) saturate(150%);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
+  border-top: 1px solid var(--border-inner);
+  font-size: 11px;
+  user-select: none;
 }
 
 .status-bar__left,
 .status-bar__right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.status-bar__indicator {
-  width: 8px;
-  height: 8px;
+.status-bar__dot {
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
 }
 
-.status-bar__indicator--active {
-  background: rgb(34, 197, 94);
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+.status-bar__dot--on {
+  background: var(--signal-read);
+  box-shadow: 0 0 4px var(--signal-read-glow);
 }
 
 .status-bar__text {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
 
-.status-bar__tool {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 10px;
-  background: var(--accent);
+.status-bar__pill {
+  padding: 1px 7px;
+  background: var(--glass-medium);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  animation: tool-pulse 0.5s ease-out;
-}
-
-.status-bar__tool-label {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.status-bar__tool-name {
-  color: white;
+  color: var(--text-secondary);
   font-weight: 500;
+  font-size: 10px;
+  animation: pill-in 0.15s ease-out;
 }
 
-@keyframes tool-pulse {
-  0% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
+@keyframes pill-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
 }
 </style>

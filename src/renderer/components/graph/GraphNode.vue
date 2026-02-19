@@ -40,7 +40,7 @@ const icon = computed(() => {
     markdown: 'M',
     typescript: 'TS',
     javascript: 'JS',
-    json: '{}',
+    json: '{ }',
     yaml: 'Y',
     directory: '/',
     file: 'F'
@@ -52,12 +52,12 @@ const icon = computed(() => {
 <template>
   <div :class="nodeClass">
     <Handle type="target" :position="Position.Top" />
-    
+
     <div class="graph-node__icon">{{ icon }}</div>
     <div class="graph-node__label">{{ data.label }}</div>
-    
+
     <div v-if="isActive" class="graph-node__pulse" />
-    
+
     <Handle type="source" :position="Position.Bottom" />
   </div>
 </template>
@@ -68,109 +68,152 @@ const icon = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 7px 11px;
   background: var(--bg-secondary);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 13px;
-  transition: all 0.2s ease;
-  cursor: pointer;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  transition: border-color 0.2s, box-shadow 0.25s, transform 0.15s;
+  cursor: default;
+}
+
+.graph-node::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.00) 60%
+  );
+  pointer-events: none;
 }
 
 .graph-node:hover {
-  border-color: var(--accent);
+  border-color: var(--border-light);
   transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .graph-node__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-  font-size: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  font-size: 9px;
   font-weight: 600;
-  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 
 .graph-node__label {
   color: var(--text-primary);
+  font-weight: 450;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 150px;
+  max-width: 130px;
 }
 
+/* File-type icon tints - warm, desaturated hues */
 .graph-node--markdown .graph-node__icon {
-  background: rgba(59, 130, 246, 0.2);
-  color: rgb(59, 130, 246);
+  background: rgba(160, 180, 200, 0.12);
+  color: rgba(180, 200, 220, 0.80);
 }
 
 .graph-node--typescript .graph-node__icon {
-  background: rgba(49, 120, 198, 0.2);
-  color: rgb(49, 120, 198);
+  background: rgba(130, 170, 210, 0.12);
+  color: rgba(150, 185, 220, 0.80);
 }
 
 .graph-node--javascript .graph-node__icon {
-  background: rgba(247, 223, 30, 0.2);
-  color: rgb(247, 223, 30);
+  background: rgba(210, 190, 120, 0.12);
+  color: rgba(220, 200, 140, 0.80);
 }
 
 .graph-node--json .graph-node__icon {
-  background: rgba(251, 191, 36, 0.2);
-  color: rgb(251, 191, 36);
+  background: rgba(200, 175, 130, 0.12);
+  color: rgba(210, 185, 145, 0.80);
+}
+
+.graph-node--yaml .graph-node__icon {
+  background: rgba(170, 160, 190, 0.12);
+  color: rgba(185, 175, 205, 0.80);
 }
 
 .graph-node--directory .graph-node__icon {
-  background: rgba(139, 92, 246, 0.2);
-  color: rgb(139, 92, 246);
+  background: rgba(170, 170, 180, 0.10);
+  color: rgba(190, 190, 200, 0.70);
 }
 
+.graph-node--file .graph-node__icon {
+  background: rgba(170, 170, 180, 0.08);
+  color: rgba(190, 190, 200, 0.60);
+}
+
+/* Activity states */
 .graph-node--active {
-  border-color: var(--accent);
-  box-shadow: 0 0 20px var(--accent-glow);
+  border-color: var(--border-light);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
 .graph-node--reading {
-  border-color: rgb(34, 197, 94);
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+  border-color: var(--signal-read);
+  box-shadow:
+    0 0 0 1px rgba(110, 201, 158, 0.10),
+    0 0 16px var(--signal-read-glow);
 }
 
 .graph-node--writing {
-  border-color: rgb(249, 115, 22);
-  box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
+  border-color: var(--signal-write);
+  box-shadow:
+    0 0 0 1px rgba(212, 151, 106, 0.10),
+    0 0 16px var(--signal-write-glow);
 }
 
 .graph-node__pulse {
   position: absolute;
-  inset: -4px;
+  inset: -3px;
   border-radius: 12px;
-  border: 2px solid var(--accent);
-  animation: pulse 1s ease-out infinite;
+  border: 1px solid var(--border-light);
+  animation: pulse 1.4s ease-out infinite;
   pointer-events: none;
+}
+
+.graph-node--reading .graph-node__pulse {
+  border-color: var(--signal-read);
+}
+
+.graph-node--writing .graph-node__pulse {
+  border-color: var(--signal-write);
 }
 
 @keyframes pulse {
   0% {
-    opacity: 1;
+    opacity: 0.6;
     transform: scale(1);
   }
   100% {
     opacity: 0;
-    transform: scale(1.2);
+    transform: scale(1.12);
   }
 }
 
 :deep(.vue-flow__handle) {
-  width: 8px;
-  height: 8px;
-  background: var(--accent-dim);
+  width: 5px;
+  height: 5px;
+  background: var(--border);
   border: none;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
 
-:deep(.vue-flow__handle:hover) {
-  background: var(--accent);
+.graph-node:hover :deep(.vue-flow__handle) {
+  opacity: 1;
 }
 </style>

@@ -20,6 +20,8 @@ const api = {
   scanWorkspace: (path: string) => ipcRenderer.invoke('workspace:scan', path),
   watchLogs: (path: string) => ipcRenderer.invoke('logs:watch', path),
   readFile: (path: string) => ipcRenderer.invoke('file:read', path),
+  selectDirectory: (): Promise<string | null> => ipcRenderer.invoke('dialog:openDirectory'),
+  selectFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile'),
 
   onNodeActivate: (callback: (data: NodeActivation) => void) => {
     ipcRenderer.on('node:activate', (_, data) => callback(data))
