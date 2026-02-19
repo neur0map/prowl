@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { MiniMap } from '@vue-flow/minimap'
+import { storeToRefs } from 'pinia'
 import { useGraphStore } from '../../stores/graph'
 import GraphNode from './GraphNode.vue'
 
 const graphStore = useGraphStore()
+const { nodes, edges } = storeToRefs(graphStore)
 const { fitView } = useVueFlow()
 
 const nodeTypes = {
@@ -18,9 +19,6 @@ const nodeTypes = {
   file: GraphNode,
   directory: GraphNode
 }
-
-const nodes = computed(() => graphStore.nodes)
-const edges = computed(() => graphStore.edges)
 </script>
 
 <template>
