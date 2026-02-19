@@ -1,7 +1,15 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { join } from 'path'
+import { homedir } from 'os'
 import { WorkspaceWatcher } from './watcher'
 import { LogParser } from './parser'
+
+function resolvePath(p: string): string {
+  if (p.startsWith('~/') || p === '~') {
+    return join(homedir(), p.slice(1))
+  }
+  return p
+}
 
 let mainWindow: BrowserWindow | null = null
 let watcher: WorkspaceWatcher | null = null
@@ -75,13 +83,13 @@ app.whenReady().then(() => {
 
   ipcMain.handle('workspace:scan', async (_, workspacePath: string) => {
     if (watcher) watcher.stop()
-    await initializeWatcher(workspacePath)
+    await initializeWatcher(resolvePath(workspacePath))
     return watcher?.getFileTree() ?? []
   })
 
   ipcMain.handle('logs:watch', async (_, logPath: string) => {
     if (parser) parser.stop()
-    initializeLogParser(logPath)
+    initializeLogParser(resolvePath(logPath))
     return true
   })
 
@@ -105,7 +113,7 @@ app.whenReady().then(() => {
   ipcMain.handle('file:read', async (_, filepath: string) => {
     const fs = await import('fs/promises')
     try {
-      return await fs.readFile(filepath, 'utf-8')
+      return await fs.readFile(resolvePath(filepath), 'utf-8')
     } catch {
       return null
     }
