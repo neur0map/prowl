@@ -38,9 +38,9 @@ function createWindow(): void {
   })
 }
 
-function initializeWatcher(workspacePath: string): void {
+async function initializeWatcher(workspacePath: string): Promise<void> {
   watcher = new WorkspaceWatcher(workspacePath)
-  
+
   watcher.on('file:read', (filepath) => {
     mainWindow?.webContents.send('node:activate', { filepath, type: 'read' })
   })
@@ -57,7 +57,7 @@ function initializeWatcher(workspacePath: string): void {
     mainWindow?.webContents.send('graph:update', { action: 'remove', filepath })
   })
 
-  watcher.start()
+  await watcher.start()
 }
 
 function initializeLogParser(logPath: string): void {
@@ -75,7 +75,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('workspace:scan', async (_, workspacePath: string) => {
     if (watcher) watcher.stop()
-    initializeWatcher(workspacePath)
+    await initializeWatcher(workspacePath)
     return watcher?.getFileTree() ?? []
   })
 
