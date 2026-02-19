@@ -4,6 +4,9 @@ import { homedir } from 'os'
 import { readdir, readFile, stat } from 'fs/promises'
 import { WorkspaceWatcher } from './watcher'
 import { LogParser } from './parser'
+import { ClaudeLogWatcher } from './claude-log-watcher'
+import { ProcessFileMonitor } from './process-file-monitor'
+import { OpenClawWSClient } from './openclaw-ws-client'
 
 function resolvePath(p: string): string {
   if (p.startsWith('~/') || p === '~') {
@@ -108,6 +111,9 @@ async function scanDirectory(dirPath: string, basePath: string): Promise<FileEnt
 let mainWindow: BrowserWindow | null = null
 let watcher: WorkspaceWatcher | null = null
 let parser: LogParser | null = null
+let claudeWatcher: ClaudeLogWatcher | null = null
+let processMonitor: ProcessFileMonitor | null = null
+let openclawClient: OpenClawWSClient | null = null
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -179,9 +185,15 @@ app.whenReady().then(() => {
     return scanDirectory(resolved, resolved)
   })
 
-  // Watcher handlers
+  // Watcher handlers — starts all 4 detection layers:
+  // 1. chokidar (filesystem writes/adds/removes)
+  // 2. Claude Code JSONL parser (agent tool calls)
+  // 3. lsof polling (process file access — reads, mmaps, handles)
+  // 4. OpenClaw WebSocket (real-time agent tool events)
   ipcMain.handle('watcher:start', async (_, workspacePath: string) => {
-    if (watcher) watcher.stop()
+    // Stop any existing watchers
+    stopAllWatchers()
+
     const resolved = resolvePath(workspacePath)
 
     // Validate path is a directory before starting
@@ -194,25 +206,72 @@ app.whenReady().then(() => {
       throw new Error(`Invalid workspace path: ${err.message}`)
     }
 
+    // Layer 1: chokidar — filesystem writes
     watcher = new WorkspaceWatcher(resolved)
-
     watcher.on('file:add', (filepath) => {
+      console.log('[prowl:chokidar] add:', filepath)
       mainWindow?.webContents.send('agent:file-activity', { filepath, type: 'add' })
     })
     watcher.on('file:write', (filepath) => {
+      console.log('[prowl:chokidar] write:', filepath)
       mainWindow?.webContents.send('agent:file-activity', { filepath, type: 'write' })
     })
     watcher.on('file:remove', (filepath) => {
+      console.log('[prowl:chokidar] remove:', filepath)
       mainWindow?.webContents.send('agent:file-activity', { filepath, type: 'remove' })
     })
-
     await watcher.start()
+
+    // Layer 2: Claude Code JSONL log watcher — agent tool calls
+    claudeWatcher = new ClaudeLogWatcher(resolved)
+    claudeWatcher.on('tool:call', (data) => {
+      console.log('[prowl:claude-log] tool:', data.tool, data.filepath || '')
+      mainWindow?.webContents.send('agent:tool-event', {
+        timestamp: data.timestamp,
+        tool: data.tool,
+        action: data.action,
+        filepath: data.filepath,
+      })
+    })
+    await claudeWatcher.start()
+
+    // Layer 3: lsof polling — process file access (macOS/Linux only)
+    if (process.platform === 'darwin' || process.platform === 'linux') {
+      processMonitor = new ProcessFileMonitor(resolved)
+      processMonitor.on('file:access', (data) => {
+        console.log('[prowl:lsof] access:', data.filepath, 'by', data.process)
+        mainWindow?.webContents.send('agent:file-activity', {
+          filepath: data.filepath,
+          type: 'access',
+        })
+      })
+      processMonitor.start()
+    }
+
+    // Layer 4: OpenClaw WebSocket — only for OpenClaw workspaces
+    const isOpenClawWorkspace = resolved.toLowerCase().includes('openclaw') ||
+      resolved.includes('.openclaw')
+    if (isOpenClawWorkspace) {
+      openclawClient = new OpenClawWSClient(resolved)
+      openclawClient.on('tool:call', (data) => {
+        console.log('[prowl:openclaw-ws] tool:', data.tool, data.filepath || '')
+        mainWindow?.webContents.send('agent:tool-event', {
+          timestamp: data.timestamp,
+          tool: data.tool,
+          action: data.action,
+          filepath: data.filepath,
+        })
+      })
+      openclawClient.start()
+      console.log('[prowl] openclaw workspace detected, WS client started')
+    }
+
+    console.log('[prowl] all detection layers started for:', resolved)
     return watcher.getFileTree()
   })
 
   ipcMain.handle('watcher:stop', async () => {
-    watcher?.stop()
-    watcher = null
+    stopAllWatchers()
   })
 
   // Parser handlers
@@ -235,8 +294,19 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('window-all-closed', () => {
+function stopAllWatchers(): void {
   watcher?.stop()
+  watcher = null
+  claudeWatcher?.stop()
+  claudeWatcher = null
+  processMonitor?.stop()
+  processMonitor = null
+  openclawClient?.stop()
+  openclawClient = null
+}
+
+app.on('window-all-closed', () => {
+  stopAllWatchers()
   parser?.stop()
   if (process.platform !== 'darwin') {
     app.quit()

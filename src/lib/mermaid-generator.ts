@@ -40,13 +40,13 @@ export function generateProcessMermaid(process: ProcessData): string {
 
   const lines: string[] = ['graph TD'];
 
-  // Add class definitions for styling (rounded corners + colors)
+  // Prowl monochrome styles — no color-coding, all glass
   lines.push('  %% Styles');
-  lines.push('  classDef default fill:#1e293b,stroke:#94a3b8,stroke-width:3px,color:#f8fafc,rx:10,ry:10,font-size:24px;');
-  lines.push('  classDef entry fill:#1e293b,stroke:#34d399,stroke-width:5px,color:#f8fafc,rx:10,ry:10,font-size:24px;');
-  lines.push('  classDef step fill:#1e293b,stroke:#22d3ee,stroke-width:3px,color:#f8fafc,rx:10,ry:10,font-size:24px;');
-  lines.push('  classDef terminal fill:#1e293b,stroke:#f472b6,stroke-width:5px,color:#f8fafc,rx:10,ry:10,font-size:24px;');
-  lines.push('  classDef cluster fill:#0f172a,stroke:#334155,stroke-width:3px,color:#94a3b8,rx:4,ry:4,font-size:20px;');
+  lines.push('  classDef default fill:#1c1c1e,stroke:rgba(255,255,255,0.12),stroke-width:1px,color:#f5f5f7,rx:20,ry:20,font-size:24px;');
+  lines.push('  classDef entry fill:#1c1c1e,stroke:rgba(255,255,255,0.2),stroke-width:2px,color:#f5f5f7,rx:20,ry:20,font-size:24px;');
+  lines.push('  classDef step fill:#1c1c1e,stroke:rgba(255,255,255,0.12),stroke-width:1px,color:#f5f5f7,rx:20,ry:20,font-size:24px;');
+  lines.push('  classDef terminal fill:#1c1c1e,stroke:rgba(255,255,255,0.2),stroke-width:2px,color:#f5f5f7,rx:20,ry:20,font-size:24px;');
+  lines.push('  classDef cluster fill:rgba(255,255,255,0.03),stroke:rgba(255,255,255,0.08),stroke-width:1px,color:rgba(255,255,255,0.35),rx:8,ry:8,font-size:20px;');
 
   // Track clusters for subgraph grouping
   const clusterGroups = new Map<string, ProcessStep[]>();
@@ -150,9 +150,9 @@ export function generateProcessMermaid(process: ProcessData): string {
  */
 export function generateSimpleMermaid(processLabel: string, stepCount: number): string {
   const [entry, terminal] = processLabel.split(' → ').map(s => s.trim());
-  
+
   return `graph LR
-  classDef entry fill:#059669,stroke:#34d399,stroke-width:2px,color:#ffffff,rx:10,ry:10;
-  classDef terminal fill:#be185d,stroke:#f472b6,stroke-width:2px,color:#ffffff,rx:10,ry:10;
-  A["🟢 ${entry || 'Start'}"]:::entry --> B["... ${stepCount - 2} steps ..."] --> C["🔴 ${terminal || 'End'}"]:::terminal`;
+  classDef default fill:#1c1c1e,stroke:rgba(255,255,255,0.12),stroke-width:1px,color:#f5f5f7,rx:20,ry:20;
+  classDef entry fill:#1c1c1e,stroke:rgba(255,255,255,0.2),stroke-width:2px,color:#f5f5f7,rx:20,ry:20;
+  A["${entry || 'Start'}"]:::entry --> B["${stepCount - 2} steps"] --> C["${terminal || 'End'}"]:::entry`;
 }

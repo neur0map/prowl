@@ -48,6 +48,7 @@ export interface GeminiConfig extends BaseProviderConfig {
   provider: 'gemini';
   apiKey: string;
   model: string;  // e.g., 'gemini-2.0-flash', 'gemini-1.5-pro'
+  baseUrl?: string;  // optional, for custom endpoints
 }
 
 /**
@@ -57,6 +58,7 @@ export interface AnthropicConfig extends BaseProviderConfig {
   provider: 'anthropic';
   apiKey: string;
   model: string;  // e.g., 'claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022'
+  baseUrl?: string;  // optional, for custom endpoints or proxies
 }
 
 /**

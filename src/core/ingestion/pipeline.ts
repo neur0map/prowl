@@ -19,15 +19,15 @@ export const runIngestionPipeline = async ( file: File, onProgress: (progress: P
   onProgress({
     phase: 'extracting',
     percent: 0,
-    message: 'Extracting ZIP file...',
+    message: 'Unpacking archive...',
   });
-  
+
   // Fake progress for extraction (JSZip doesn't expose progress)
   const fakeExtractionProgress = setInterval(() => {
     onProgress({
       phase: 'extracting',
       percent: Math.min(14, Math.random() * 10 + 5),
-      message: 'Extracting ZIP file...',
+      message: 'Unpacking archive...',
     });
   }, 200);
   
@@ -64,7 +64,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'extracting',
     percent: 15,
-    message: 'ZIP extracted successfully',
+    message: 'Source files loaded',
     stats: { filesProcessed: 0, totalFiles: files.length, nodesCreated: 0 },
   });
   
@@ -72,7 +72,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'structure',
     percent: 15,
-    message: 'Analyzing project structure...',
+    message: 'Mapping file tree...',
     stats: { filesProcessed: 0, totalFiles: files.length, nodesCreated: 0 },
   });
   
@@ -82,7 +82,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'structure',
     percent: 30,
-    message: 'Project structure analyzed',
+    message: 'File tree mapped',
     stats: { filesProcessed: files.length, totalFiles: files.length, nodesCreated: graph.nodeCount },
   });
   
@@ -90,7 +90,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'parsing',
     percent: 30,
-    message: 'Parsing code definitions...',
+    message: 'Extracting symbols...',
     stats: { filesProcessed: 0, totalFiles: files.length, nodesCreated: graph.nodeCount },
   });
   
@@ -99,7 +99,7 @@ export const runPipelineFromFiles = async (
     onProgress({
       phase: 'parsing',
       percent: Math.round(parsingProgress),
-      message: 'Parsing code definitions...',
+      message: 'Extracting symbols...',
       detail: filePath,
       stats: { filesProcessed: current, totalFiles: total, nodesCreated: graph.nodeCount },
     });
@@ -110,7 +110,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'imports',
     percent: 70,
-    message: 'Resolving imports...',
+    message: 'Resolving dependencies...',
     stats: { filesProcessed: 0, totalFiles: files.length, nodesCreated: graph.nodeCount },
   });
 
@@ -119,7 +119,7 @@ export const runPipelineFromFiles = async (
     onProgress({
       phase: 'imports',
       percent: Math.round(importProgress),
-      message: 'Resolving imports...',
+      message: 'Resolving dependencies...',
       stats: { filesProcessed: current, totalFiles: total, nodesCreated: graph.nodeCount },
     });
   });
@@ -139,7 +139,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'calls',
     percent: 82,
-    message: 'Tracing function calls...',
+    message: 'Tracing call graph...',
     stats: { filesProcessed: 0, totalFiles: files.length, nodesCreated: graph.nodeCount },
   });
 
@@ -148,7 +148,7 @@ export const runPipelineFromFiles = async (
     onProgress({
       phase: 'calls',
       percent: Math.round(callProgress),
-      message: 'Tracing function calls...',
+      message: 'Tracing call graph...',
       stats: { filesProcessed: current, totalFiles: total, nodesCreated: graph.nodeCount },
     });
   });
@@ -157,7 +157,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'heritage',
     percent: 92,
-    message: 'Extracting class inheritance...',
+    message: 'Linking inheritance chains...',
     stats: { filesProcessed: 0, totalFiles: files.length, nodesCreated: graph.nodeCount },
   });
 
@@ -166,7 +166,7 @@ export const runPipelineFromFiles = async (
     onProgress({
       phase: 'heritage',
       percent: Math.round(heritageProgress),
-      message: 'Extracting class inheritance...',
+      message: 'Linking inheritance chains...',
       stats: { filesProcessed: current, totalFiles: total, nodesCreated: graph.nodeCount },
     });
   });
@@ -175,7 +175,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'communities',
     percent: 92,
-    message: 'Detecting code communities...',
+    message: 'Clustering modules...',
     stats: { filesProcessed: files.length, totalFiles: files.length, nodesCreated: graph.nodeCount },
   });
 
@@ -225,7 +225,7 @@ export const runPipelineFromFiles = async (
   onProgress({
     phase: 'processes',
     percent: 98,
-    message: 'Detecting execution flows...',
+    message: 'Mapping execution flows...',
     stats: { filesProcessed: files.length, totalFiles: files.length, nodesCreated: graph.nodeCount },
   });
 

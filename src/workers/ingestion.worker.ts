@@ -92,7 +92,7 @@ const workerApi = {
       onProgress({
         phase: 'complete',
         percent: 98,
-        message: 'Loading into KuzuDB...',
+        message: 'Indexing graph database...',
         stats: {
           filesProcessed: result.graph.nodeCount,
           totalFiles: result.graph.nodeCount,
@@ -196,7 +196,7 @@ const workerApi = {
       onProgress({
         phase: 'complete',
         percent: 98,
-        message: 'Loading into KuzuDB...',
+        message: 'Indexing graph database...',
         stats: {
           filesProcessed: result.graph.nodeCount,
           totalFiles: result.graph.nodeCount,

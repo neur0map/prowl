@@ -118,7 +118,7 @@ export function useAgentWatcher(graph: KnowledgeGraph | null) {
 
       const event: ToolEvent = {
         timestamp: Date.now(),
-        tool: data.type === 'write' ? 'write' : data.type === 'add' ? 'create' : 'delete',
+        tool: data.type === 'write' ? 'write' : data.type === 'add' ? 'create' : data.type === 'access' ? 'access' : 'delete',
         filepath: data.filepath,
       };
       setState(prev => ({

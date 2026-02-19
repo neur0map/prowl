@@ -17,34 +17,7 @@ const initFS = () => {
   return fsName;
 };
 
-// Detect Electron context — renderer has no CORS restrictions
-const isElectron = typeof window !== 'undefined' && !!(window as any).prowl;
-
-// Hosted CORS proxy for web deployment (Electron skips this entirely)
-const HOSTED_PROXY_URL = 'https://gitnexus.vercel.app/api/proxy';
-
-/**
- * Custom HTTP client that uses a query-param based proxy (web only).
- * In Electron, fetch() works directly against GitHub — no CORS restrictions.
- */
-const createProxiedHttp = (): typeof http => {
-  // Electron: use raw http (no proxy needed)
-  if (isElectron) return http;
-
-  const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-
-  return {
-    request: async (config) => {
-      const proxyBase = isDev ? HOSTED_PROXY_URL : '/api/proxy';
-      const proxyUrl = `${proxyBase}?url=${encodeURIComponent(config.url)}`;
-
-      return http.request({
-        ...config,
-        url: proxyUrl,
-      });
-    },
-  };
-};
+// Electron has no CORS restrictions — fetch() works directly against GitHub
 
 /**
  * Parse GitHub URL to extract owner and repo
@@ -92,12 +65,10 @@ export const cloneRepository = async (
   try {
     onProgress?.('cloning', 0);
 
-    const httpClient = createProxiedHttp();
-    
     // Clone with shallow depth for speed
     await git.clone({
       fs,
-      http: httpClient,
+      http,
       dir,
       url: repoUrl,
       depth: 1,

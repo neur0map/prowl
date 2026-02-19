@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 export interface FileActivity {
   filepath: string
-  type: 'add' | 'write' | 'remove'
+  type: 'add' | 'write' | 'remove' | 'access'
 }
 
 export interface ToolEvent {

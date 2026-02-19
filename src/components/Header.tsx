@@ -1,4 +1,4 @@
-import { Search, Settings, MessageSquare } from 'lucide-react';
+import { Search, Settings, PanelRight } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { GraphNode } from '../core/graph/types';
@@ -24,9 +24,8 @@ export const Header = ({ onFocusNode }: HeaderProps) => {
   const {
     projectName,
     graph,
-    openChatPanel,
     isRightPanelOpen,
-    rightPanelTab,
+    setRightPanelOpen,
     setSettingsPanelOpen,
   } = useAppState();
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,17 +193,17 @@ export const Header = ({ onFocusNode }: HeaderProps) => {
         </button>
 
         <button
-          onClick={openChatPanel}
+          onClick={() => setRightPanelOpen(!isRightPanelOpen)}
           className={`
-            flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] transition-all
-            ${isRightPanelOpen && rightPanelTab === 'chat'
-              ? 'bg-accent text-white'
-              : 'glass-subtle text-text-secondary hover:text-text-primary'
+            w-7 h-7 flex items-center justify-center rounded-md transition-colors
+            ${isRightPanelOpen
+              ? 'bg-white/[0.1] text-text-primary'
+              : 'text-text-muted hover:text-text-primary hover:bg-white/[0.08]'
             }
           `}
+          title="Toggle panel"
         >
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>Chat</span>
+          <PanelRight className="w-4 h-4" />
         </button>
       </div>
     </header>

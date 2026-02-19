@@ -21,6 +21,7 @@ export const DropZone = ({ onFileSelect, onGitClone, onFolderLoad }: DropZonePro
   const [cloneProgress, setCloneProgress] = useState({ phase: '', percent: 0 });
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [folderPath, setFolderPath] = useState('');
 
   const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -93,16 +94,12 @@ export const DropZone = ({ onFileSelect, onGitClone, onFolderLoad }: DropZonePro
     }
   };
 
-  const handleLocalFolder = async () => {
-    if (!window.prowl) return;
+  const scanAndLoad = async (dirPath: string) => {
     setError(null);
-    const dirPath = await window.prowl.selectDirectory();
-    if (!dirPath) return;
     setIsScanning(true);
     try {
       const files = await window.prowl.scanFolder(dirPath);
       if (files.length === 0) { setError('No source files found in this folder.'); return; }
-      // Use dedicated folder callback (passes path for auto-watcher), fall back to generic
       if (onFolderLoad) {
         onFolderLoad(files, dirPath);
       } else {
@@ -114,6 +111,19 @@ export const DropZone = ({ onFileSelect, onGitClone, onFolderLoad }: DropZonePro
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const handleLocalFolder = async () => {
+    if (!window.prowl) return;
+    setError(null);
+    const dirPath = await window.prowl.selectDirectory();
+    if (!dirPath) return;
+    await scanAndLoad(dirPath);
+  };
+
+  const handleFolderPathSubmit = async () => {
+    if (!window.prowl || !folderPath.trim()) return;
+    await scanAndLoad(folderPath.trim());
   };
 
   const tabs = [
@@ -306,24 +316,48 @@ export const DropZone = ({ onFileSelect, onGitClone, onFolderLoad }: DropZonePro
               Open Local Folder
             </h2>
             <p className="text-[12px] text-text-muted text-center mb-5">
-              Select a project folder from your machine
+              Paste a path or browse for a project folder
             </p>
 
-            <button
-              onClick={handleLocalFolder}
-              disabled={isScanning}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[13px] bg-accent text-white hover:bg-accent-dim disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {isScanning ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Scanning...</>
-              ) : (
-                <><FolderOpen className="w-3.5 h-3.5" /> Choose Folder</>
-              )}
-            </button>
+            <div className="space-y-2.5">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={folderPath}
+                  onChange={(e) => setFolderPath(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !isScanning && handleFolderPathSubmit()}
+                  placeholder="/path/to/project or ~/project"
+                  disabled={isScanning}
+                  autoComplete="off"
+                  className="flex-1 px-3 py-2 rounded-md text-[13px] bg-white/[0.06] border border-white/[0.12] text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 disabled:opacity-40 transition-colors font-mono"
+                />
+                <button
+                  onClick={handleLocalFolder}
+                  disabled={isScanning}
+                  className="px-3 py-2 rounded-md text-[13px] bg-white/[0.06] border border-white/[0.12] text-text-secondary hover:text-text-primary hover:bg-white/[0.1] disabled:opacity-40 transition-colors"
+                  title="Browse"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <button
+                onClick={handleFolderPathSubmit}
+                disabled={isScanning || !folderPath.trim()}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[13px] bg-accent text-white hover:bg-accent-dim disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isScanning ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Scanning...</>
+                ) : (
+                  <><ArrowRight className="w-3.5 h-3.5" /> Open</>
+                )}
+              </button>
+            </div>
 
             <div className="mt-3 flex justify-center gap-2 text-[11px] text-text-muted">
               <span className="px-2 py-1 rounded bg-white/[0.06] border border-white/[0.08]">Any project</span>
-              <span className="px-2 py-1 rounded bg-white/[0.06] border border-white/[0.08]">No upload</span>
+              <span className="px-2 py-1 rounded bg-white/[0.06] border border-white/[0.08]">Live watcher</span>
+              <span className="px-2 py-1 rounded bg-white/[0.06] border border-white/[0.08]">~/paths</span>
             </div>
           </div>
         )}

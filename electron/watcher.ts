@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { watch, FSWatcher } from 'chokidar'
 import { readdir, stat } from 'fs/promises'
-import { join, relative, extname } from 'path'
+import { join, relative, extname, basename } from 'path'
 
 export interface FileNode {
   path: string
@@ -11,14 +11,22 @@ export interface FileNode {
   children?: FileNode[]
 }
 
-const IGNORED_PATTERNS = [
-  '**/node_modules/**',
-  '**/.git/**',
-  '**/dist/**',
-  '**/*.log'
-]
+// Directories to ignore WITHIN the workspace (checked against relative paths only)
+const IGNORED_DIR_NAMES = new Set([
+  'node_modules', '.git', 'dist', 'build', 'out', 'target',
+  '.next', '.nuxt', '__pycache__', '.pytest_cache', 'coverage',
+  '.cache', 'tmp', 'temp',
+])
 
-const WATCHED_EXTENSIONS = ['.md', '.ts', '.js', '.json', '.yaml', '.yml']
+// File patterns to ignore
+const IGNORED_EXTENSIONS = new Set([
+  '.log', '.lock', '.map',
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
+  '.woff', '.woff2', '.ttf', '.eot',
+  '.zip', '.tar', '.gz', '.rar',
+  '.exe', '.dll', '.so', '.dylib', '.wasm',
+  '.pdf', '.mp4', '.mp3',
+])
 
 export class WorkspaceWatcher extends EventEmitter {
   private watcher: FSWatcher | null = null
@@ -33,8 +41,32 @@ export class WorkspaceWatcher extends EventEmitter {
   async start(): Promise<void> {
     this.fileTree = await this.buildFileTree(this.workspacePath)
 
-    this.watcher = watch(this.workspacePath, {
-      ignored: IGNORED_PATTERNS,
+    // Use a function for `ignored` so we check the RELATIVE path from workspace root.
+    // This prevents false positives when the workspace itself lives inside node_modules
+    // (e.g. /opt/homebrew/lib/node_modules/openclaw/).
+    const workspaceRoot = this.workspacePath
+
+    this.watcher = watch(workspaceRoot, {
+      ignored: (absolutePath: string) => {
+        const rel = relative(workspaceRoot, absolutePath)
+        if (!rel || rel === '.') return false
+
+        // Check each path segment against ignored directory names
+        const segments = rel.split('/')
+        for (const seg of segments.slice(0, -1)) {
+          if (IGNORED_DIR_NAMES.has(seg)) return true
+        }
+
+        // Check file extension
+        const ext = extname(absolutePath).toLowerCase()
+        if (IGNORED_EXTENSIONS.has(ext)) return true
+
+        // Ignore dotfiles/dotdirs (but not the workspace root itself)
+        const name = basename(absolutePath)
+        if (name.startsWith('.') && name !== '.') return true
+
+        return false
+      },
       persistent: true,
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -78,7 +110,7 @@ export class WorkspaceWatcher extends EventEmitter {
             children
           })
         }
-      } else if (this.isWatchedFile(entry.name)) {
+      } else {
         nodes.push({
           path: relativePath,
           name: entry.name,
@@ -95,12 +127,7 @@ export class WorkspaceWatcher extends EventEmitter {
   }
 
   private shouldIgnore(name: string): boolean {
-    return name.startsWith('.') || name === 'node_modules' || name === 'dist'
-  }
-
-  private isWatchedFile(name: string): boolean {
-    const ext = extname(name).toLowerCase()
-    return WATCHED_EXTENSIONS.includes(ext)
+    return name.startsWith('.') || IGNORED_DIR_NAMES.has(name)
   }
 
   private handleAdd(filepath: string): void {

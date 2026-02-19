@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Radio, FolderOpen, FileText, Power, PowerOff } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import type { ToolEvent } from '../hooks/useAgentWatcher';
@@ -24,29 +24,37 @@ export const AgentPanel = () => {
     stopAgentWatcher,
   } = useAppState();
 
-  const [workspacePath, setWorkspacePath] = useState('');
-  const [logPath, setLogPath] = useState('');
+  const { isConnected, recentEvents, workspacePath: watchedPath, logPath: watchedLog } = agentWatcherState;
 
-  const { isConnected, recentEvents } = agentWatcherState;
+  const [inputWorkspace, setInputWorkspace] = useState('');
+  const [inputLog, setInputLog] = useState('');
+
+  // Sync inputs from shared state when watcher connects/disconnects
+  useEffect(() => {
+    if (isConnected) {
+      if (watchedPath) setInputWorkspace(watchedPath);
+      if (watchedLog) setInputLog(watchedLog);
+    }
+  }, [isConnected, watchedPath, watchedLog]);
 
   const handleBrowseWorkspace = async () => {
     if (!window.prowl) return;
     const path = await window.prowl.selectDirectory();
-    if (path) setWorkspacePath(path);
+    if (path) setInputWorkspace(path);
   };
 
   const handleBrowseLog = async () => {
     if (!window.prowl) return;
     const path = await window.prowl.selectFile();
-    if (path) setLogPath(path);
+    if (path) setInputLog(path);
   };
 
   const handleToggle = async () => {
     if (isConnected) {
       await stopAgentWatcher();
     } else {
-      if (!workspacePath) return;
-      await startAgentWatcher(workspacePath, logPath || undefined);
+      if (!inputWorkspace) return;
+      await startAgentWatcher(inputWorkspace, inputLog || undefined);
     }
   };
 
@@ -68,8 +76,8 @@ export const AgentPanel = () => {
           <div className="flex gap-2">
             <input
               type="text"
-              value={workspacePath}
-              onChange={(e) => setWorkspacePath(e.target.value)}
+              value={inputWorkspace}
+              onChange={(e) => setInputWorkspace(e.target.value)}
               placeholder="/path/to/project"
               disabled={isConnected}
               className="flex-1 px-2.5 py-1.5 bg-white/[0.06] border border-white/[0.12] rounded-md text-[12px] font-mono text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 disabled:opacity-40 transition-colors"
@@ -91,8 +99,8 @@ export const AgentPanel = () => {
           <div className="flex gap-2">
             <input
               type="text"
-              value={logPath}
-              onChange={(e) => setLogPath(e.target.value)}
+              value={inputLog}
+              onChange={(e) => setInputLog(e.target.value)}
               placeholder="/path/to/agent.log"
               disabled={isConnected}
               className="flex-1 px-2.5 py-1.5 bg-white/[0.06] border border-white/[0.12] rounded-md text-[12px] font-mono text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 disabled:opacity-40 transition-colors"
@@ -111,7 +119,7 @@ export const AgentPanel = () => {
         {/* Connect button */}
         <button
           onClick={handleToggle}
-          disabled={!isConnected && !workspacePath}
+          disabled={!isConnected && !inputWorkspace}
           className={`
             w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[13px] transition-all
             ${isConnected
