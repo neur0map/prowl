@@ -39,19 +39,38 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create DMG
+      - name: Ad-hoc sign app bundle
         run: |
-          VERSION=$(jq -r .version package.json)
-          ARCH=${{ matrix.arch }}
-          DMG_NAME="Prowl-${VERSION}-mac-${ARCH}.dmg"
-
-          # Find the .app bundle electron-builder created
           APP_PATH=$(find release -name "*.app" -maxdepth 3 -type d | head -1)
           if [ -z "$APP_PATH" ]; then
             echo "ERROR: No .app bundle found in release/"
             find release -maxdepth 3 -type d
             exit 1
           fi
+          echo "Signing: $APP_PATH"
+
+          # Remove any existing signatures first
+          codesign --remove-signature "$APP_PATH" 2>/dev/null || true
+
+          # Ad-hoc sign all nested frameworks/helpers, then the app itself
+          find "$APP_PATH" -type f \( -name "*.dylib" -o -name "*.so" -o -name "*.node" \) -exec codesign --force --deep -s - {} \; 2>/dev/null || true
+          find "$APP_PATH" -path "*/Frameworks/*.framework" -maxdepth 4 -exec codesign --force --deep -s - {} \; 2>/dev/null || true
+          find "$APP_PATH" -name "*.app" -path "*/Helpers/*" -exec codesign --force --deep -s - {} \; 2>/dev/null || true
+
+          # Sign the main app bundle
+          codesign --force --deep -s - "$APP_PATH"
+
+          # Verify
+          codesign --verify --verbose "$APP_PATH"
+          echo "Signing OK"
+
+      - name: Create DMG
+        run: |
+          VERSION=$(jq -r .version package.json)
+          ARCH=${{ matrix.arch }}
+          DMG_NAME="Prowl-${VERSION}-mac-${ARCH}.dmg"
+
+          APP_PATH=$(find release -name "*.app" -maxdepth 3 -type d | head -1)
           echo "Found app bundle: $APP_PATH"
 
           # Create staging dir with app + Applications symlink
