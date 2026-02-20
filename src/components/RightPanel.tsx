@@ -10,6 +10,7 @@ import { isProviderConfigured, getActiveProviderConfig } from '../core/llm/setti
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ProcessesPanel } from './ProcessesPanel';
 import { AgentPanel } from './AgentPanel';
+import { ContextBridge } from './ContextBridge';
 
 const isElectron = typeof window !== 'undefined' && !!(window as any).prowl;
 
@@ -472,7 +473,10 @@ export const RightPanel = ({ onFocusNode }: RightPanelProps) => {
 
           {/* Input */}
           <div className="p-3 border-t border-white/[0.08] bg-deep/80">
-            <div className="flex items-end gap-2 px-3 py-1.5 bg-white/[0.05] border border-white/[0.10] rounded-xl transition-all focus-within:border-accent/40 focus-within:bg-white/[0.06]">
+            {/* Context Bridge */}
+            <ContextBridge />
+
+            <div className="flex items-end gap-2 px-3 py-1.5 bg-white/[0.05] border border-white/[0.10] rounded-xl transition-all focus-within:border-accent/40 focus-within:bg-white/[0.06] mt-3">
               <textarea
                 ref={textareaRef}
                 value={chatInput}

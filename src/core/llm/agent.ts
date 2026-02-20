@@ -13,14 +13,15 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatOllama } from '@langchain/ollama';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { createGraphRAGTools } from './tools';
-import type { 
-  ProviderConfig, 
+import type {
+  ProviderConfig,
   OpenAIConfig,
-  AzureOpenAIConfig, 
+  AzureOpenAIConfig,
   GeminiConfig,
   AnthropicConfig,
   OllamaConfig,
   OpenRouterConfig,
+  GroqConfig,
   AgentStreamChunk,
 } from './types';
 import { 
@@ -200,15 +201,15 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         numCtx: 32768,
       });
     }
-    
+
     case 'openrouter': {
       const openRouterConfig = config as OpenRouterConfig;
-      
-      
+
+
       if (!openRouterConfig.apiKey || openRouterConfig.apiKey.trim() === '') {
         throw new Error('OpenRouter API key is required but was not provided');
       }
-      
+
       return new ChatOpenAI({
         openAIApiKey: openRouterConfig.apiKey,
         apiKey: openRouterConfig.apiKey, // Fallback for some versions
@@ -222,7 +223,27 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         streaming: true,
       });
     }
-    
+
+    case 'groq': {
+      const groqConfig = config as GroqConfig;
+
+      if (!groqConfig.apiKey || groqConfig.apiKey.trim() === '') {
+        throw new Error('Groq API key is required but was not provided');
+      }
+
+      return new ChatOpenAI({
+        apiKey: groqConfig.apiKey,
+        modelName: groqConfig.model,
+        temperature: groqConfig.temperature ?? 0.1,
+        maxTokens: groqConfig.maxTokens,
+        configuration: {
+          apiKey: groqConfig.apiKey,
+          baseURL: groqConfig.baseUrl ?? 'https://api.groq.com/openai/v1',
+        },
+        streaming: true,
+      });
+    }
+
     default:
       throw new Error(`Unsupported provider: ${(config as any).provider}`);
   }

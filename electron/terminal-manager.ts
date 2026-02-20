@@ -19,7 +19,7 @@ export class TerminalManager {
 
   create(cwd?: string): string {
     const id = `term-${++this.counter}`
-    const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh')
+    const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/bash')
     const resolvedCwd = cwd || homedir()
 
     // Clean env: remove vars that conflict with nvm/shell init

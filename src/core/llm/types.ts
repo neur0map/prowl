@@ -8,7 +8,7 @@
 /**
  * Supported LLM providers
  */
-export type LLMProvider = 'openai' | 'azure-openai' | 'gemini' | 'anthropic' | 'ollama' | 'openrouter';
+export type LLMProvider = 'openai' | 'azure-openai' | 'gemini' | 'anthropic' | 'ollama' | 'openrouter' | 'groq';
 
 /**
  * Base configuration shared by all providers
@@ -81,9 +81,19 @@ export interface OpenRouterConfig extends BaseProviderConfig {
 }
 
 /**
+ * Groq configuration
+ */
+export interface GroqConfig extends BaseProviderConfig {
+  provider: 'groq';
+  apiKey: string;
+  model: string;  // e.g., 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'
+  baseUrl?: string;  // defaults to https://api.groq.com/openai/v1
+}
+
+/**
  * Union type for all provider configurations
  */
-export type ProviderConfig = OpenAIConfig | AzureOpenAIConfig | GeminiConfig | AnthropicConfig | OllamaConfig | OpenRouterConfig;
+export type ProviderConfig = OpenAIConfig | AzureOpenAIConfig | GeminiConfig | AnthropicConfig | OllamaConfig | OpenRouterConfig | GroqConfig;
 
 /**
  * Stored settings (what goes to localStorage)
@@ -100,6 +110,7 @@ export interface LLMSettings {
   anthropic?: Partial<Omit<AnthropicConfig, 'provider'>>;
   ollama?: Partial<Omit<OllamaConfig, 'provider'>>;
   openrouter?: Partial<Omit<OpenRouterConfig, 'provider'>>;
+  groq?: Partial<Omit<GroqConfig, 'provider'>>;
 
   // Intelligent Clustering Settings
   intelligentClustering: boolean;
@@ -148,6 +159,12 @@ export const DEFAULT_LLM_SETTINGS: LLMSettings = {
     apiKey: '',
     model: '',
     baseUrl: 'https://openrouter.ai/api/v1',
+    temperature: 0.1,
+  },
+  groq: {
+    apiKey: '',
+    model: 'llama-3.3-70b-versatile',
+    baseUrl: 'https://api.groq.com/openai/v1',
     temperature: 0.1,
   },
 };

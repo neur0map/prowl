@@ -18,6 +18,13 @@ export interface FileEntry {
   content: string
 }
 
+export interface UpdateInfo {
+  currentVersion: string
+  latestVersion: string
+  releaseUrl: string
+  releaseName: string
+}
+
 const prowlApi = {
   // Dialog
   selectDirectory: (): Promise<string | null> =>
@@ -107,6 +114,18 @@ const prowlApi = {
     removeAllListeners: () => {
       ipcRenderer.removeAllListeners('terminal:data')
       ipcRenderer.removeAllListeners('terminal:exit')
+    },
+  },
+
+  // Update checker
+  updater: {
+    check: (): Promise<UpdateInfo | null> =>
+      ipcRenderer.invoke('updater:check'),
+    onUpdateAvailable: (cb: (info: UpdateInfo) => void) => {
+      ipcRenderer.on('updater:update-available', (_, info) => cb(info))
+    },
+    removeUpdateListener: () => {
+      ipcRenderer.removeAllListeners('updater:update-available')
     },
   },
 }

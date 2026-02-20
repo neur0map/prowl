@@ -6,10 +6,12 @@ import { Header } from './components/Header';
 import { GraphCanvas, GraphCanvasHandle } from './components/GraphCanvas';
 import { RightPanel } from './components/RightPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { RoadmapPanel } from './components/RoadmapPanel';
 import { StatusBar } from './components/StatusBar';
 import { FileTreePanel } from './components/FileTreePanel';
 import { CodeEditorPanel } from './components/CodeEditorPanel';
 import { TerminalDrawer } from './components/TerminalDrawer';
+import { UpdateBanner } from './components/UpdateBanner';
 import { FileEntry } from './services/zip';
 import { getActiveProviderConfig } from './core/llm/settings-service';
 
@@ -40,6 +42,7 @@ const AppContent = () => {
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isRoadmapOpen, setIsRoadmapOpen] = useState(false);
 
   // Track folder path for auto-watcher — stored in ref to avoid re-render deps
   const pendingFolderPathRef = useRef<string | null>(null);
@@ -207,11 +210,14 @@ const AppContent = () => {
   // Render based on view mode
   if (viewMode === 'onboarding') {
     return (
-      <DropZone
-        onFileSelect={handleFileSelect}
-        onGitClone={handleGitClone}
-        onFolderLoad={handleFolderLoad}
-      />
+      <>
+        <UpdateBanner />
+        <DropZone
+          onFileSelect={handleFileSelect}
+          onGitClone={handleGitClone}
+          onFolderLoad={handleFolderLoad}
+        />
+      </>
     );
   }
 
@@ -222,7 +228,12 @@ const AppContent = () => {
   // Exploring view
   return (
     <div className="flex flex-col h-screen bg-void overflow-hidden">
-      <Header onFocusNode={handleFocusNode} onRefreshGraph={handleRefreshGraph} />
+      <UpdateBanner />
+      <Header
+        onFocusNode={handleFocusNode}
+        onRefreshGraph={handleRefreshGraph}
+        onOpenRoadmap={() => setIsRoadmapOpen(true)}
+      />
 
       <main className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Panel - File Tree */}
@@ -263,6 +274,12 @@ const AppContent = () => {
         isOpen={isSettingsPanelOpen}
         onClose={() => setSettingsPanelOpen(false)}
         onSettingsSaved={handleSettingsSaved}
+      />
+
+      {/* Roadmap Panel (modal) */}
+      <RoadmapPanel
+        isOpen={isRoadmapOpen}
+        onClose={() => setIsRoadmapOpen(false)}
       />
     </div>
   );

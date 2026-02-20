@@ -59,6 +59,11 @@ const logos: Record<LLMProvider, (active: boolean) => JSX.Element> = {
       <line x1="12" y1="12" x2="20" y2="18" stroke={a ? '#6366F1' : '#8e8e93'} strokeWidth="0.8" opacity="0.3"/>
     </svg>
   ),
+  groq: (a) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke={a ? '#F55036' : '#8e8e93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
 };
 
 // Open URL in system browser (Electron) or new tab (browser fallback)
@@ -149,6 +154,21 @@ const MODEL_PRESETS: Record<string, { id: string; name: string }[]> = {
     { id: 'qwen2.5-coder', name: 'Qwen 2.5 Coder' },
     { id: 'gemma2', name: 'Gemma 2' },
   ],
+  groq: [
+    { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile (Production)' },
+    { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant (Production)' },
+    { id: 'openai/gpt-oss-120b', name: 'OpenAI GPT-OSS 120B (Production)' },
+    { id: 'openai/gpt-oss-20b', name: 'OpenAI GPT-OSS 20B (Production)' },
+    { id: 'groq/compound', name: 'Groq Compound (Production System)' },
+    { id: 'groq/compound-mini', name: 'Groq Compound Mini (Production System)' },
+    { id: 'meta-llama/llama-4-maverick-17b-128e-instruct', name: 'Llama 4 Maverick 17B (Preview)' },
+    { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout 17B (Preview)' },
+    { id: 'moonshotai/kimi-k2-instruct-0905', name: 'Kimi K2 Instruct (Preview)' },
+    { id: 'qwen/qwen3-32b', name: 'Qwen3 32B (Preview)' },
+    { id: 'openai/gpt-oss-safeguard-20b', name: 'OpenAI GPT-OSS Safeguard 20B (Preview)' },
+    { id: 'meta-llama/llama-prompt-guard-2-22m', name: 'Llama Prompt Guard 2 22M (Preview)' },
+    { id: 'meta-llama/llama-prompt-guard-2-86m', name: 'Llama Prompt Guard 2 86M (Preview)' },
+  ],
 };
 
 // ── Unified model selector — presets + search + custom entry ──
@@ -232,6 +252,7 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
   const [ollamaError, setOllamaError] = useState<string | null>(null);
   const [checkingOllama, setCheckingOllama] = useState(false);
   const [orModels, setOrModels] = useState<{ id: string; name: string }[]>([]);
+  const [groqModels, setGroqModels] = useState<{ id: string; name: string }[]>(MODEL_PRESETS.groq);
   const [loadingModels, setLoadingModels] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -268,6 +289,19 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
     setLoadingModels(true); setOrModels(await fetchOpenRouterModels()); setLoadingModels(false);
   }, []);
 
+  const loadGroqModels = useCallback(async () => {
+    setLoadingModels(true);
+    try {
+      const fetchedModels = await fetchGroqModels(settings.groq?.apiKey);
+      if (fetchedModels.length > 0) {
+        setGroqModels(fetchedModels);
+      }
+    } catch (error) {
+      console.error('Failed to fetch Groq models:', error);
+    }
+    setLoadingModels(false);
+  }, [settings.groq?.apiKey]);
+
   useEffect(() => {
     if (settings.activeProvider === 'ollama') {
       const t = setTimeout(() => checkOllama(settings.ollama?.baseUrl ?? 'http://localhost:11434'), 300);
@@ -298,7 +332,7 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
 
   if (!isOpen) return null;
 
-  const providers: LLMProvider[] = ['openai', 'gemini', 'anthropic', 'azure-openai', 'ollama', 'openrouter'];
+  const providers: LLMProvider[] = ['openai', 'gemini', 'anthropic', 'azure-openai', 'ollama', 'openrouter', 'groq'];
   const p = settings.activeProvider;
 
   return (
@@ -518,6 +552,27 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
             </Row>
             <Row label="Endpoint">
               <input value={settings.openrouter?.baseUrl ?? ''} onChange={e => setSettings(s => ({ ...s, openrouter: { ...s.openrouter!, baseUrl: e.target.value } }))}
+                placeholder="default" className={fieldClass} />
+            </Row>
+          </>}
+
+          {/* Groq */}
+          {p === 'groq' && <>
+            <Row label="API Key" hint="https://console.groq.com/keys">
+              <KeyInput value={settings.groq?.apiKey ?? ''} onChange={v => setSettings(s => ({ ...s, groq: { ...s.groq!, apiKey: v } }))}
+                visible={!!showKey.groq} onToggle={() => setShowKey(s => ({ ...s, groq: !s.groq }))} placeholder="gsk_..." />
+            </Row>
+            <Row label="Model">
+              <ModelSelect
+                value={settings.groq?.model ?? 'llama-3.3-70b-versatile'}
+                onChange={m => setSettings(s => ({ ...s, groq: { ...s.groq!, model: m } }))}
+                models={groqModels}
+                isLoading={loadingModels}
+                onLoad={settings.groq?.apiKey ? loadGroqModels : undefined}
+              />
+            </Row>
+            <Row label="Endpoint">
+              <input value={settings.groq?.baseUrl ?? ''} onChange={e => setSettings(s => ({ ...s, groq: { ...s.groq!, baseUrl: e.target.value } }))}
                 placeholder="default" className={fieldClass} />
             </Row>
           </>}

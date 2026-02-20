@@ -17,6 +17,7 @@ import {
   AnthropicConfig,
   OllamaConfig,
   OpenRouterConfig,
+  GroqConfig,
   ProviderConfig,
 } from './types';
 
@@ -35,6 +36,7 @@ const SECURE_KEY_MAP: Record<string, string> = {
   gemini: 'prowl-key-gemini',
   anthropic: 'prowl-key-anthropic',
   openrouter: 'prowl-key-openrouter',
+  groq: 'prowl-key-groq',
 };
 
 const isElectron = () => typeof window !== 'undefined' && !!(window as any).prowl?.secureStorage;
@@ -132,6 +134,10 @@ export const loadSettings = (): LLMSettings => {
         ...DEFAULT_LLM_SETTINGS.openrouter,
         ...parsed.openrouter,
       },
+      groq: {
+        ...DEFAULT_LLM_SETTINGS.groq,
+        ...parsed.groq,
+      },
     };
 
     // Overlay cached secure keys (overrides any leftover plaintext in localStorage)
@@ -141,6 +147,7 @@ export const loadSettings = (): LLMSettings => {
       if (secureKeyCache.gemini) settings.gemini!.apiKey = secureKeyCache.gemini;
       if (secureKeyCache.anthropic) settings.anthropic!.apiKey = secureKeyCache.anthropic;
       if (secureKeyCache.openrouter) settings.openrouter!.apiKey = secureKeyCache.openrouter;
+      if (secureKeyCache.groq) settings.groq!.apiKey = secureKeyCache.groq;
     }
 
     return settings;
@@ -165,6 +172,7 @@ export const saveSettings = (settings: LLMSettings): void => {
         ['gemini', SECURE_KEY_MAP.gemini, settings.gemini?.apiKey ?? ''],
         ['anthropic', SECURE_KEY_MAP.anthropic, settings.anthropic?.apiKey ?? ''],
         ['openrouter', SECURE_KEY_MAP.openrouter, settings.openrouter?.apiKey ?? ''],
+        ['groq', SECURE_KEY_MAP.groq, settings.groq?.apiKey ?? ''],
       ];
 
       for (const [provider, storageKey, value] of keyUpdates) {
@@ -184,6 +192,7 @@ export const saveSettings = (settings: LLMSettings): void => {
       if (sanitized.gemini) sanitized.gemini.apiKey = '';
       if (sanitized.anthropic) sanitized.anthropic.apiKey = '';
       if (sanitized.openrouter) sanitized.openrouter.apiKey = '';
+      if (sanitized.groq) sanitized.groq.apiKey = '';
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
     } else {
       // Fallback: store everything in localStorage (browser dev mode)
@@ -278,6 +287,17 @@ export const updateProviderSettings = <T extends LLMProvider>(
       saveSettings(updated);
       return updated;
     }
+    case 'groq': {
+      const updated: LLMSettings = {
+        ...current,
+        groq: {
+          ...(current.groq ?? {}),
+          ...(updates as Partial<Omit<GroqConfig, 'provider'>>),
+        },
+      };
+      saveSettings(updated);
+      return updated;
+    }
     default: {
       // Should be unreachable due to T extends LLMProvider, but keep a safe fallback
       const updated: LLMSettings = { ...current };
@@ -361,7 +381,20 @@ export const getActiveProviderConfig = (): ProviderConfig | null => {
         temperature: settings.openrouter.temperature,
         maxTokens: settings.openrouter.maxTokens,
       } as OpenRouterConfig;
-      
+
+    case 'groq':
+      if (!settings.groq?.apiKey || settings.groq.apiKey.trim() === '') {
+        return null;
+      }
+      return {
+        provider: 'groq',
+        apiKey: settings.groq.apiKey,
+        model: settings.groq.model || 'llama-3.3-70b-versatile',
+        baseUrl: settings.groq.baseUrl || 'https://api.groq.com/openai/v1',
+        temperature: settings.groq.temperature,
+        maxTokens: settings.groq.maxTokens,
+      } as GroqConfig;
+
     default:
       return null;
   }
@@ -398,6 +431,8 @@ export const getProviderDisplayName = (provider: LLMProvider): string => {
       return 'Ollama (Local)';
     case 'openrouter':
       return 'OpenRouter';
+    case 'groq':
+      return 'Groq';
     default:
       return provider;
   }
@@ -419,6 +454,17 @@ export const getAvailableModels = (provider: LLMProvider): string[] => {
       return ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
     case 'ollama':
       return ['llama3.2', 'llama3.1', 'mistral', 'codellama', 'deepseek-coder'];
+    case 'groq':
+      return [
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant',
+        'openai/gpt-oss-120b',
+        'openai/gpt-oss-20b',
+        'meta-llama/llama-4-maverick-17b-128e-instruct',
+        'meta-llama/llama-4-scout-17b-16e-instruct',
+        'moonshotai/kimi-k2-instruct-0905',
+        'qwen/qwen3-32b',
+      ];
     default:
       return [];
   }

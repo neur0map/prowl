@@ -8,6 +8,7 @@ import { ClaudeLogWatcher } from './claude-log-watcher'
 import { ProcessFileMonitor } from './process-file-monitor'
 import { OpenClawWSClient } from './openclaw-ws-client'
 import { TerminalManager } from './terminal-manager'
+import { checkForUpdate } from './update-checker'
 
 function resolvePath(p: string): string {
   if (p.startsWith('~/') || p === '~') {
@@ -433,6 +434,19 @@ app.whenReady().then(() => {
   // OAuth handlers
   ipcMain.handle('oauth:openExternal', async (_, url: string) => {
     await shell.openExternal(url)
+  })
+
+  // Update checker
+  ipcMain.handle('updater:check', () => checkForUpdate())
+
+  // Auto-check for updates 3s after window finishes loading
+  mainWindow!.webContents.once('did-finish-load', () => {
+    setTimeout(async () => {
+      const info = await checkForUpdate()
+      if (info && mainWindow) {
+        mainWindow.webContents.send('updater:update-available', info)
+      }
+    }, 3_000)
   })
 })
 

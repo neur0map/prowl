@@ -1,4 +1,4 @@
-import { Search, Settings, PanelRight, RefreshCw } from 'lucide-react';
+import { Search, Settings, PanelRight, RefreshCw, Rocket } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { GraphNode } from '../core/graph/types';
@@ -19,9 +19,10 @@ const NODE_TYPE_COLORS: Record<string, string> = {
 interface HeaderProps {
   onFocusNode?: (nodeId: string) => void;
   onRefreshGraph?: () => void;
+  onOpenRoadmap?: () => void;
 }
 
-export const Header = ({ onFocusNode, onRefreshGraph }: HeaderProps) => {
+export const Header = ({ onFocusNode, onRefreshGraph, onOpenRoadmap }: HeaderProps) => {
   const {
     projectName,
     graph,
@@ -195,6 +196,14 @@ export const Header = ({ onFocusNode, onRefreshGraph }: HeaderProps) => {
         )}
 
         <EmbeddingStatus />
+
+        <button
+          onClick={onOpenRoadmap}
+          className="w-7 h-7 flex items-center justify-center rounded-md text-text-muted hover:text-text-primary hover:bg-white/[0.08] transition-colors"
+          title="Roadmap"
+        >
+          <Rocket className="w-4 h-4" />
+        </button>
 
         <button
           onClick={() => setSettingsPanelOpen(true)}

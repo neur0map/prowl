@@ -18,6 +18,8 @@ export {
   clearSettings,
   getProviderDisplayName,
   getAvailableModels,
+  fetchOpenRouterModels,
+  fetchGroqModels,
 } from './settings-service';
 
 // Tools
