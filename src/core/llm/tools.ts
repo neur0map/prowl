@@ -338,28 +338,31 @@ export const createGraphRAGTools = (
         return `${results.length} results:\n${formatted.join('\n')}${truncated}`;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return `Cypher error: ${message}\n\nCheck your query syntax. Node tables: File, Folder, Function, Class, Interface, Method, CodeElement. Relation: CodeRelation with type property (CONTAINS, DEFINES, IMPORTS, CALLS). Example: MATCH (f:File)-[:CodeRelation {type: 'IMPORTS'}]->(g:File) RETURN f, g`;
+        return `Cypher error: ${message}\n\nFix your query. Rules: (1) NEVER return whole nodes — use RETURN f.name, f.filePath (2) WITH + ORDER BY MUST have LIMIT (3) Properties: name, filePath, startLine, endLine, content, isExported. Use LABEL(n) for node type.\n\nExample: MATCH (f:File)-[:CodeRelation {type: 'IMPORTS'}]->(g:File) RETURN f.name, f.filePath, g.name, g.filePath LIMIT 20`;
       }
     },
     {
       name: 'cypher',
-      description: `Execute a Cypher query against the code graph. Use for structural queries like finding callers, tracing imports, class inheritance, or custom traversals.
+      description: `Execute a Cypher query against the code graph (KuzuDB). Use for structural queries like finding callers, tracing imports, class inheritance, or custom traversals.
 
 Node tables: File, Folder, Function, Class, Interface, Method, CodeElement
 Relation: CodeRelation (single table with 'type' property: CONTAINS, DEFINES, IMPORTS, CALLS, EXTENDS, IMPLEMENTS)
+Properties: name, filePath, startLine, endLine, content, isExported. Use LABEL(n) for node type.
+
+CRITICAL: NEVER return whole nodes (RETURN f). ALWAYS use explicit properties (RETURN f.name, f.filePath).
+CRITICAL: WITH + ORDER BY MUST have LIMIT. Example: WITH n, cnt ORDER BY cnt DESC LIMIT 20 RETURN n, cnt
 
 Example queries:
+- Top files by connections: MATCH (f:File)-[r:CodeRelation]-(m) WITH f.name AS name, f.filePath AS fp, COUNT(r) AS c ORDER BY c DESC LIMIT 10 RETURN name, fp, c
 - Functions calling a function: MATCH (caller:Function)-[:CodeRelation {type: 'CALLS'}]->(fn:Function {name: 'validate'}) RETURN caller.name, caller.filePath
 - Class inheritance: MATCH (child:Class)-[:CodeRelation {type: 'EXTENDS'}]->(parent:Class) RETURN child.name, parent.name
-- Classes implementing interface: MATCH (c:Class)-[:CodeRelation {type: 'IMPLEMENTS'}]->(i:Interface) RETURN c.name, i.name
-- Files importing a file: MATCH (f:File)-[:CodeRelation {type: 'IMPORTS'}]->(target:File) WHERE target.name = 'utils.ts' RETURN f.name
-- All connections (with confidence): MATCH (n)-[r:CodeRelation]-(m) WHERE n.name = 'MyClass' AND r.confidence > 0.8 RETURN m.name, r.type, r.confidence
-- Find fuzzy matches: MATCH (n)-[r:CodeRelation]-(m) WHERE r.confidence < 0.8 RETURN n.name, r.reason
+- Files importing a file: MATCH (f:File)-[:CodeRelation {type: 'IMPORTS'}]->(target:File) WHERE target.name = 'utils.ts' RETURN f.name, f.filePath
+- All connections: MATCH (n)-[r:CodeRelation]-(m) WHERE n.name = 'MyClass' RETURN m.name, LABEL(m) AS type, r.type LIMIT 20
 
 For semantic+graph queries, include {{QUERY_VECTOR}} placeholder and provide a 'query' parameter:
 CALL QUERY_VECTOR_INDEX('CodeEmbedding', 'code_embedding_idx', {{QUERY_VECTOR}}, 10) YIELD node AS emb, distance
 WITH emb, distance WHERE distance < 0.5
-MATCH (n:Function {id: emb.nodeId}) RETURN n`,
+MATCH (n:Function {id: emb.nodeId}) RETURN n.name, n.filePath, distance`,
       schema: z.object({
         cypher: z.string().describe('The Cypher query to execute'),
         query: z.string().optional().nullable().describe('Natural language query to embed (required if cypher contains {{QUERY_VECTOR}})'),
@@ -964,9 +967,6 @@ MATCH (n:Function {id: emb.nodeId}) RETURN n`,
       const targetType = Array.isArray(targetNode) ? targetNode[1] : targetNode.nodeType;
       const targetFilePath = Array.isArray(targetNode) ? targetNode[2] : targetNode.filePath;
       
-      if (import.meta.env.DEV) {
-        console.log(`🎯 Impact: Found target "${target}" → id=${targetId}, type=${targetType}, filePath=${targetFilePath}`);
-      }
       
       // No more multipleMatchWarning needed - we either disambiguated or returned early
       const multipleMatchWarning = '';
@@ -1055,16 +1055,7 @@ MATCH (n:Function {id: emb.nodeId}) RETURN n`,
               r.reason AS reason
             LIMIT 300
           `;
-      if (import.meta.env.DEV) {
-        console.log(`🔍 Impact d=1 query:\n${d1Query}`);
-      }
       depthQueries.push(executeQuery(d1Query).then(results => {
-        if (import.meta.env.DEV) {
-          console.log(`📊 Impact d=1 results: ${results.length} rows`);
-          if (results.length > 0) {
-            console.log('   Sample:', results.slice(0, 3));
-          }
-        }
         return results;
       }).catch(err => {
         if (import.meta.env.DEV) console.warn('Impact d=1 query failed:', err);

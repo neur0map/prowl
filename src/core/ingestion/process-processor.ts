@@ -288,17 +288,6 @@ const findEntryPoints = (
   // Sort by score descending and return top candidates
   const sorted = entryPointCandidates.sort((a, b) => b.score - a.score);
   
-  // DEBUG: Log top candidates with new scoring details
-  if (sorted.length > 0 && typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
-    console.log(`[Process] Top 10 entry point candidates (new scoring):`);
-    sorted.slice(0, 10).forEach((c, i) => {
-      const node = graph.nodes.find(n => n.id === c.id);
-      const exported = node?.properties.isExported ? '✓' : '✗';
-      const shortPath = node?.properties.filePath?.split('/').slice(-2).join('/') || '';
-      console.log(`  ${i+1}. ${node?.properties.name} [exported:${exported}] (${shortPath})`);
-      console.log(`     score: ${c.score.toFixed(2)} = [${c.reasons.join(' × ')}]`);
-    });
-  }
   
   return sorted
     .slice(0, 200)  // Limit to prevent explosion

@@ -72,8 +72,6 @@ const workerApi = {
     onProgress: (progress: PipelineProgress) => void,
     clusteringConfig?: ProviderConfig
   ): Promise<SerializablePipelineResult> {
-    // Debug logging
-    console.log('🔧 runPipeline called with clusteringConfig:', !!clusteringConfig);
     // Run the actual pipeline
     const result = await runIngestionPipeline(file, onProgress);
     currentGraphResult = result;
@@ -82,10 +80,7 @@ const workerApi = {
     storedFileContents = result.fileContents;
     
     // Build BM25 index for keyword search (instant, ~100ms)
-    const bm25DocCount = buildBM25Index(storedFileContents);
-    if (import.meta.env.DEV) {
-      console.log(`🔍 BM25 index built: ${bm25DocCount} documents`);
-    }
+    buildBM25Index(storedFileContents);
     
     // Load graph into KuzuDB for querying (optional - gracefully degrades)
     try {
@@ -103,11 +98,6 @@ const workerApi = {
       const kuzu = await getKuzuAdapter();
       await kuzu.loadGraphToKuzu(result.graph, result.fileContents);
       
-      if (import.meta.env.DEV) {
-        const stats = await kuzu.getKuzuStats();
-        console.log('KuzuDB loaded:', stats);
-        console.log('📁 Stored', storedFileContents.size, 'files for grep/read tools');
-      }
     } catch {
       // KuzuDB is optional - silently continue without it
     }
@@ -115,7 +105,6 @@ const workerApi = {
     // Store clustering config for background enrichment (runs after graph loads)
     if (clusteringConfig) {
       pendingEnrichmentConfig = clusteringConfig;
-      console.log('📋 Clustering config saved for background enrichment');
     }
     
     // Convert to serializable format for transfer back to main thread
@@ -186,10 +175,7 @@ const workerApi = {
     storedFileContents = result.fileContents;
     
     // Build BM25 index for keyword search (instant, ~100ms)
-    const bm25DocCount = buildBM25Index(storedFileContents);
-    if (import.meta.env.DEV) {
-      console.log(`🔍 BM25 index built: ${bm25DocCount} documents`);
-    }
+    buildBM25Index(storedFileContents);
     
     // Load graph into KuzuDB for querying (optional - gracefully degrades)
     try {
@@ -207,11 +193,6 @@ const workerApi = {
       const kuzu = await getKuzuAdapter();
       await kuzu.loadGraphToKuzu(result.graph, result.fileContents);
       
-      if (import.meta.env.DEV) {
-        const stats = await kuzu.getKuzuStats();
-        console.log('KuzuDB loaded:', stats);
-        console.log('📁 Stored', storedFileContents.size, 'files for grep/read tools');
-      }
     } catch {
       // KuzuDB is optional - silently continue without it
     }
@@ -219,7 +200,6 @@ const workerApi = {
     // Store clustering config for background enrichment (runs after graph loads)
     if (clusteringConfig) {
       pendingEnrichmentConfig = clusteringConfig;
-      console.log('📋 Clustering config saved for background enrichment');
     }
     
     // Convert to serializable format for transfer back to main thread
@@ -274,18 +254,15 @@ const workerApi = {
     onProgress?: (current: number, total: number) => void
   ): Promise<{ enriched: number; skipped: boolean }> {
     if (!pendingEnrichmentConfig) {
-      console.log('⏭️ No pending enrichment config, skipping');
       return { enriched: 0, skipped: true };
     }
     
-    console.log('✨ Starting background LLM enrichment...');
     try {
       await workerApi.enrichCommunities(
         pendingEnrichmentConfig,
         onProgress ?? (() => {})
       );
       pendingEnrichmentConfig = null; // Clear after running
-      console.log('✅ Background enrichment completed');
       return { enriched: 1, skipped: false };
     } catch (err) {
       console.error('❌ Background enrichment failed:', err);
@@ -300,7 +277,6 @@ const workerApi = {
   async cancelEnrichment(): Promise<void> {
     enrichmentCancelled = true;
     pendingEnrichmentConfig = null;
-    console.log('⏸️ Enrichment cancelled by user');
   },
 
   /**
@@ -496,19 +472,11 @@ const workerApi = {
       // Use provided projectName, or fallback to 'project' if not provided
       const resolvedProjectName = projectName || 'project';
       if (import.meta.env.DEV) {
-        console.log('📛 Project name received:', { provided: projectName, resolved: resolvedProjectName });
       }
       
       let codebaseContext;
       try {
         codebaseContext = await buildCodebaseContext(kuzu.executeQuery, resolvedProjectName);
-        if (import.meta.env.DEV) {
-          console.log('📊 Codebase context built:', {
-            files: codebaseContext.stats.fileCount,
-            functions: codebaseContext.stats.functionCount,
-            hotspots: codebaseContext.hotspots.length,
-          });
-        }
       } catch (err) {
         console.warn('Failed to build codebase context, proceeding without:', err);
       }
@@ -526,9 +494,6 @@ const workerApi = {
       );
       currentProviderConfig = config;
 
-      if (import.meta.env.DEV) {
-        console.log('🤖 Graph RAG Agent initialized with provider:', config.provider);
-      }
 
       return { success: true };
     } catch (error) {
@@ -685,7 +650,6 @@ const workerApi = {
     );
 
     if (import.meta.env.DEV) {
-      console.log(`✨ Enriched ${enrichments.size} clusters using ~${Math.round(tokensUsed)} tokens`);
     }
 
     // Update graph nodes with enrichment data

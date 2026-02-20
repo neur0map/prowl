@@ -8,6 +8,7 @@ import Graph from 'graphology';
 
 export interface GraphCanvasHandle {
   focusNode: (nodeId: string) => void;
+  refreshGraph: () => void;
 }
 
 export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
@@ -45,20 +46,30 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     return blastRadiusNodeIds;
   }, [blastRadiusNodeIds, isAIHighlightsEnabled]);
 
-  // Animated nodes (only when AI highlights enabled)
+  // Animated nodes — always pass through (pulse from focus clicks should work regardless of AI highlights toggle)
   const effectiveAnimatedNodes = useMemo(() => {
-    if (!isAIHighlightsEnabled) return new Map();
     return animatedNodes;
-  }, [animatedNodes, isAIHighlightsEnabled]);
+  }, [animatedNodes]);
 
   const handleNodeClick = useCallback((nodeId: string) => {
     if (!graph) return;
     const node = graph.nodes.find(n => n.id === nodeId);
-    if (node) {
+    if (!node) return;
+
+    if (node.label === 'Folder') {
+      // Folders: highlight all child file nodes (same as file tree + ProcessesPanel Focus)
+      const folderPath = node.properties.filePath;
+      const childFileIds = graph.nodes
+        .filter(n => n.label === 'File' && n.properties.filePath.startsWith(folderPath + '/'))
+        .map(n => n.id);
+      if (childFileIds.length > 0) {
+        setHighlightedNodeIds(new Set(childFileIds));
+      }
+    } else {
       setSelectedNode(node);
       openCodePanel();
     }
-  }, [graph, setSelectedNode, openCodePanel]);
+  }, [graph, setSelectedNode, openCodePanel, setHighlightedNodeIds]);
 
   const handleNodeHover = useCallback((nodeId: string | null) => {
     if (!nodeId || !graph) {
@@ -98,20 +109,33 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle>((_, ref) => {
     visibleEdgeTypes,
   });
 
-  // Expose focusNode to parent via ref
+  // Expose focusNode to parent via ref — uses highlightedNodeIds just like ProcessesPanel "Focus" button
   useImperativeHandle(ref, () => ({
     focusNode: (nodeId: string) => {
-      // Also update app state so the selection syncs properly
-      if (graph) {
-        const node = graph.nodes.find(n => n.id === nodeId);
-        if (node) {
-          setSelectedNode(node);
-          openCodePanel();
+      // Same mechanism as ProcessesPanel Focus: set highlighted node IDs
+      // The nodeReducer handles the cyan highlight + dimming of other nodes
+      setHighlightedNodeIds(new Set([nodeId]));
+    },
+    refreshGraph: () => {
+      if (!graph) return;
+
+      // Rebuild communityMemberships
+      const communityMemberships = new Map<string, number>();
+      graph.relationships.forEach(rel => {
+        if (rel.type === 'MEMBER_OF') {
+          const communityNode = graph.nodes.find(n => n.id === rel.targetId && n.label === 'Community');
+          if (communityNode) {
+            const communityIdx = parseInt(rel.targetId.replace('comm_', ''), 10) || 0;
+            communityMemberships.set(rel.sourceId, communityIdx);
+          }
         }
-      }
-      focusNode(nodeId);
+      });
+
+      // Rebuild and re-layout the sigma graph
+      const sigmaGraph = knowledgeGraphToGraphology(graph, communityMemberships);
+      setSigmaGraph(sigmaGraph);
     }
-  }), [focusNode, graph, setSelectedNode, openCodePanel]);
+  }), [setHighlightedNodeIds, graph, setSigmaGraph]);
 
   // Update Sigma graph when KnowledgeGraph changes
   useEffect(() => {

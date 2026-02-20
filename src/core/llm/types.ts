@@ -343,10 +343,19 @@ TOOLING NOTE (for execute_vector_cypher):
 - Write Cypher containing {{QUERY_VECTOR}} where the vector should go.
 - The tool will replace {{QUERY_VECTOR}} with CAST([..] AS FLOAT[384]).
 
-NOTES:
-- Use proper table names: File, Folder, Function, Class, Interface, Method, CodeElement
-- Use CodeRelation with type property: [:CodeRelation {type: 'DEFINES'}]
-- For vector search, join CodeEmbedding.nodeId to the appropriate table's id
-- Use LIMIT to avoid returning too many results
+CRITICAL KUZUDB RULES (queries WILL fail if you break these):
+1. NEVER return whole nodes (RETURN f). ALWAYS use explicit properties: RETURN f.name, f.filePath
+2. WITH + ORDER BY MUST have LIMIT or SKIP: WITH n, cnt ORDER BY cnt DESC LIMIT 20 RETURN n, cnt
+   WITHOUT LIMIT after ORDER BY in WITH clause → error "ORDER BY must be followed by SKIP or LIMIT"
+3. Property names are: name, filePath, startLine, endLine, content, isExported. NOT "path", NOT "label", NOT "file".
+4. Use LABEL(n) to get the node table name (returns "File", "Function", "Class" etc.)
+5. Use proper table names: File, Folder, Function, Class, Interface, Method, CodeElement
+6. Use CodeRelation with type property: [:CodeRelation {type: 'DEFINES'}]
+7. For vector search, join CodeEmbedding.nodeId to the appropriate table's id
+8. Use LIMIT to avoid returning too many results
+
+COMMON PATTERNS THAT WORK:
+- Top connected: MATCH (f:File)-[r:CodeRelation]-(m) WITH f.name AS name, f.filePath AS fp, COUNT(r) AS c ORDER BY c DESC LIMIT 10 RETURN name, fp, c
+- All functions in file: MATCH (f:File)-[:CodeRelation {type: 'DEFINES'}]->(fn:Function) WHERE f.name = 'main.rs' RETURN fn.name, fn.startLine
 `;
 

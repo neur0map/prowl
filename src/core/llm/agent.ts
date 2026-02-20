@@ -55,11 +55,10 @@ Every factual claim MUST include a citation.
 - File refs: [[src/auth.ts:45-60]] (line range with hyphen)
 - NO citation = NO claim. Say "I didn't find evidence" instead of guessing.
 
-## ⚠️ MANDATORY: VALIDATION
-Every output MUST be validated.
-- Use cypher to validate the results and confirm completeness of context before final output.
-- NO validation = NO claim. Say "I didn't find evidence" instead of guessing.
-- Do not blindly trust readme or single source of truth. Always validate and cross-reference. Never be lazy.
+## ⚠️ VALIDATION
+- Cross-reference claims when feasible, but do NOT loop endlessly re-validating the same data.
+- Say "I didn't find evidence" instead of guessing.
+- Do not blindly trust readme or single source of truth.
 
 ## 🧠 CORE PROTOCOL
 You are an investigator. For each question:
@@ -67,7 +66,7 @@ You are an investigator. For each question:
 2. **Read** → Use read to see the actual source
 3. **Trace** → Use cypher to follow connections in the graph
 4. **Cite** → Ground every finding with [[file:line]] or [[Type:Name]]
-5. **Validate** → Use cypher to validate the results and confirm completeness of context before final output. ( MUST DO )
+5. **Respond** → Deliver a concise answer. Do NOT run more than 15-20 tool calls per question — deliver what you have.
 
 ## 🛠️ TOOLS
 - **\`search\`** — Hybrid search. Results grouped by process with cluster context.
@@ -94,17 +93,24 @@ Relations: \`CodeRelation\` with \`type\` property: CONTAINS, DEFINES, IMPORTS, 
 - Entry points are detected via export status, naming patterns, and framework conventions
 
 Cypher examples:
-- \`MATCH (f:Function) RETURN f.name LIMIT 10\`
+- \`MATCH (f:Function) RETURN f.name, f.filePath LIMIT 10\`
 - \`MATCH (f:File)-[:CodeRelation {type: 'IMPORTS'}]->(g:File) RETURN f.name, g.name\`
+- Top files by connections: \`MATCH (f:File)-[r:CodeRelation]-(m) WITH f.name AS name, f.filePath AS filePath, COUNT(r) AS conns ORDER BY conns DESC LIMIT 20 RETURN name, filePath, conns\`
+
+## ⚠️ KUZUDB CYPHER RULES (MUST FOLLOW)
+- **NEVER** return whole nodes (\`RETURN f\`). ALWAYS return explicit properties: \`RETURN f.name, f.filePath\`
+- **WITH + ORDER BY** MUST have LIMIT: \`WITH x, cnt ORDER BY cnt DESC LIMIT 20 RETURN x, cnt\` (without LIMIT it errors)
+- **Property names**: name, filePath, startLine, endLine, content, isExported. NOT path, NOT label, NOT file.
+- Use \`LABEL(n)\` to get the node type (File, Function, Class etc.)
 
 ## 📝CRITICAL RULES
-- **impact output is trusted.** Do NOT re-validate with cypher. Optionally run the suggested grep commands for dynamic patterns.
+- **impact output is trusted.** Do NOT re-validate with cypher.
 - **Cite or retract.** Never state something you can't ground.
 - **Read before concluding.** Don't guess from names alone.
-- **Retry on failure.** If a tool fails, fix the input and try again.
-- **Cyfer tool validation** prefer using cyfer tool in anything that requires graph connections.
-- **OUTPUT STYLE** Prefer using tables and mermaid diagrams instead of long explanations.
-- ALWAYS USE MERMAID FOR VISUALIZATION AND STRUCTURING THE OUTPUT.
+- **Retry on failure.** If a tool fails, fix the input and try again (max 2 retries).
+- **Be efficient.** Prefer cypher for graph connections. Combine information from earlier calls. Do NOT repeat similar queries.
+- **Stop when done.** When you have enough information to answer, stop calling tools and deliver the answer.
+- **OUTPUT STYLE** Prefer tables and mermaid diagrams instead of long explanations.
 
 ## 🎯 OUTPUT STYLE
 Think like a senior architect. Be concise—no fluff, short, precise and to the point.
@@ -198,15 +204,6 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
     case 'openrouter': {
       const openRouterConfig = config as OpenRouterConfig;
       
-      // Debug logging
-      if (import.meta.env.DEV) {
-        console.log('🌐 OpenRouter config:', {
-          hasApiKey: !!openRouterConfig.apiKey,
-          apiKeyLength: openRouterConfig.apiKey?.length || 0,
-          model: openRouterConfig.model,
-          baseUrl: openRouterConfig.baseUrl,
-        });
-      }
       
       if (!openRouterConfig.apiKey || openRouterConfig.apiKey.trim() === '') {
         throw new Error('OpenRouter API key is required but was not provided');
@@ -281,10 +278,7 @@ export const createGraphRAGAgent = (
     ? buildDynamicSystemPrompt(BASE_SYSTEM_PROMPT, codebaseContext)
     : BASE_SYSTEM_PROMPT;
   
-  // Log the full prompt for debugging
-  if (import.meta.env.DEV) {
-    console.log('🤖 AGENT SYSTEM PROMPT:\n', systemPrompt);
-  }
+  // System prompt built — not logged to avoid console clutter
   
   const agent = createReactAgent({
     llm: model as any,
@@ -327,7 +321,7 @@ export async function* streamAgentResponse(
       {
         streamMode: ['values', 'messages'] as any,
         // Allow longer tool/reasoning loops (more Cursor-like persistence)
-        recursionLimit: 50,
+        recursionLimit: 100,
       } as any
     );
     
@@ -361,12 +355,6 @@ export async function* streamAgentResponse(
       }
       
       // DEBUG: Enhanced logging
-      if (import.meta.env.DEV) {
-        const msgType = mode === 'messages' && data?.[0]?._getType?.() || 'n/a';
-        const hasContent = mode === 'messages' && data?.[0]?.content;
-        const hasToolCalls = mode === 'messages' && data?.[0]?.tool_calls?.length > 0;
-        console.log(`🔄 [${mode}] type:${msgType} content:${!!hasContent} tools:${hasToolCalls}`);
-      }
       // Handle 'messages' mode - token-by-token streaming
       if (mode === 'messages') {
         const [msg] = Array.isArray(data) ? data : [data];
@@ -506,19 +494,21 @@ export async function* streamAgentResponse(
       }
     }
     
-    // DEBUG: Stream completed normally
-    if (import.meta.env.DEV) {
-      console.log('✅ Stream completed normally, yielding done');
-    }
     yield { type: 'done' };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    // DEBUG: Stream error
+    const raw = error instanceof Error ? error.message : String(error);
     if (import.meta.env.DEV) {
-      console.error('❌ Stream error:', message, error);
+      console.error('❌ Stream error:', raw, error);
     }
-    yield { 
-      type: 'error', 
+
+    // Friendly error messages
+    let message = raw;
+    if (raw.toLowerCase().includes('recursion limit')) {
+      message = 'The analysis was too complex and hit the step limit. Try a more specific question, or break it into smaller parts.';
+    }
+
+    yield {
+      type: 'error',
       error: message,
     };
   }

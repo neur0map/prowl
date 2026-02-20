@@ -194,10 +194,22 @@ interface FileTreePanelProps {
   onFocusNode: (nodeId: string) => void;
 }
 
-export const FileTreePanel = ({ onFocusNode }: FileTreePanelProps) => {
-  const { graph, visibleLabels, toggleLabelVisibility, visibleEdgeTypes, toggleEdgeVisibility, selectedNode, setSelectedNode, openCodePanel, depthFilter, setDepthFilter } = useAppState();
+// Recursively collect all file graph node IDs under a tree node
+const collectFileNodeIds = (treeNode: TreeNode): string[] => {
+  const ids: string[] = [];
+  if (treeNode.type === 'file' && treeNode.graphNode) {
+    ids.push(treeNode.graphNode.id);
+  }
+  for (const child of treeNode.children) {
+    ids.push(...collectFileNodeIds(child));
+  }
+  return ids;
+};
 
-  const [isCollapsed, setIsCollapsed] = useState(false);
+export const FileTreePanel = ({ onFocusNode }: FileTreePanelProps) => {
+  const { graph, visibleLabels, toggleLabelVisibility, visibleEdgeTypes, toggleEdgeVisibility, selectedNode, setSelectedNode, openCodePanel, depthFilter, setDepthFilter, setHighlightedNodeIds } = useAppState();
+
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'files' | 'filters'>('files');
@@ -254,8 +266,20 @@ export const FileTreePanel = ({ onFocusNode }: FileTreePanelProps) => {
   }, []);
 
   const handleNodeClick = useCallback((treeNode: TreeNode) => {
-    if (treeNode.graphNode) {
-      // Only focus if selecting a different node
+    if (treeNode.type === 'folder') {
+      // Folders: highlight all child file nodes on the graph (same as ProcessesPanel Focus)
+      const childIds = collectFileNodeIds(treeNode);
+      if (childIds.length > 0) {
+        setHighlightedNodeIds(new Set(childIds));
+      }
+      // Also expand the folder in the tree
+      setExpandedPaths(prev => {
+        const next = new Set(prev);
+        next.add(treeNode.path);
+        return next;
+      });
+    } else if (treeNode.graphNode) {
+      // Files: select + open code panel
       const isSameNode = selectedNode?.id === treeNode.graphNode.id;
       setSelectedNode(treeNode.graphNode);
       openCodePanel();
@@ -263,7 +287,7 @@ export const FileTreePanel = ({ onFocusNode }: FileTreePanelProps) => {
         onFocusNode(treeNode.graphNode.id);
       }
     }
-  }, [setSelectedNode, openCodePanel, onFocusNode, selectedNode]);
+  }, [setSelectedNode, openCodePanel, onFocusNode, selectedNode, setHighlightedNodeIds]);
 
   const selectedPath = selectedNode?.properties.filePath || null;
 

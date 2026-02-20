@@ -124,15 +124,6 @@ export const runPipelineFromFiles = async (
     });
   });
   
-  // Debug: Count IMPORTS relationships
-  if (import.meta.env.DEV) {
-    const importsCount = graph.relationships.filter(r => r.type === 'IMPORTS').length;
-    console.log(`📊 Pipeline: After import phase, graph has ${importsCount} IMPORTS relationships (total: ${graph.relationshipCount})`);
-    if (importsCount > 0) {
-      const sample = graph.relationships.filter(r => r.type === 'IMPORTS').slice(0, 3);
-      sample.forEach(r => console.log(`   Sample IMPORTS: ${r.sourceId} → ${r.targetId}`));
-    }
-  }
 
 
   // Phase 5: Calls (82-98%)
@@ -191,7 +182,6 @@ export const runPipelineFromFiles = async (
 
   // Log community detection results
   if (import.meta.env.DEV) {
-    console.log(`🏘️ Community detection: ${communityResult.stats.totalCommunities} communities found (modularity: ${communityResult.stats.modularity.toFixed(3)})`);
   }
 
   // Add community nodes to the graph
@@ -245,7 +235,6 @@ export const runPipelineFromFiles = async (
 
   // Log process detection results
   if (import.meta.env.DEV) {
-    console.log(`🔄 Process detection: ${processResult.stats.totalProcesses} processes found (${processResult.stats.crossCommunityCount} cross-community)`);
   }
 
   // Add Process nodes to the graph

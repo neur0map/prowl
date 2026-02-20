@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "postinstall": "npx @electron/rebuild -w node-pty"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.0.0",
@@ -18,8 +19,12 @@
     "@langchain/langgraph": "^1.1.0",
     "@langchain/ollama": "^1.2.0",
     "@langchain/openai": "^1.2.2",
+    "@monaco-editor/react": "^4.7.0",
     "@sigma/edge-curve": "^3.1.0",
     "@tailwindcss/vite": "^4.1.18",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
     "axios": "^1.13.2",
     "buffer": "^6.0.3",
     "chokidar": "^3.6.0",
@@ -40,6 +45,7 @@
     "mermaid": "^11.12.2",
     "minisearch": "^7.2.0",
     "mnemonist": "^0.39.0",
+    "node-pty": "^1.1.0",
     "pandemonium": "^2.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

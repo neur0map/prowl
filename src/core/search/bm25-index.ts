@@ -82,9 +82,6 @@ export const buildBM25Index = (fileContents: Map<string, string>): number => {
   searchIndex.addAll(documents);
   indexedDocCount = documents.length;
   
-  if (import.meta.env.DEV) {
-    console.log(`📚 BM25 index built: ${indexedDocCount} documents`);
-  }
   
   return indexedDocCount;
 };

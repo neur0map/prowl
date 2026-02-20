@@ -1,6 +1,12 @@
+import { Terminal } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 
-export const StatusBar = () => {
+interface StatusBarProps {
+  isTerminalOpen?: boolean;
+  onTerminalToggle?: () => void;
+}
+
+export const StatusBar = ({ isTerminalOpen, onTerminalToggle }: StatusBarProps) => {
   const { graph, progress, agentWatcherState } = useAppState();
 
   const nodeCount = graph?.nodes.length ?? 0;
@@ -54,7 +60,7 @@ export const StatusBar = () => {
         <span>Prowl</span>
       )}
 
-      {/* Right — stats */}
+      {/* Right — stats + terminal toggle */}
       <div className="flex items-center gap-3">
         {graph && (
           <>
@@ -67,6 +73,23 @@ export const StatusBar = () => {
                 <span>{primaryLanguage}</span>
               </>
             )}
+          </>
+        )}
+        {onTerminalToggle && (window as any).prowl?.terminal && (
+          <>
+            <span className="text-white/10">·</span>
+            <button
+              onClick={onTerminalToggle}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
+                isTerminalOpen
+                  ? 'text-accent bg-accent/10'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+              title="Toggle Terminal (Ctrl+`)"
+            >
+              <Terminal size={11} />
+              <span className="text-[10px]">Terminal</span>
+            </button>
           </>
         )}
       </div>

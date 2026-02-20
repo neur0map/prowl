@@ -54,7 +54,6 @@ export const EmbeddingStatus = () => {
     const result = await testArrayParams();
     if (result.success) {
       setTestResult('✅ Array params WORK!');
-      console.log('✅ Array params test passed!');
     } else {
       setTestResult(`❌ ${result.error}`);
       console.error('❌ Array params test failed:', result.error);

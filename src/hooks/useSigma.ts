@@ -75,35 +75,34 @@ interface UseSigmaReturn {
   refreshHighlights: () => void;
 }
 
-// Noverlap for final cleanup - minimal since it starts with good positions
+// Noverlap for final cleanup — push overlapping nodes apart after FA2 converges
 const NOVERLAP_SETTINGS = {
-  maxIterations: 20,  // Reduced - less cleanup needed
-  ratio: 1.1,
-  margin: 10,
-  expansion: 1.05,
+  maxIterations: 150,
+  ratio: 2,
+  margin: 25,
+  expansion: 1.3,
 };
 
-// ForceAtlas2 settings - FAST convergence since nodes start near their parents
+// ForceAtlas2 settings — strong repulsion, very low gravity for airy spread
 const getFA2Settings = (nodeCount: number) => {
   const isSmall = nodeCount < 500;
   const isMedium = nodeCount >= 500 && nodeCount < 2000;
   const isLarge = nodeCount >= 2000 && nodeCount < 10000;
-  
+
   return {
-    // Lower gravity allows folders to stay spread out
-    gravity: isSmall ? 0.8 : isMedium ? 0.5 : isLarge ? 0.3 : 0.15,
-    
-    // Higher scaling ratio = more spread out overall
-    scalingRatio: isSmall ? 15 : isMedium ? 30 : isLarge ? 60 : 100,
-    
-    // LOW slowDown = FASTER movement (converges quicker)
-    slowDown: isSmall ? 1 : isMedium ? 2 : isLarge ? 3 : 5,
-    
-    // Barnes-Hut for performance - use it even on smaller graphs
-    barnesHutOptimize: nodeCount > 200,
-    barnesHutTheta: isLarge ? 0.8 : 0.6,  // Higher = faster but less accurate
-    
-    // These help with clustering while keeping spread
+    // Very low gravity — prevent collapse-into-ball
+    gravity: isSmall ? 0.02 : isMedium ? 0.015 : isLarge ? 0.01 : 0.005,
+
+    // Strong repulsion — keep clusters visually separated
+    scalingRatio: isSmall ? 150 : isMedium ? 200 : isLarge ? 300 : 400,
+
+    // Higher slowDown = smoother, less jittery movement
+    slowDown: isSmall ? 8 : isMedium ? 10 : isLarge ? 12 : 15,
+
+    // Barnes-Hut for performance
+    barnesHutOptimize: nodeCount > 100,
+    barnesHutTheta: isLarge ? 0.8 : 0.5,
+
     strongGravityMode: false,
     outboundAttractionDistribution: true,
     linLogMode: false,
@@ -112,15 +111,14 @@ const getFA2Settings = (nodeCount: number) => {
   };
 };
 
-// Layout duration - let it run longer for better results
-// Web Worker + WebGL means minimal system impact
+// Layout duration — give enough time for smooth settling
 const getLayoutDuration = (nodeCount: number): number => {
-  if (nodeCount > 10000) return 45000;  // 45s for huge graphs
-  if (nodeCount > 5000) return 35000;   // 35s
-  if (nodeCount > 2000) return 30000;   // 30s
-  if (nodeCount > 1000) return 30000;   // 30s
-  if (nodeCount > 500) return 25000;    // 25s
-  return 20000;                         // 20s for small graphs
+  if (nodeCount > 10000) return 30000;
+  if (nodeCount > 5000) return 25000;
+  if (nodeCount > 2000) return 20000;
+  if (nodeCount > 1000) return 15000;
+  if (nodeCount > 500) return 12000;
+  return 10000;
 };
 
 export const useSigma = (options: UseSigmaOptions = {}): UseSigmaReturn => {

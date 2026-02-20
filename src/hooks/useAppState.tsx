@@ -8,7 +8,8 @@ import type { IngestionWorkerApi } from '../workers/ingestion.worker';
 import type { FileEntry } from '../services/zip';
 import type { EmbeddingProgress, SemanticSearchResult } from '../core/embeddings/types';
 import type { LLMSettings, ProviderConfig, AgentStreamChunk, ChatMessage, ToolCallInfo, MessageStep } from '../core/llm/types';
-import { loadSettings, getActiveProviderConfig, saveSettings } from '../core/llm/settings-service';
+import { loadSettings, getActiveProviderConfig, saveSettings, initSecureStorage } from '../core/llm/settings-service';
+import { initOAuth } from '../core/llm/oauth-service';
 import type { AgentMessage } from '../core/llm/agent';
 import { DEFAULT_VISIBLE_EDGES, type EdgeType } from '../lib/constants';
 import { useAgentWatcher, type ToolEvent } from './useAgentWatcher';
@@ -294,6 +295,14 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
   const [isAgentReady, setIsAgentReady] = useState(false);
   const [isAgentInitializing, setIsAgentInitializing] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
+
+  // Initialize secure storage + OAuth on mount
+  useEffect(() => {
+    initSecureStorage().then(() => {
+      setLLMSettings(loadSettings());
+      initOAuth();
+    });
+  }, []);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -658,7 +667,7 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
         setIsAgentReady(true);
         setAgentError(null);
         if (import.meta.env.DEV) {
-          console.log('✅ Agent initialized successfully');
+          // Agent initialized
         }
       } else {
         setAgentError(result.error ?? 'Failed to initialize agent');

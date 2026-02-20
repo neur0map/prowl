@@ -1,12 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from 'electron'
 import { join } from 'path'
 import { homedir } from 'os'
-import { readdir, readFile, stat } from 'fs/promises'
+import { readdir, readFile, writeFile, stat } from 'fs/promises'
 import { WorkspaceWatcher } from './watcher'
 import { LogParser } from './parser'
 import { ClaudeLogWatcher } from './claude-log-watcher'
 import { ProcessFileMonitor } from './process-file-monitor'
 import { OpenClawWSClient } from './openclaw-ws-client'
+import { TerminalManager } from './terminal-manager'
 
 function resolvePath(p: string): string {
   if (p.startsWith('~/') || p === '~') {
@@ -114,6 +115,74 @@ let parser: LogParser | null = null
 let claudeWatcher: ClaudeLogWatcher | null = null
 let processMonitor: ProcessFileMonitor | null = null
 let openclawClient: OpenClawWSClient | null = null
+const terminalManager = new TerminalManager()
+
+// ── Secure Storage (safeStorage) ──
+// Encrypts API keys using OS keychain (macOS Keychain, Windows DPAPI, Linux libsecret)
+// Stores encrypted data as base64 in a JSON file in userData directory
+
+const getSecureStoragePath = () => join(app.getPath('userData'), 'secure-keys.json')
+
+async function readSecureStore(): Promise<Record<string, string>> {
+  try {
+    const data = await readFile(getSecureStoragePath(), 'utf-8')
+    return JSON.parse(data)
+  } catch {
+    return {}
+  }
+}
+
+async function writeSecureStore(store: Record<string, string>): Promise<void> {
+  await writeFile(getSecureStoragePath(), JSON.stringify(store), 'utf-8')
+}
+
+// ── OAuth Deep Link Protocol ──
+// Register prowl:// as default protocol for this app
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('prowl', process.execPath, [process.argv[1]])
+  }
+} else {
+  app.setAsDefaultProtocolClient('prowl')
+}
+
+// Handle deep link on macOS (app already running)
+app.on('open-url', (_event, url) => {
+  handleDeepLink(url)
+})
+
+// Handle deep link on Windows/Linux (second instance)
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    // Windows/Linux: deep link comes as last argument
+    const url = commandLine.find(arg => arg.startsWith('prowl://'))
+    if (url) handleDeepLink(url)
+    // Focus window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
+
+function handleDeepLink(url: string): void {
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname === 'oauth' && parsed.pathname === '/callback') {
+      const code = parsed.searchParams.get('code')
+      const state = parsed.searchParams.get('state')
+      const error = parsed.searchParams.get('error')
+      if (mainWindow) {
+        mainWindow.webContents.send('oauth:callback', { code, state, error })
+      }
+    }
+  } catch {
+    // Invalid URL, ignore
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -160,6 +229,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   createWindow()
+  terminalManager.setWindow(mainWindow!)
 
   // Dialog handlers
   ipcMain.handle('dialog:openDirectory', async () => {
@@ -292,6 +362,78 @@ app.whenReady().then(() => {
     parser?.stop()
     parser = null
   })
+
+  // File system handlers (for code editor autosave)
+  ipcMain.handle('fs:readFile', async (_, filePath: string) => {
+    const resolved = resolvePath(filePath)
+    return readFile(resolved, 'utf-8')
+  })
+
+  ipcMain.handle('fs:writeFile', async (_, filePath: string, content: string) => {
+    const resolved = resolvePath(filePath)
+    await writeFile(resolved, content, 'utf-8')
+  })
+
+  // Terminal handlers
+  ipcMain.handle('terminal:create', (_, cwd?: string) => {
+    return terminalManager.create(cwd)
+  })
+
+  ipcMain.on('terminal:write', (_, id: string, data: string) => {
+    terminalManager.write(id, data)
+  })
+
+  ipcMain.on('terminal:resize', (_, id: string, cols: number, rows: number) => {
+    terminalManager.resize(id, cols, rows)
+  })
+
+  ipcMain.handle('terminal:kill', (_, id: string) => {
+    terminalManager.kill(id)
+  })
+
+  ipcMain.handle('terminal:getTitle', (_, id: string) => {
+    return terminalManager.getTitle(id)
+  })
+
+  // Secure storage handlers (safeStorage)
+  ipcMain.handle('secureStorage:isAvailable', () => {
+    return safeStorage.isEncryptionAvailable()
+  })
+
+  ipcMain.handle('secureStorage:store', async (_, key: string, value: string) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('Encryption not available')
+    }
+    const encrypted = safeStorage.encryptString(value)
+    const store = await readSecureStore()
+    store[key] = encrypted.toString('base64')
+    await writeSecureStore(store)
+  })
+
+  ipcMain.handle('secureStorage:retrieve', async (_, key: string) => {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('Encryption not available')
+    }
+    const store = await readSecureStore()
+    const encrypted = store[key]
+    if (!encrypted) return null
+    try {
+      return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('secureStorage:delete', async (_, key: string) => {
+    const store = await readSecureStore()
+    delete store[key]
+    await writeSecureStore(store)
+  })
+
+  // OAuth handlers
+  ipcMain.handle('oauth:openExternal', async (_, url: string) => {
+    await shell.openExternal(url)
+  })
 })
 
 function stopAllWatchers(): void {
@@ -308,6 +450,7 @@ function stopAllWatchers(): void {
 app.on('window-all-closed', () => {
   stopAllWatchers()
   parser?.stop()
+  terminalManager.killAll()
   if (process.platform !== 'darwin') {
     app.quit()
   }

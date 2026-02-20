@@ -1,11 +1,21 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { X, Eye, EyeOff, RefreshCw, ChevronDown, Loader2, Check, AlertCircle } from 'lucide-react';
+import { X, Eye, EyeOff, RefreshCw, ChevronDown, Loader2, Check, AlertCircle, Lock, ShieldCheck, Cloud, LogOut } from 'lucide-react';
 import {
   loadSettings,
   saveSettings,
   getProviderDisplayName,
   fetchOpenRouterModels,
+  isSecureStorageActive,
 } from '../core/llm/settings-service';
+import {
+  isOAuthConnected,
+  isOAuthReady,
+  getOAuthEmail,
+  startOAuthFlow,
+  signOutOAuth,
+  onOAuthCallback,
+  type OAuthProvider,
+} from '../core/llm/oauth-service';
 import type { LLMSettings, LLMProvider } from '../core/llm/types';
 
 // Provider logos — clean SVG marks at their actual brand colors
@@ -51,12 +61,21 @@ const logos: Record<LLMProvider, (active: boolean) => JSX.Element> = {
   ),
 };
 
+// Open URL in system browser (Electron) or new tab (browser fallback)
+const openExternal = (url: string) => {
+  if ((window as any).prowl?.oauth?.openExternal) {
+    (window as any).prowl.oauth.openExternal(url);
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
+};
+
 // Reusable row: label left, input right
 const Row = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
   <div className="grid grid-cols-[100px_1fr] items-start gap-3 py-2">
     <div className="pt-1.5">
       <span className="text-[12px] text-text-muted">{label}</span>
-      {hint && <a href={hint} target="_blank" rel="noopener noreferrer" className="block text-[10px] text-accent/70 hover:text-accent truncate mt-0.5">{hint.replace(/^https?:\/\//, '')}</a>}
+      {hint && <button onClick={() => openExternal(hint)} className="block text-[10px] text-accent/70 hover:text-accent truncate mt-0.5 text-left">{hint.replace(/^https?:\/\//, '')}</button>}
     </div>
     <div>{children}</div>
   </div>
@@ -214,8 +233,30 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
   const [checkingOllama, setCheckingOllama] = useState(false);
   const [orModels, setOrModels] = useState<{ id: string; name: string }[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
-  useEffect(() => { if (isOpen) { setSettings(loadSettings()); setSaveStatus('idle'); setOllamaError(null); } }, [isOpen]);
+  // Track OAuth connected state
+  const [oauthConnected, setOauthConnected] = useState<Record<string, boolean>>({
+    anthropic: isOAuthConnected('anthropic'),
+    openai: isOAuthConnected('openai'),
+  });
+
+  useEffect(() => { if (isOpen) { setSettings(loadSettings()); setSaveStatus('idle'); setOllamaError(null); setOauthError(null); setOauthConnected({ anthropic: isOAuthConnected('anthropic'), openai: isOAuthConnected('openai') }); } }, [isOpen]);
+
+  // Listen for OAuth callbacks
+  useEffect(() => {
+    const unsubscribe = onOAuthCallback((result) => {
+      setOauthLoading(null);
+      if (result.success) {
+        setOauthConnected(prev => ({ ...prev, [result.provider]: true }));
+        setOauthError(null);
+      } else {
+        setOauthError(result.error);
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   const checkOllama = useCallback(async (url: string) => {
     setCheckingOllama(true); setOllamaError(null);
@@ -233,6 +274,22 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
       return () => clearTimeout(t);
     }
   }, [settings.ollama?.baseUrl, settings.activeProvider, checkOllama]);
+
+  const handleOAuthSignIn = useCallback(async (provider: OAuthProvider) => {
+    setOauthLoading(provider);
+    setOauthError(null);
+    try {
+      await startOAuthFlow(provider);
+    } catch (err: any) {
+      setOauthLoading(null);
+      setOauthError(err.message);
+    }
+  }, []);
+
+  const handleOAuthSignOut = useCallback(async (provider: OAuthProvider) => {
+    await signOutOAuth(provider);
+    setOauthConnected(prev => ({ ...prev, [provider]: false }));
+  }, []);
 
   const save = () => {
     try { saveSettings(settings); setSaveStatus('saved'); onSettingsSaved?.(); setTimeout(() => setSaveStatus('idle'), 2000); }
@@ -281,6 +338,40 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
 
           {/* OpenAI */}
           {p === 'openai' && <>
+            {/* OAuth sign-in */}
+            {oauthConnected.openai ? (
+              <div className="flex items-center justify-between py-2 px-3 bg-green-500/[0.08] border border-green-500/20 rounded-lg mb-3">
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-green-400" />
+                  <span className="text-[12px] text-text-secondary">Connected{getOAuthEmail('openai') ? ` as ${getOAuthEmail('openai')}` : ''}</span>
+                </div>
+                <button onClick={() => handleOAuthSignOut('openai')} className="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary transition-colors">
+                  <LogOut className="w-3 h-3" /> Sign out
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => isOAuthReady('openai') && handleOAuthSignIn('openai')}
+                  disabled={oauthLoading === 'openai' || !isOAuthReady('openai')}
+                  className={`w-full flex items-center justify-center gap-2 py-2 mb-3 rounded-lg text-[12px] transition-all ${
+                    isOAuthReady('openai')
+                      ? 'bg-accent/[0.08] border border-accent/25 text-accent hover:bg-accent/[0.14] hover:border-accent/40 disabled:opacity-50'
+                      : 'bg-white/[0.04] border border-white/[0.08] text-text-muted/60 cursor-default'
+                  }`}
+                  title={isOAuthReady('openai') ? 'Sign in via OAuth' : 'OAuth coming soon'}
+                >
+                  {oauthLoading === 'openai' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cloud className="w-3.5 h-3.5" />}
+                  Sign in with OpenAI
+                  {!isOAuthReady('openai') && <span className="text-[10px] text-text-muted/40 ml-1">soon</span>}
+                </button>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-1 h-px bg-white/[0.06]" />
+                  <span className="text-[10px] text-text-muted/40">or use API key</span>
+                  <div className="flex-1 h-px bg-white/[0.06]" />
+                </div>
+              </>
+            )}
             <Row label="API Key" hint="https://platform.openai.com/api-keys">
               <KeyInput value={settings.openai?.apiKey ?? ''} onChange={v => setSettings(s => ({ ...s, openai: { ...s.openai!, apiKey: v } }))}
                 visible={!!showKey.openai} onToggle={() => setShowKey(s => ({ ...s, openai: !s.openai }))} placeholder="sk-..." />
@@ -313,6 +404,46 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
 
           {/* Anthropic */}
           {p === 'anthropic' && <>
+            {/* OAuth sign-in */}
+            {oauthConnected.anthropic ? (
+              <div className="flex items-center justify-between py-2 px-3 bg-green-500/[0.08] border border-green-500/20 rounded-lg mb-3">
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-green-400" />
+                  <span className="text-[12px] text-text-secondary">Connected{getOAuthEmail('anthropic') ? ` as ${getOAuthEmail('anthropic')}` : ''}</span>
+                </div>
+                <button onClick={() => handleOAuthSignOut('anthropic')} className="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-primary transition-colors">
+                  <LogOut className="w-3 h-3" /> Sign out
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => isOAuthReady('anthropic') && handleOAuthSignIn('anthropic')}
+                  disabled={oauthLoading === 'anthropic' || !isOAuthReady('anthropic')}
+                  className={`w-full flex items-center justify-center gap-2 py-2 mb-3 rounded-lg text-[12px] transition-all ${
+                    isOAuthReady('anthropic')
+                      ? 'bg-[#D4A27F]/[0.08] border border-[#D4A27F]/25 text-[#D4A27F] hover:bg-[#D4A27F]/[0.14] hover:border-[#D4A27F]/40 disabled:opacity-50'
+                      : 'bg-white/[0.04] border border-white/[0.08] text-text-muted/60 cursor-default'
+                  }`}
+                  title={isOAuthReady('anthropic') ? 'Sign in via OAuth' : 'OAuth coming soon'}
+                >
+                  {oauthLoading === 'anthropic' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cloud className="w-3.5 h-3.5" />}
+                  Sign in with Claude
+                  {!isOAuthReady('anthropic') && <span className="text-[10px] text-text-muted/40 ml-1">soon</span>}
+                </button>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-1 h-px bg-white/[0.06]" />
+                  <span className="text-[10px] text-text-muted/40">or use API key</span>
+                  <div className="flex-1 h-px bg-white/[0.06]" />
+                </div>
+              </>
+            )}
+            {oauthError && p === 'anthropic' && (
+              <div className="flex items-center gap-2 py-2 mb-2 text-[11px] text-[#FF453A]">
+                <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                <span>{oauthError}</span>
+              </div>
+            )}
             <Row label="API Key" hint="https://console.anthropic.com/settings/keys">
               <KeyInput value={settings.anthropic?.apiKey ?? ''} onChange={v => setSettings(s => ({ ...s, anthropic: { ...s.anthropic!, apiKey: v } }))}
                 visible={!!showKey.anthropic} onToggle={() => setShowKey(s => ({ ...s, anthropic: !s.anthropic }))} placeholder="sk-ant-..." />
@@ -396,7 +527,13 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
 
         {/* ── Footer ── */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06]">
-          <span className="text-[10px] text-text-muted/40">keys stored locally only</span>
+          <span className="flex items-center gap-1 text-[10px] text-text-muted/40">
+            {isSecureStorageActive() ? (
+              <><ShieldCheck className="w-3 h-3 text-green-400/60" /> keys encrypted via system keychain</>
+            ) : (
+              <><Lock className="w-3 h-3" /> keys stored locally only</>
+            )}
+          </span>
           <div className="flex items-center gap-2">
             {saveStatus === 'saved' && <Check className="w-3.5 h-3.5 text-green-400" />}
             {saveStatus === 'error' && <AlertCircle className="w-3.5 h-3.5 text-[#FF453A]" />}

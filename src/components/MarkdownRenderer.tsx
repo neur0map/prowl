@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidDiagram } from './MermaidDiagram';
-import { ToolCallCard } from './ToolCallCard';
+import { ToolCallPill } from './ToolCallPill';
 
 // Custom syntax theme
 const customTheme = {
@@ -41,9 +41,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         // Avoid rewriting inside fenced code blocks.
         const parts = md.split('```');
         for (let i = 0; i < parts.length; i += 2) {
-            // Pattern 1: File grounding - [[file.ext]]
+            // Pattern 1: File grounding - [[file.ext]], [[file.ext:10]], [[file.ext:10-20]], [[file.ext:4,57]]
             parts[i] = parts[i].replace(
-                /\[\[([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+(?::\d+(?:[-–]\d+)?)?)\]\]/g,
+                /\[\[([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+(?::\d+(?:[,\-–]\d+)*)?)\]\]/g,
                 (_m, inner: string) => {
                     const trimmed = inner.trim();
                     const href = `code-ref:${encodeURIComponent(trimmed)}`;
@@ -121,6 +121,24 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const codeContent = String(children).replace(/\n$/, '');
 
             if (isInline) {
+                // Detect file paths in inline code and make them clickable
+                // Must contain at least one / and end with a file extension, optionally with :line numbers
+                const filePathMatch = codeContent.match(
+                    /^([a-zA-Z0-9_\-./\\]+\/[a-zA-Z0-9_\-./\\]*\.[a-zA-Z0-9]+(?::\d+(?:[,\-–]\d+)*)?)$/
+                );
+                if (filePathMatch && onLinkClick) {
+                    const href = `code-ref:${encodeURIComponent(filePathMatch[1])}`;
+                    return (
+                        <a
+                            href={href}
+                            onClick={(e) => { e.preventDefault(); onLinkClick(href); }}
+                            className="code-ref-btn inline-flex items-center px-2 py-0.5 rounded-md font-mono text-[12px] !no-underline hover:!no-underline transition-colors cursor-pointer border border-cyan-300/55 bg-cyan-400/10 !text-cyan-200 visited:!text-cyan-200 hover:bg-cyan-400/15 hover:border-cyan-200/70"
+                            title={`Open in editor • ${filePathMatch[1]}`}
+                        >
+                            {codeContent}
+                        </a>
+                    );
+                }
                 return <code {...props}>{children}</code>;
             }
 
@@ -166,11 +184,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 {formattedContent}
             </ReactMarkdown>
 
-            {/* Tool Call Cards appended at the bottom if provided */}
+            {/* Tool Call Pills appended at the bottom if provided */}
             {toolCalls && toolCalls.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                     {toolCalls.map(tc => (
-                        <ToolCallCard key={tc.id} toolCall={tc} defaultExpanded={false} />
+                        <ToolCallPill key={tc.id} toolCall={tc} />
                     ))}
                 </div>
             )}

@@ -1,4 +1,4 @@
-import { Search, Settings, PanelRight } from 'lucide-react';
+import { Search, Settings, PanelRight, RefreshCw } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { GraphNode } from '../core/graph/types';
@@ -18,9 +18,10 @@ const NODE_TYPE_COLORS: Record<string, string> = {
 
 interface HeaderProps {
   onFocusNode?: (nodeId: string) => void;
+  onRefreshGraph?: () => void;
 }
 
-export const Header = ({ onFocusNode }: HeaderProps) => {
+export const Header = ({ onFocusNode, onRefreshGraph }: HeaderProps) => {
   const {
     projectName,
     graph,
@@ -106,10 +107,21 @@ export const Header = ({ onFocusNode }: HeaderProps) => {
         </div>
 
         {projectName && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 glass-subtle rounded-md text-[12px] text-text-secondary">
-            <span className="w-1.5 h-1.5 bg-node-function rounded-full opacity-70" />
-            <span className="truncate max-w-[180px]">{projectName}</span>
-          </div>
+          <>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 glass-subtle rounded-md text-[12px] text-text-secondary">
+              <span className="w-1.5 h-1.5 bg-node-function rounded-full opacity-70" />
+              <span className="truncate max-w-[180px]">{projectName}</span>
+            </div>
+            {onRefreshGraph && (
+              <button
+                onClick={onRefreshGraph}
+                className="w-6 h-6 flex items-center justify-center rounded-md text-text-muted hover:text-text-primary hover:bg-white/[0.08] transition-colors"
+                title="Refresh graph layout"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </>
         )}
       </div>
 

@@ -1,24 +1,73 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Send, Square, MessageSquare, User,
-  PanelRightClose, Loader2, AlertTriangle, GitBranch, Radio
+  PanelRightClose, Loader2, AlertTriangle, GitBranch, Radio, Sparkles, Trash2,
+  ChevronDown, ChevronRight, Wrench
 } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
-import { ToolCallCard } from './ToolCallCard';
-import { isProviderConfigured } from '../core/llm/settings-service';
+import { ToolCallPill } from './ToolCallPill';
+import { isProviderConfigured, getActiveProviderConfig } from '../core/llm/settings-service';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { ProcessesPanel } from './ProcessesPanel';
 import { AgentPanel } from './AgentPanel';
 
 const isElectron = typeof window !== 'undefined' && !!(window as any).prowl;
 
-export const RightPanel = () => {
+// Collapsible group for tool call pills — shows summary when many completed calls
+const ToolCallGroup = ({ steps }: { steps: { id: string; toolCall: any }[] }) => {
+  const [expanded, setExpanded] = useState(false);
+  const allDone = steps.every(s => s.toolCall?.status === 'completed' || s.toolCall?.status === 'error');
+  const runningCount = steps.filter(s => s.toolCall?.status === 'running').length;
+  const MAX_VISIBLE = 3;
+
+  // If few pills or still running, show them all
+  if (steps.length <= MAX_VISIBLE || !allDone) {
+    return (
+      <div className="flex flex-wrap gap-1.5 mb-2 items-center">
+        {steps.map((ts) => (
+          <ToolCallPill key={ts.id} toolCall={ts.toolCall!} />
+        ))}
+        {runningCount > 0 && steps.length > MAX_VISIBLE && (
+          <span className="text-[11px] text-text-muted ml-1">
+            {steps.length - runningCount} done, {runningCount} running...
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Many completed pills — collapse into summary
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] bg-white/[0.04] border border-white/[0.08] text-text-secondary hover:bg-white/[0.06] transition-all cursor-pointer select-none"
+      >
+        <Wrench size={12} className="opacity-50" />
+        <span>{steps.length} tool calls completed</span>
+        {expanded ? <ChevronDown size={11} className="opacity-40" /> : <ChevronRight size={11} className="opacity-40" />}
+      </button>
+      {expanded && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {steps.map((ts) => (
+            <ToolCallPill key={ts.id} toolCall={ts.toolCall!} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface RightPanelProps {
+  onFocusNode: (nodeId: string) => void;
+}
+
+export const RightPanel = ({ onFocusNode }: RightPanelProps) => {
   const {
     isRightPanelOpen,
     setRightPanelOpen,
     fileContents,
     graph,
-    addCodeReference,
     // LLM / chat state
     chatMessages,
     isChatLoading,
@@ -35,6 +84,38 @@ export const RightPanel = () => {
   const [activeTab, setActiveTab] = useState<'chat' | 'processes' | 'agent'>('chat');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Resizable width
+  const [panelWidth, setPanelWidth] = useState(35); // percentage
+  const isResizingRef = useRef(false);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = panelWidth;
+    const windowWidth = window.innerWidth;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const delta = startX - ev.clientX;
+      const newPct = startWidth + (delta / windowWidth) * 100;
+      setPanelWidth(Math.min(60, Math.max(20, newPct)));
+    };
+
+    const onMouseUp = () => {
+      isResizingRef.current = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [panelWidth]);
 
   // Auto-scroll to bottom when messages update or while streaming
   useEffect(() => {
@@ -65,13 +146,13 @@ export const RightPanel = () => {
     return best?.path ?? null;
   }, [fileContents]);
 
-  const findFileNodeIdForUI = useCallback((filePath: string): string | undefined => {
+  // Find graph node by file path
+  const findFileNodeForUI = useCallback((filePath: string) => {
     if (!graph) return undefined;
     const target = filePath.replace(/\\/g, '/').replace(/^\.?\//, '');
-    const node = graph.nodes.find(
+    return graph.nodes.find(
       (n) => n.label === 'File' && n.properties.filePath.replace(/\\/g, '/').replace(/^\.?\//, '') === target
     );
-    return node?.id;
   }, [graph]);
 
   const handleGroundingClick = useCallback((inner: string) => {
@@ -79,46 +160,35 @@ export const RightPanel = () => {
     if (!raw) return;
 
     let rawPath = raw;
-    let startLine1: number | undefined;
-    let endLine1: number | undefined;
 
-    // Match line:num or line:num-num (supports both hyphen - and en dash –)
-    const lineMatch = raw.match(/^(.*):(\d+)(?:[-–](\d+))?$/);
+    // Strip line numbers for path resolution
+    const lineMatch = raw.match(/^(.*):(\d+(?:[,\-–]\d+)*)$/);
     if (lineMatch) {
       rawPath = lineMatch[1].trim();
-      startLine1 = parseInt(lineMatch[2], 10);
-      endLine1 = parseInt(lineMatch[3] || lineMatch[2], 10);
     }
 
     const resolvedPath = resolveFilePathForUI(rawPath);
     if (!resolvedPath) return;
 
-    const nodeId = findFileNodeIdForUI(resolvedPath);
+    const node = findFileNodeForUI(resolvedPath);
 
-    addCodeReference({
-      filePath: resolvedPath,
-      startLine: startLine1 ? Math.max(0, startLine1 - 1) : undefined,
-      endLine: endLine1 ? Math.max(0, endLine1 - 1) : (startLine1 ? Math.max(0, startLine1 - 1) : undefined),
-      nodeId,
-      label: 'File',
-      name: resolvedPath.split('/').pop() ?? resolvedPath,
-      source: 'ai',
-    });
-  }, [addCodeReference, findFileNodeIdForUI, resolveFilePathForUI]);
+    // Focus the graph node — no code panel, just visual focus
+    if (node?.id) {
+      onFocusNode(node.id);
+    }
+  }, [findFileNodeForUI, resolveFilePathForUI, onFocusNode]);
 
   // Handler for node grounding: [[Class:View]], [[Function:trigger]], etc.
   const handleNodeGroundingClick = useCallback((nodeTypeAndName: string) => {
     const raw = nodeTypeAndName.trim();
     if (!raw || !graph) return;
 
-    // Parse Type:Name format
     const match = raw.match(/^(Class|Function|Method|Interface|File|Folder|Variable|Enum|Type|CodeElement):(.+)$/);
     if (!match) return;
 
     const [, nodeType, nodeName] = match;
     const trimmedName = nodeName.trim();
 
-    // Find node in graph by type + name
     const node = graph.nodes.find(n =>
       n.label === nodeType &&
       n.properties.name === trimmedName
@@ -129,22 +199,9 @@ export const RightPanel = () => {
       return;
     }
 
-    // Add to Code Panel (if node has file/line info)
-    if (node.properties.filePath) {
-      const resolvedPath = resolveFilePathForUI(node.properties.filePath);
-      if (resolvedPath) {
-        addCodeReference({
-          filePath: resolvedPath,
-          startLine: node.properties.startLine ? node.properties.startLine - 1 : undefined,
-          endLine: node.properties.endLine ? node.properties.endLine - 1 : undefined,
-          nodeId: node.id,
-          label: node.label,
-          name: node.properties.name,
-          source: 'ai',
-        });
-      }
-    }
-  }, [graph, resolveFilePathForUI, addCodeReference]);
+    // Focus the graph node — no code panel, just visual focus
+    onFocusNode(node.id);
+  }, [graph, onFocusNode]);
 
   const handleLinkClick = useCallback((href: string) => {
     if (href.startsWith('code-ref:')) {
@@ -206,7 +263,15 @@ export const RightPanel = () => {
   if (!isRightPanelOpen) return null;
 
   return (
-    <aside className="w-[40%] min-w-[400px] max-w-[600px] flex flex-col bg-void border-l border-white/[0.08] animate-fade-in relative z-30 flex-shrink-0">
+    <aside
+      className="flex flex-col bg-void border-l border-white/[0.08] animate-fade-in relative z-30 flex-shrink-0"
+      style={{ width: `${panelWidth}%`, minWidth: 320 }}
+    >
+      {/* Resize handle */}
+      <div
+        onMouseDown={handleResizeStart}
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-40 hover:bg-accent/40 active:bg-accent/60 transition-colors"
+      />
       {/* Tab bar — underline style */}
       <div className="flex items-center justify-between px-4 py-0 glass border-b border-white/[0.08]">
         <div className="flex items-center gap-0">
@@ -254,16 +319,29 @@ export const RightPanel = () => {
       {/* Chat Content */}
       {activeTab === 'chat' && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Status bar */}
-          <div className="flex items-center gap-2.5 px-4 py-2 border-b border-white/[0.08]">
+          {/* Status bar with model info */}
+          <div className="flex items-center gap-2.5 px-4 py-1.5 border-b border-white/[0.08]">
+            {(() => {
+              const config = getActiveProviderConfig();
+              if (config) {
+                const modelName = config.model.split('/').pop() || config.model;
+                return (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-text-muted flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#30D158]" />
+                    {modelName}
+                  </span>
+                );
+              }
+              return null;
+            })()}
             <div className="ml-auto flex items-center gap-2">
-              {!isAgentReady && (
-                <span className="text-[11px] px-2 py-1 rounded-md bg-[#FF9F0A]/10 text-[#FF9F0A] border border-[#FF9F0A]/20">
+              {!isAgentReady && !isAgentInitializing && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FF9F0A]/10 text-[#FF9F0A] border border-[#FF9F0A]/20">
                   Configure AI
                 </span>
               )}
               {isAgentInitializing && (
-                <span className="text-[11px] px-2 py-1 rounded-md bg-white/[0.06] border border-white/[0.1] flex items-center gap-1 text-text-muted">
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.1] flex items-center gap-1 text-text-muted">
                   <Loader2 className="w-3 h-3 animate-spin" /> Connecting
                 </span>
               )}
@@ -282,21 +360,21 @@ export const RightPanel = () => {
           <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
             {chatMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                <div className="w-12 h-12 mb-4 flex items-center justify-center rounded-full glass">
-                  <MessageSquare className="w-5 h-5 text-text-secondary" />
+                <div className="w-10 h-10 mb-3 flex items-center justify-center rounded-full bg-accent/10 border border-accent/20">
+                  <Sparkles className="w-4 h-4 text-accent" />
                 </div>
-                <h3 className="text-[15px] font-normal text-text-primary mb-1">
+                <h3 className="text-[14px] font-medium text-text-primary mb-1">
                   Ask about this codebase
                 </h3>
-                <p className="text-[12px] text-text-muted leading-relaxed mb-5">
-                  Architecture, functions, connections — ask anything.
+                <p className="text-[12px] text-text-muted leading-relaxed mb-5 max-w-[260px]">
+                  Architecture, functions, connections — Prowl understands your code graph.
                 </p>
-                <div className="flex flex-wrap gap-2 justify-center">
+                <div className="flex flex-wrap gap-1.5 justify-center max-w-[340px]">
                   {chatSuggestions.map((suggestion) => (
                     <button
                       key={suggestion}
                       onClick={() => setChatInput(suggestion)}
-                      className="px-2.5 py-1.5 bg-white/[0.06] border border-white/[0.1] rounded-md text-[11px] text-text-secondary hover:border-white/[0.2] hover:text-text-primary transition-colors"
+                      className="px-2.5 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-full text-[11px] text-text-secondary hover:border-accent/30 hover:text-text-primary hover:bg-accent/5 transition-all"
                     >
                       {suggestion}
                     </button>
@@ -309,13 +387,17 @@ export const RightPanel = () => {
                   <div key={message.id} className="animate-fade-in">
                     {/* User message */}
                     {message.role === 'user' && (
-                      <div className="mb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <User className="w-3.5 h-3.5 text-text-muted" />
-                          <span className="text-[11px] text-text-muted uppercase tracking-wide">You</span>
-                        </div>
-                        <div className="pl-6 text-[13px] text-text-primary">
-                          {message.content}
+                      <div className="mb-1">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-6 h-6 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                            <User className="w-3 h-3 text-text-muted" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[11px] text-text-muted uppercase tracking-wide">You</span>
+                            <div className="mt-1 px-3 py-2 rounded-lg bg-white/[0.06] border border-white/[0.08] text-[13px] text-text-primary">
+                              {message.content}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -323,47 +405,61 @@ export const RightPanel = () => {
                     {/* Assistant message */}
                     {message.role === 'assistant' && (
                       <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <MessageSquare className="w-3.5 h-3.5 text-accent" />
-                          <span className="text-[11px] text-text-muted uppercase tracking-wide">Prowl</span>
-                          {isChatLoading && message === chatMessages[chatMessages.length - 1] && (
-                            <Loader2 className="w-3 h-3 animate-spin text-accent" />
-                          )}
-                        </div>
-                        <div className="pl-6 chat-prose">
-                          {message.steps && message.steps.length > 0 ? (
-                            <div className="space-y-4">
-                              {message.steps.map((step) => (
-                                <div key={step.id}>
-                                  {step.type === 'reasoning' && step.content && (
-                                    <div className="text-text-secondary text-[13px] italic border-l-2 border-white/[0.15] pl-3 mb-3">
-                                      <MarkdownRenderer
-                                        content={step.content}
-                                        onLinkClick={handleLinkClick}
-                                      />
-                                    </div>
-                                  )}
-                                  {step.type === 'tool_call' && step.toolCall && (
-                                    <div className="mb-3">
-                                      <ToolCallCard toolCall={step.toolCall} defaultExpanded={false} />
-                                    </div>
-                                  )}
-                                  {step.type === 'content' && step.content && (
-                                    <MarkdownRenderer
-                                      content={step.content}
-                                      onLinkClick={handleLinkClick}
-                                    />
-                                  )}
-                                </div>
-                              ))}
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center shrink-0 mt-0.5">
+                            <MessageSquare className="w-3 h-3 text-accent" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-text-muted uppercase tracking-wide">Prowl</span>
+                              {isChatLoading && message === chatMessages[chatMessages.length - 1] && (
+                                <Loader2 className="w-3 h-3 animate-spin text-accent" />
+                              )}
                             </div>
-                          ) : (
-                            <MarkdownRenderer
-                              content={message.content}
-                              onLinkClick={handleLinkClick}
-                              toolCalls={message.toolCalls}
-                            />
-                          )}
+                            <div className="mt-1.5 chat-prose">
+                              {message.steps && message.steps.length > 0 ? (
+                                <div className="space-y-2">
+                                  {/* Group consecutive tool calls, collapse large groups */}
+                                  {message.steps.reduce<{ groups: React.ReactNode[]; pendingTools: typeof message.steps }>((acc, step, idx) => {
+                                    if (step.type === 'tool_call' && step.toolCall) {
+                                      acc.pendingTools.push(step);
+                                    } else {
+                                      if (acc.pendingTools.length > 0) {
+                                        acc.groups.push(
+                                          <ToolCallGroup key={`tools-${acc.pendingTools[0].id}`} steps={acc.pendingTools as any} />
+                                        );
+                                        acc.pendingTools = [];
+                                      }
+                                      if (step.type === 'reasoning' && step.content) {
+                                        acc.groups.push(
+                                          <div key={step.id} className="text-text-secondary text-[13px] italic border-l-2 border-white/[0.15] pl-3 mb-2">
+                                            <MarkdownRenderer content={step.content} onLinkClick={handleLinkClick} />
+                                          </div>
+                                        );
+                                      }
+                                      if (step.type === 'content' && step.content) {
+                                        acc.groups.push(
+                                          <MarkdownRenderer key={step.id} content={step.content} onLinkClick={handleLinkClick} />
+                                        );
+                                      }
+                                    }
+                                    if (idx === message.steps!.length - 1 && acc.pendingTools.length > 0) {
+                                      acc.groups.push(
+                                        <ToolCallGroup key={`tools-${acc.pendingTools[0].id}`} steps={acc.pendingTools as any} />
+                                      );
+                                    }
+                                    return acc;
+                                  }, { groups: [], pendingTools: [] }).groups}
+                                </div>
+                              ) : (
+                                <MarkdownRenderer
+                                  content={message.content}
+                                  onLinkClick={handleLinkClick}
+                                  toolCalls={message.toolCalls}
+                                />
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -375,8 +471,8 @@ export const RightPanel = () => {
           </div>
 
           {/* Input */}
-          <div className="p-3 glass border-t border-white/[0.08]">
-            <div className="flex items-end gap-2 px-3 py-2 bg-white/[0.06] border border-white/[0.12] rounded-lg transition-all focus-within:border-accent/50">
+          <div className="p-3 border-t border-white/[0.08] bg-deep/80">
+            <div className="flex items-end gap-2 px-3 py-1.5 bg-white/[0.05] border border-white/[0.10] rounded-xl transition-all focus-within:border-accent/40 focus-within:bg-white/[0.06]">
               <textarea
                 ref={textareaRef}
                 value={chatInput}
@@ -387,26 +483,28 @@ export const RightPanel = () => {
                 className="flex-1 bg-transparent border-none outline-none text-[13px] text-text-primary placeholder:text-text-muted resize-none min-h-[36px] scrollbar-thin"
                 style={{ height: '36px', overflowY: 'hidden' }}
               />
-              <button
-                onClick={clearChat}
-                className="px-2 py-1 text-[11px] text-text-muted hover:text-text-primary transition-colors"
-                title="Clear chat"
-              >
-                Clear
-              </button>
+              {chatMessages.length > 0 && (
+                <button
+                  onClick={clearChat}
+                  className="w-7 h-7 flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors rounded-md hover:bg-white/[0.06]"
+                  title="Clear chat"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
               {isChatLoading ? (
                 <button
                   onClick={stopChatResponse}
-                  className="w-8 h-8 flex items-center justify-center bg-[#FF453A]/80 rounded-md text-white transition-all hover:bg-[#FF453A]"
+                  className="w-8 h-8 flex items-center justify-center bg-[#FF453A]/80 rounded-lg text-white transition-all hover:bg-[#FF453A] shrink-0"
                   title="Stop response"
                 >
-                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <Square className="w-3 h-3 fill-current" />
                 </button>
               ) : (
                 <button
                   onClick={handleSendMessage}
                   disabled={!chatInput.trim() || isAgentInitializing}
-                  className="w-8 h-8 flex items-center justify-center bg-accent rounded-md text-white transition-all hover:bg-accent-dim disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-8 h-8 flex items-center justify-center bg-accent rounded-lg text-white transition-all hover:bg-accent-dim disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
