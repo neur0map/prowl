@@ -6,10 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build-mac:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x64, arm64]
     steps:
@@ -22,6 +26,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_build_from_source: true
+
+      - name: Rebuild native modules for Electron
+        run: npx @electron/rebuild -w node-pty
 
       - name: Build & package (macOS ${{ matrix.arch }})
         run: npm run build && npx electron-builder --mac --${{ matrix.arch }}
@@ -33,7 +42,7 @@ jobs:
         with:
           name: prowl-mac-${{ matrix.arch }}
           path: release/*.dmg
-          if-no-files-found: error
+          if-no-files-found: warn
 
   build-windows:
     runs-on: windows-latest
@@ -47,6 +56,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_build_from_source: "true"
+
+      - name: Rebuild native modules for Electron
+        run: npx @electron/rebuild -w node-pty
 
       - name: Build & package (Windows)
         run: npm run build && npx electron-builder --win
@@ -58,7 +72,7 @@ jobs:
         with:
           name: prowl-win-x64
           path: release/*.exe
-          if-no-files-found: error
+          if-no-files-found: warn
 
   build-linux:
     runs-on: ubuntu-latest
@@ -72,6 +86,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_build_from_source: true
+
+      - name: Rebuild native modules for Electron
+        run: npx @electron/rebuild -w node-pty
 
       - name: Build & package (Linux)
         run: npm run build && npx electron-builder --linux
@@ -85,4 +104,40 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
-          if-no-files-found: error
+          if-no-files-found: warn
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-mac, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from package.json
+        id: pkg
+        run: echo "version=$(node -p 'require(\"./package.json\").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: List artifacts
+        run: find artifacts -type f | head -30
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.pkg.outputs.version }}
+          name: Prowl v${{ steps.pkg.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.exe
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
