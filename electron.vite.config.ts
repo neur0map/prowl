@@ -39,6 +39,14 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'index.html')
+        },
+        output: {
+          manualChunks: {
+            'vendor-graph': ['sigma', 'graphology', 'graphology-layout-forceatlas2', 'graphology-layout-noverlap', '@sigma/edge-curve'],
+            'vendor-editor': ['@monaco-editor/react'],
+            'vendor-mermaid': ['mermaid'],
+            'vendor-react': ['react', 'react-dom'],
+          }
         }
       }
     },

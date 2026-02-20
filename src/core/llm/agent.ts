@@ -5,12 +5,7 @@
  * Supports Azure OpenAI and Google Gemini providers.
  */
 
-import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { SystemMessage } from '@langchain/core/messages';
-import { ChatOpenAI, AzureChatOpenAI } from '@langchain/openai';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { ChatAnthropic } from '@langchain/anthropic';
-import { ChatOllama } from '@langchain/ollama';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { createGraphRAGTools } from './tools';
 import type {
@@ -24,7 +19,7 @@ import type {
   GroqConfig,
   AgentStreamChunk,
 } from './types';
-import { 
+import {
   type CodebaseContext,
   buildDynamicSystemPrompt,
 } from './context-builder';
@@ -131,15 +126,16 @@ When generating diagrams:
 BAD:  A[User's Data] --> B(Process & Save)
 GOOD: A["User Data"] --> B["Process and Save"]
 `;
-export const createChatModel = (config: ProviderConfig): BaseChatModel => {
+export const createChatModel = async (config: ProviderConfig): Promise<BaseChatModel> => {
   switch (config.provider) {
     case 'openai': {
       const openaiConfig = config as OpenAIConfig;
-      
+
       if (!openaiConfig.apiKey || openaiConfig.apiKey.trim() === '') {
         throw new Error('OpenAI API key is required but was not provided');
       }
-      
+
+      const { ChatOpenAI } = await import('@langchain/openai');
       return new ChatOpenAI({
         apiKey: openaiConfig.apiKey,
         modelName: openaiConfig.model,
@@ -152,9 +148,10 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         streaming: true,
       });
     }
-    
+
     case 'azure-openai': {
       const azureConfig = config as AzureOpenAIConfig;
+      const { AzureChatOpenAI } = await import('@langchain/openai');
       return new AzureChatOpenAI({
         azureOpenAIApiKey: azureConfig.apiKey,
         azureOpenAIApiInstanceName: extractInstanceName(azureConfig.endpoint),
@@ -164,9 +161,10 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         streaming: true,
       });
     }
-    
+
     case 'gemini': {
       const geminiConfig = config as GeminiConfig;
+      const { ChatGoogleGenerativeAI } = await import('@langchain/google-genai');
       return new ChatGoogleGenerativeAI({
         apiKey: geminiConfig.apiKey,
         model: geminiConfig.model,
@@ -175,9 +173,10 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         streaming: true,
       });
     }
-    
+
     case 'anthropic': {
       const anthropicConfig = config as AnthropicConfig;
+      const { ChatAnthropic } = await import('@langchain/anthropic');
       return new ChatAnthropic({
         anthropicApiKey: anthropicConfig.apiKey,
         model: anthropicConfig.model,
@@ -186,9 +185,10 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         streaming: true,
       });
     }
-    
+
     case 'ollama': {
       const ollamaConfig = config as OllamaConfig;
+      const { ChatOllama } = await import('@langchain/ollama');
       return new ChatOllama({
         baseUrl: ollamaConfig.baseUrl ?? 'http://localhost:11434',
         model: ollamaConfig.model,
@@ -205,11 +205,11 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
     case 'openrouter': {
       const openRouterConfig = config as OpenRouterConfig;
 
-
       if (!openRouterConfig.apiKey || openRouterConfig.apiKey.trim() === '') {
         throw new Error('OpenRouter API key is required but was not provided');
       }
 
+      const { ChatOpenAI } = await import('@langchain/openai');
       return new ChatOpenAI({
         openAIApiKey: openRouterConfig.apiKey,
         apiKey: openRouterConfig.apiKey, // Fallback for some versions
@@ -231,6 +231,7 @@ export const createChatModel = (config: ProviderConfig): BaseChatModel => {
         throw new Error('Groq API key is required but was not provided');
       }
 
+      const { ChatOpenAI } = await import('@langchain/openai');
       return new ChatOpenAI({
         apiKey: groqConfig.apiKey,
         modelName: groqConfig.model,
@@ -272,7 +273,7 @@ const extractInstanceName = (endpoint: string): string => {
 /**
  * Create a Graph RAG agent
  */
-export const createGraphRAGAgent = (
+export const createGraphRAGAgent = async (
   config: ProviderConfig,
   executeQuery: (cypher: string) => Promise<any[]>,
   semanticSearch: (query: string, k?: number, maxDistance?: number) => Promise<any[]>,
@@ -283,7 +284,8 @@ export const createGraphRAGAgent = (
   fileContents: Map<string, string>,
   codebaseContext?: CodebaseContext
 ) => {
-  const model = createChatModel(config);
+  const { createReactAgent } = await import('@langchain/langgraph/prebuilt');
+  const model = await createChatModel(config);
   const tools = createGraphRAGTools(
     executeQuery,
     semanticSearch,
@@ -293,20 +295,20 @@ export const createGraphRAGAgent = (
     isBM25Ready,
     fileContents
   );
-  
+
   // Use dynamic prompt if context is provided, otherwise use base prompt
-  const systemPrompt = codebaseContext 
+  const systemPrompt = codebaseContext
     ? buildDynamicSystemPrompt(BASE_SYSTEM_PROMPT, codebaseContext)
     : BASE_SYSTEM_PROMPT;
-  
+
   // System prompt built — not logged to avoid console clutter
-  
+
   const agent = createReactAgent({
     llm: model as any,
     tools: tools as any,
     messageModifier: new SystemMessage(systemPrompt) as any,
   });
-  
+
   return agent;
 };
 

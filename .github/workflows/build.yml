@@ -11,11 +11,15 @@ permissions:
 
 jobs:
   build-mac:
-    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, arm64]
+        include:
+          - arch: x64
+            runner: macos-13
+          - arch: arm64
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,17 +38,46 @@ jobs:
       - name: Rebuild native modules for Electron
         run: npx @electron/rebuild -w node-pty
 
-      - name: Build & package (macOS ${{ matrix.arch }})
-        run: npm run build && npx electron-builder --mac --${{ matrix.arch }}
+      - name: Build app bundle (macOS ${{ matrix.arch }})
+        run: npm run build && npx electron-builder --mac dir --${{ matrix.arch }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create DMG
+        run: |
+          VERSION=$(jq -r .version package.json)
+          ARCH=${{ matrix.arch }}
+          DMG_NAME="Prowl-${VERSION}-mac-${ARCH}.dmg"
+
+          # Find the .app bundle electron-builder created
+          APP_PATH=$(find release -name "*.app" -maxdepth 3 -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: No .app bundle found in release/"
+            find release -maxdepth 3 -type d
+            exit 1
+          fi
+          echo "Found app bundle: $APP_PATH"
+
+          # Create staging dir with app + Applications symlink
+          STAGING=$(mktemp -d)
+          cp -R "$APP_PATH" "$STAGING/"
+          ln -s /Applications "$STAGING/Applications"
+
+          # Create DMG using hdiutil create (avoids hdiutil convert koly bug)
+          hdiutil create -volname Prowl -srcfolder "$STAGING" -ov -format UDZO "release/${DMG_NAME}"
+          rm -rf "$STAGING"
+
+          echo "Verifying DMG..."
+          hdiutil verify "release/${DMG_NAME}"
+          echo "DMG OK: release/${DMG_NAME}"
+          ls -lh "release/${DMG_NAME}"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: prowl-mac-${{ matrix.arch }}
           path: release/*.dmg
-          if-no-files-found: warn
+          if-no-files-found: error
 
   build-windows:
     runs-on: windows-latest
@@ -76,7 +109,7 @@ jobs:
         with:
           name: prowl-win-x64
           path: release/*.exe
-          if-no-files-found: warn
+          if-no-files-found: error
 
   build-linux:
     runs-on: ubuntu-latest
@@ -110,7 +143,7 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
-          if-no-files-found: warn
+          if-no-files-found: error
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

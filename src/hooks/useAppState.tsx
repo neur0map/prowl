@@ -498,21 +498,27 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     setCodePanelOpen(true);
   }, [selectedNode]);
 
-  // Worker (single instance shared across app)
+  // Worker (single instance shared across app, spawned on first use)
   const workerRef = useRef<Worker | null>(null);
   const apiRef = useRef<Comlink.Remote<IngestionWorkerApi> | null>(null);
 
-  useEffect(() => {
-    const worker = new Worker(
-      new URL('../workers/ingestion.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
-    const api = Comlink.wrap<IngestionWorkerApi>(worker);
-    workerRef.current = worker;
-    apiRef.current = api;
+  const ensureWorker = useCallback(() => {
+    if (!workerRef.current) {
+      const worker = new Worker(
+        new URL('../workers/ingestion.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      const api = Comlink.wrap<IngestionWorkerApi>(worker);
+      workerRef.current = worker;
+      apiRef.current = api;
+    }
+    return apiRef.current!;
+  }, []);
 
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      worker.terminate();
+      workerRef.current?.terminate();
       workerRef.current = null;
       apiRef.current = null;
     };
@@ -523,47 +529,43 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     onProgress: (progress: PipelineProgress) => void,
     clusteringConfig?: ProviderConfig
   ): Promise<PipelineResult> => {
-    const api = apiRef.current;
-    if (!api) throw new Error('Worker not initialized');
+    const api = ensureWorker();
 
     const proxiedOnProgress = Comlink.proxy(onProgress);
     const serializedResult = await api.runPipeline(file, proxiedOnProgress, clusteringConfig);
     return deserializePipelineResult(serializedResult, createKnowledgeGraph);
-  }, []);
+  }, [ensureWorker]);
 
   const runPipelineFromFiles = useCallback(async (
     files: FileEntry[],
     onProgress: (progress: PipelineProgress) => void,
     clusteringConfig?: ProviderConfig
   ): Promise<PipelineResult> => {
-    const api = apiRef.current;
-    if (!api) throw new Error('Worker not initialized');
+    const api = ensureWorker();
 
     const proxiedOnProgress = Comlink.proxy(onProgress);
     const serializedResult = await api.runPipelineFromFiles(files, proxiedOnProgress, clusteringConfig);
     return deserializePipelineResult(serializedResult, createKnowledgeGraph);
-  }, []);
+  }, [ensureWorker]);
 
   const runQuery = useCallback(async (cypher: string): Promise<any[]> => {
-    const api = apiRef.current;
-    if (!api) throw new Error('Worker not initialized');
+    const api = ensureWorker();
     return api.runQuery(cypher);
-  }, []);
+  }, [ensureWorker]);
 
   const isDatabaseReady = useCallback(async (): Promise<boolean> => {
-    const api = apiRef.current;
-    if (!api) return false;
+    if (!workerRef.current) return false;
+    const api = ensureWorker();
     try {
       return await api.isReady();
     } catch {
       return false;
     }
-  }, []);
+  }, [ensureWorker]);
 
   // Embedding methods
   const startEmbeddings = useCallback(async (forceDevice?: 'webgpu' | 'wasm'): Promise<void> => {
-    const api = apiRef.current;
-    if (!api) throw new Error('Worker not initialized');
+    const api = ensureWorker();
 
     setEmbeddingStatus('loading');
     setEmbeddingProgress(null);
@@ -603,32 +605,29 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
       }
       throw error;
     }
-  }, []);
+  }, [ensureWorker]);
 
   const semanticSearch = useCallback(async (
     query: string,
     k: number = 10
   ): Promise<SemanticSearchResult[]> => {
-    const api = apiRef.current;
-    if (!api) throw new Error('Worker not initialized');
+    const api = ensureWorker();
     return api.semanticSearch(query, k);
-  }, []);
+  }, [ensureWorker]);
 
   const semanticSearchWithContext = useCallback(async (
     query: string,
     k: number = 5,
     hops: number = 2
   ): Promise<any[]> => {
-    const api = apiRef.current;
-    if (!api) throw new Error('Worker not initialized');
+    const api = ensureWorker();
     return api.semanticSearchWithContext(query, k, hops);
-  }, []);
+  }, [ensureWorker]);
 
   const testArrayParams = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    const api = apiRef.current;
-    if (!api) return { success: false, error: 'Worker not initialized' };
+    const api = ensureWorker();
     return api.testArrayParams();
-  }, []);
+  }, [ensureWorker]);
 
   // LLM methods
   const updateLLMSettings = useCallback((updates: Partial<LLMSettings>) => {
@@ -644,11 +643,7 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const initializeAgent = useCallback(async (overrideProjectName?: string): Promise<void> => {
-    const api = apiRef.current;
-    if (!api) {
-      setAgentError('Worker not initialized');
-      return;
-    }
+    const api = ensureWorker();
 
     const config = getActiveProviderConfig();
     if (!config) {
@@ -680,14 +675,10 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsAgentInitializing(false);
     }
-  }, [projectName]);
+  }, [projectName, ensureWorker]);
 
   const sendChatMessage = useCallback(async (message: string): Promise<void> => {
-    const api = apiRef.current;
-    if (!api) {
-      setAgentError('Worker not initialized');
-      return;
-    }
+    const api = ensureWorker();
 
     // Refresh Code panel for the new question: keep user-pinned refs, clear old AI citations
     clearAICodeReferences();
@@ -1033,12 +1024,11 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
       setIsChatLoading(false);
       setCurrentToolCalls([]);
     }
-  }, [chatMessages, isAgentReady, initializeAgent, resolveFilePath, findFileNodeId, addCodeReference, clearAICodeReferences, clearAIToolHighlights, graph, embeddingStatus]);
+  }, [chatMessages, isAgentReady, initializeAgent, resolveFilePath, findFileNodeId, addCodeReference, clearAICodeReferences, clearAIToolHighlights, graph, embeddingStatus, ensureWorker]);
 
   const stopChatResponse = useCallback(() => {
-    const api = apiRef.current;
-    if (api && isChatLoading) {
-      api.stopChat();
+    if (workerRef.current && apiRef.current && isChatLoading) {
+      apiRef.current.stopChat();
       setIsChatLoading(false);
       setCurrentToolCalls([]);
     }

@@ -191,17 +191,24 @@ function createWindow(): void {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#00000000',
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
+    backgroundColor: '#1c1c1e',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
+    show: false,
     title: 'Prowl',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+    }
+  })
+
+  // Show window when renderer is ready (avoids white flash)
+  mainWindow.once('ready-to-show', () => {
+    mainWindow!.show()
+    // Apply vibrancy AFTER window is visible — non-blocking
+    if (process.platform === 'darwin') {
+      mainWindow!.setVibrancy('under-window')
     }
   })
 
