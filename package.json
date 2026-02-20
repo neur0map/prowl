@@ -84,6 +84,9 @@
     "vite": "^5.2.0",
     "vite-plugin-static-copy": "^3.1.4"
   },
-  "author": "neur0map",
+  "author": {
+    "name": "neur0map",
+    "email": "neur0map@users.noreply.github.com"
+  },
   "license": "MIT"
 }
