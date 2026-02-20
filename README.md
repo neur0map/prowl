@@ -16,7 +16,21 @@
 
 <br />
 
-<img src="docs/screenshot.png" alt="Prowl Screenshot" width="800" />
+## See Prowl in Action
+
+<video src="https://github.com/neur0map/prowl/raw/main/public/media/prowl.mp4" controls width="800"></video>
+
+<br />
+
+### Focus Graph
+
+<img src="public/media/focus-graph.png" alt="Prowl Focus Graph" width="800" />
+
+<br />
+
+### Code Editor View
+
+<img src="public/media/code.png" alt="Prowl Code Editor" width="800" />
 
 </div>
 
