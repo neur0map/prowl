@@ -68,12 +68,22 @@ const getKuzuAdapter = async () => {
   return kuzuAdapter;
 };
 
+// Snapshot module (lazy loaded)
+let snapshotModule: typeof import('../core/snapshot') | null = null;
+const getSnapshot = async () => {
+  if (!snapshotModule) snapshotModule = await import('../core/snapshot');
+  return snapshotModule;
+};
+
 // Embedding state
 let embeddingProgress: EmbeddingProgress | null = null;
 let isEmbeddingComplete = false;
 
 // File contents state - stores full file contents for grep/read tools
 let storedFileContents: Map<string, string> = new Map();
+
+// Project path state (for snapshot persistence)
+let projectPath: string | null = null;
 
 // Agent state
 let currentAgent: any | null = null;
@@ -88,8 +98,26 @@ let enrichmentCancelled = false;
 let chatCancelled = false;
 
 /**
+ * Warm the embedding model in the background so semantic search is instant.
+ */
+async function warmEmbeddingModel(): Promise<void> {
+  try {
+    const { initEmbedder } = await getEmbedder();
+    try {
+      await initEmbedder(undefined, {}, 'webgpu');
+    } catch {
+      await initEmbedder(undefined, {}, 'wasm');
+    }
+  } catch (err) {
+    if (import.meta.env.DEV) {
+      console.warn('[prowl:embedding] Model warm-up failed:', err);
+    }
+  }
+}
+
+/**
  * Worker API exposed via Comlink
- * 
+ *
  * Note: The onProgress callback is passed as a Comlink.proxy() from the main thread,
  * allowing it to be called from the worker and have it execute on the main thread.
  */
@@ -624,6 +652,223 @@ const workerApi = {
   disposeAgent(): void {
     currentAgent = null;
     currentProviderConfig = null;
+  },
+
+  // ============================================================
+  // Snapshot Persistence Methods
+  // ============================================================
+
+  /**
+   * Set the project path (for snapshot saving)
+   */
+  setProjectPath(path: string | null): void {
+    projectPath = path;
+  },
+
+  /**
+   * Load a snapshot from disk and restore all state.
+   * Returns a SerializablePipelineResult if successful, null on failure.
+   */
+  async loadSnapshot(
+    path: string,
+    onProgress: (progress: PipelineProgress) => void,
+  ): Promise<(SerializablePipelineResult & { hasEmbeddings: boolean }) | null> {
+    const prowl = (globalThis as any).window?.prowl ?? (globalThis as any).prowl;
+    if (!prowl?.snapshot) return null;
+
+    try {
+      onProgress({ phase: 'extracting', percent: 5, message: 'Reading snapshot...' });
+
+      // Read snapshot data
+      const data = await prowl.snapshot.read(path);
+      if (!data) return null;
+
+      // Read meta and verify HMAC
+      onProgress({ phase: 'extracting', percent: 10, message: 'Verifying integrity...' });
+      const meta = await prowl.snapshot.readMeta(path) as any;
+      if (!meta?.hmac) return null;
+
+      const valid = await prowl.snapshot.verify(data, meta.hmac);
+      if (!valid) {
+        console.warn('[prowl:snapshot] HMAC verification failed — full re-index needed');
+        return null;
+      }
+
+      // Check format version compatibility
+      if (meta.formatVersion != null) {
+        const { SNAPSHOT_FORMAT_VERSION } = await getSnapshot();
+        if (meta.formatVersion !== SNAPSHOT_FORMAT_VERSION) {
+          console.warn(`[prowl:snapshot] Format version mismatch: ${meta.formatVersion} vs ${SNAPSHOT_FORMAT_VERSION} — full re-index`);
+          return null;
+        }
+      }
+
+      // Check app version compatibility
+      const prowlVersion = (import.meta.env.VITE_APP_VERSION as string) || 'unknown';
+      if (meta.prowlVersion && prowlVersion !== 'unknown' && meta.prowlVersion !== prowlVersion) {
+        console.warn(`[prowl:snapshot] Version mismatch: ${meta.prowlVersion} vs ${prowlVersion} — full re-index`);
+        return null;
+      }
+
+      // Deserialize
+      onProgress({ phase: 'structure', percent: 20, message: 'Deserializing snapshot...' });
+      const { deserializeSnapshot } = await getSnapshot();
+      const payload = await deserializeSnapshot(data);
+
+      // Restore graph
+      onProgress({ phase: 'parsing', percent: 40, message: 'Restoring graph...' });
+      const { restoreGraphFromPayload, restoreFileContents } = await getSnapshot();
+      const graph = restoreGraphFromPayload(payload);
+      const fileContentsMap = restoreFileContents(payload);
+
+      // Set worker state
+      storedFileContents = fileContentsMap;
+      currentGraphResult = {
+        graph,
+        fileContents: fileContentsMap,
+        communityResult: { communities: [], memberships: [], stats: { totalCommunities: 0, modularity: 0, nodesProcessed: 0 } },
+        processResult: { processes: [], steps: [], stats: { totalProcesses: 0, crossCommunityCount: 0, avgStepCount: 0, entryPointsFound: 0 } },
+      };
+      projectPath = path;
+
+      // Rebuild BM25 from file contents (fast, ~100ms)
+      onProgress({ phase: 'imports', percent: 60, message: 'Rebuilding search index...' });
+      const { buildBM25Index } = await getSearch();
+      buildBM25Index(storedFileContents);
+
+      // Restore KuzuDB
+      onProgress({ phase: 'calls', percent: 70, message: 'Restoring graph database...' });
+      try {
+        const { restoreKuzuFromSnapshot } = await import('../core/snapshot/kuzu-restorer');
+        await restoreKuzuFromSnapshot(payload);
+      } catch (err) {
+        console.warn('[prowl:snapshot] KuzuDB restore failed (non-fatal):', err);
+      }
+
+      // Set embedding state and warm model in background
+      const hasEmbeddings = payload.embeddings.length > 0;
+      if (hasEmbeddings) {
+        isEmbeddingComplete = true;
+        // Non-blocking: warm the embedding model so semantic search has zero cold-start
+        warmEmbeddingModel().catch(console.warn);
+      }
+
+      onProgress({
+        phase: 'complete',
+        percent: 100,
+        message: `Loaded from cache! ${payload.meta.nodeCount} nodes, ${payload.meta.relationshipCount} edges`,
+        stats: {
+          filesProcessed: payload.meta.fileCount,
+          totalFiles: payload.meta.fileCount,
+          nodesCreated: payload.meta.nodeCount,
+        },
+      });
+
+      return {
+        nodes: payload.nodes,
+        relationships: payload.relationships,
+        fileContents: payload.fileContents,
+        hasEmbeddings,
+      };
+    } catch (err) {
+      console.warn('[prowl:snapshot] Load failed:', err);
+      return null;
+    }
+  },
+
+  /**
+   * Apply an incremental update based on file changes.
+   * Reads changed files from disk via IPC, updates the graph, and returns updated result.
+   */
+  async incrementalUpdate(
+    diff: { added: string[]; modified: string[]; deleted: string[]; isGitRepo: boolean },
+    folderPath: string,
+    onProgress: (progress: PipelineProgress) => void,
+  ): Promise<SerializablePipelineResult | null> {
+    if (!currentGraphResult) return null;
+
+    const prowl = (globalThis as any).window?.prowl ?? (globalThis as any).prowl;
+    if (!prowl?.fs?.readFile) return null;
+
+    try {
+      // Read changed/added files from disk
+      const newFileContents = new Map<string, string>();
+      const filesToRead = [...diff.added, ...diff.modified];
+      for (const filePath of filesToRead) {
+        try {
+          const content = await prowl.fs.readFile(`${folderPath}/${filePath}`);
+          newFileContents.set(filePath, content);
+        } catch {
+          // File might be binary or unreadable — skip
+        }
+      }
+
+      const { applyIncrementalUpdate } = await import('../core/snapshot/incremental-updater');
+      const result = await applyIncrementalUpdate(
+        diff,
+        newFileContents,
+        currentGraphResult.graph,
+        currentGraphResult.fileContents,
+        onProgress,
+      );
+
+      // Update worker state
+      currentGraphResult = result;
+      storedFileContents = result.fileContents;
+
+      // Rebuild BM25
+      const { buildBM25Index } = await getSearch();
+      buildBM25Index(storedFileContents);
+
+      // Reload KuzuDB
+      try {
+        const kuzu = await getKuzuAdapter();
+        await kuzu.loadGraphToKuzu(result.graph, result.fileContents);
+      } catch {
+        // KuzuDB is optional
+      }
+
+      return serializePipelineResult(result);
+    } catch (err) {
+      console.warn('[prowl:snapshot] Incremental update failed:', err);
+      return null;
+    }
+  },
+
+  /**
+   * Save the current project state as a snapshot to disk.
+   * Requires projectPath to be set and a graph to be loaded.
+   */
+  async saveSnapshot(path: string): Promise<{ success: boolean; size: number }> {
+    if (!currentGraphResult) {
+      return { success: false, size: 0 };
+    }
+
+    const { saveProjectSnapshot } = await getSnapshot();
+    let kuzuQueryFn: ((cypher: string) => Promise<any[]>) | undefined;
+
+    try {
+      const kuzu = await getKuzuAdapter();
+      if (kuzu.isKuzuReady()) {
+        kuzuQueryFn = kuzu.executeQuery;
+      }
+    } catch { /* no kuzu */ }
+
+    // Get prowl version from package.json (injected by Vite as env)
+    const prowlVersion = (import.meta.env.VITE_APP_VERSION as string) || 'unknown';
+
+    const projectName = path.split('/').filter(Boolean).pop() || 'project';
+
+    const result = await saveProjectSnapshot(
+      path,
+      currentGraphResult.graph,
+      currentGraphResult.fileContents,
+      projectName,
+      prowlVersion,
+      kuzuQueryFn,
+    );
+
+    return { success: result.success, size: result.size };
   },
 
   /**

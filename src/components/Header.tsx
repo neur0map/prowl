@@ -1,4 +1,4 @@
-import { Search, Settings, PanelRight, RefreshCw, Rocket } from 'lucide-react';
+import { Search, Settings, PanelRight, RefreshCw, Rocket, Database } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { GraphNode } from '../core/graph/types';
@@ -29,6 +29,7 @@ export const Header = ({ onFocusNode, onRefreshGraph, onOpenRoadmap }: HeaderPro
     isRightPanelOpen,
     setRightPanelOpen,
     setSettingsPanelOpen,
+    loadedFromSnapshot,
   } = useAppState();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -113,6 +114,12 @@ export const Header = ({ onFocusNode, onRefreshGraph, onOpenRoadmap }: HeaderPro
               <span className="w-1.5 h-1.5 bg-node-function rounded-full opacity-70" />
               <span className="truncate max-w-[180px]">{projectName}</span>
             </div>
+            {loadedFromSnapshot && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] text-text-muted bg-white/[0.04] border border-white/[0.06]">
+                <Database className="w-3 h-3" />
+                Cached
+              </div>
+            )}
             {onRefreshGraph && (
               <button
                 onClick={onRefreshGraph}

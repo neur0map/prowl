@@ -240,6 +240,37 @@ const checkOllamaStatus = async (baseUrl: string) => {
   } catch { return { ok: false, error: 'Not running. Start with: ollama serve' }; }
 };
 
+// ── Storage Management Section ──
+const StorageSection = () => {
+  const [diskUsage, setDiskUsage] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+
+  const prowl = typeof window !== 'undefined' ? (window as any).prowl : null;
+  const hasSnapshot = !!prowl?.snapshot;
+
+  useEffect(() => {
+    if (!hasSnapshot) return;
+    // We can't easily list all projects without a known base path,
+    // so just show a "Clear all" button and generic info
+  }, [hasSnapshot]);
+
+  if (!hasSnapshot) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-white/[0.06]">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[12px] text-text-muted font-medium">Snapshot Cache</span>
+      </div>
+      <p className="text-[11px] text-text-muted/60 mb-2">
+        Prowl caches project snapshots in each project's <code className="text-text-muted/80">.prowl/</code> folder for instant re-opening.
+      </p>
+      <div className="text-[11px] text-text-muted/50">
+        To clear a project's cache, delete its <code className="text-text-muted/70">.prowl/</code> directory.
+      </div>
+    </div>
+  );
+};
+
 // ════════════════════════════════════════
 // Settings Panel
 // ════════════════════════════════════════
@@ -578,6 +609,9 @@ export const SettingsPanel = ({ isOpen, onClose, onSettingsSaved }: SettingsPane
           </>}
 
           </div>{/* end keyed animation wrapper */}
+
+          {/* Storage Section */}
+          <StorageSection />
         </div>
 
         {/* ── Footer ── */}

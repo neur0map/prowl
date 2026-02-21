@@ -1,6 +1,6 @@
 {
   "name": "prowl",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Prowl — Code Knowledge Graph Explorer",
   "main": "dist/main/index.js",
   "type": "module",
@@ -50,6 +50,7 @@
     "mermaid": "^11.12.2",
     "minisearch": "^7.2.0",
     "mnemonist": "^0.39.0",
+    "msgpackr": "^1.11.8",
     "node-pty": "^1.1.0",
     "pandemonium": "^2.4.0",
     "react": "^18.3.1",

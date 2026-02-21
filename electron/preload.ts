@@ -117,6 +117,36 @@ const prowlApi = {
     },
   },
 
+  // Snapshot persistence
+  snapshot: {
+    write: (projectPath: string, data: Uint8Array): Promise<void> =>
+      ipcRenderer.invoke('snapshot:write', projectPath, data),
+    read: (projectPath: string): Promise<Uint8Array | null> =>
+      ipcRenderer.invoke('snapshot:read', projectPath),
+    writeMeta: (projectPath: string, meta: object): Promise<void> =>
+      ipcRenderer.invoke('snapshot:writeMeta', projectPath, meta),
+    readMeta: (projectPath: string): Promise<object | null> =>
+      ipcRenderer.invoke('snapshot:readMeta', projectPath),
+    writeManifest: (projectPath: string, manifest: object): Promise<void> =>
+      ipcRenderer.invoke('snapshot:writeManifest', projectPath, manifest),
+    readManifest: (projectPath: string): Promise<object | null> =>
+      ipcRenderer.invoke('snapshot:readManifest', projectPath),
+    exists: (projectPath: string): Promise<boolean> =>
+      ipcRenderer.invoke('snapshot:exists', projectPath),
+    verify: (data: Uint8Array, hmac: string): Promise<boolean> =>
+      ipcRenderer.invoke('snapshot:verify', data, hmac),
+    generateHMAC: (data: Uint8Array): Promise<string> =>
+      ipcRenderer.invoke('snapshot:generateHMAC', data),
+    ensureGitignore: (projectPath: string): Promise<void> =>
+      ipcRenderer.invoke('snapshot:ensureGitignore', projectPath),
+    deleteProject: (projectPath: string): Promise<void> =>
+      ipcRenderer.invoke('snapshot:deleteProject', projectPath),
+    diskUsage: (projectPath: string): Promise<number> =>
+      ipcRenderer.invoke('snapshot:diskUsage', projectPath),
+    detectChanges: (projectPath: string, gitCommit: string | null, manifest: object): Promise<any> =>
+      ipcRenderer.invoke('snapshot:detectChanges', projectPath, gitCommit, manifest),
+  },
+
   // Update checker
   updater: {
     check: (): Promise<UpdateInfo | null> =>

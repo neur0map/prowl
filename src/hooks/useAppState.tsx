@@ -175,6 +175,15 @@ interface AppState {
   agentWatcherState: AgentWatcherState;
   startAgentWatcher: (workspacePath: string, logPath?: string) => Promise<void>;
   stopAgentWatcher: () => Promise<void>;
+
+  // Snapshot persistence
+  projectPath: string | null;
+  setProjectPath: (path: string | null) => void;
+  loadedFromSnapshot: boolean;
+  setLoadedFromSnapshot: (loaded: boolean) => void;
+  saveSnapshot: (path: string) => Promise<{ success: boolean; size: number }>;
+  loadSnapshot: (path: string, onProgress: (p: PipelineProgress) => void) => Promise<PipelineResult | null>;
+  incrementalUpdate: (diff: any, folderPath: string, onProgress: (p: PipelineProgress) => void) => Promise<PipelineResult | null>;
 }
 
 const AppStateContext = createContext<AppState | null>(null);
@@ -284,6 +293,8 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
 
   // Project info
   const [projectName, setProjectName] = useState<string>('');
+  const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [loadedFromSnapshot, setLoadedFromSnapshot] = useState(false);
 
   // Embedding state
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus>('idle');
@@ -560,6 +571,50 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
       return await api.isReady();
     } catch {
       return false;
+    }
+  }, [ensureWorker]);
+
+  // Snapshot methods
+  const saveSnapshot = useCallback(async (path: string): Promise<{ success: boolean; size: number }> => {
+    const api = ensureWorker();
+    return api.saveSnapshot(path);
+  }, [ensureWorker]);
+
+  const loadSnapshot = useCallback(async (
+    path: string,
+    onProgress: (p: PipelineProgress) => void,
+  ): Promise<PipelineResult | null> => {
+    const api = ensureWorker();
+    const proxiedOnProgress = Comlink.proxy(onProgress);
+    try {
+      const rawResult = await api.loadSnapshot(path, proxiedOnProgress);
+      if (!rawResult) return null;
+
+      // Set embedding status if snapshot had embeddings
+      const { hasEmbeddings, ...serializedResult } = rawResult;
+      if (hasEmbeddings) {
+        setEmbeddingStatus('ready');
+      }
+
+      return deserializePipelineResult(serializedResult, createKnowledgeGraph);
+    } catch {
+      return null;
+    }
+  }, [ensureWorker]);
+
+  const incrementalUpdate = useCallback(async (
+    diff: { added: string[]; modified: string[]; deleted: string[]; isGitRepo: boolean },
+    folderPath: string,
+    onProgress: (p: PipelineProgress) => void,
+  ): Promise<PipelineResult | null> => {
+    const api = ensureWorker();
+    const proxiedOnProgress = Comlink.proxy(onProgress);
+    try {
+      const serializedResult = await api.incrementalUpdate(diff, folderPath, proxiedOnProgress);
+      if (!serializedResult) return null;
+      return deserializePipelineResult(serializedResult, createKnowledgeGraph);
+    } catch {
+      return null;
     }
   }, [ensureWorker]);
 
@@ -1177,6 +1232,14 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     agentWatcherState,
     startAgentWatcher,
     stopAgentWatcher,
+    // Snapshot persistence
+    projectPath,
+    setProjectPath,
+    loadedFromSnapshot,
+    setLoadedFromSnapshot,
+    saveSnapshot,
+    loadSnapshot,
+    incrementalUpdate,
   };
 
   return (

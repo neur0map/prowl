@@ -5,6 +5,9 @@ import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
+
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 
 export default defineConfig({
   main: {
@@ -73,6 +76,7 @@ export default defineConfig({
     },
     define: {
       global: 'globalThis',
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
     },
     optimizeDeps: {
       exclude: ['kuzu-wasm'],

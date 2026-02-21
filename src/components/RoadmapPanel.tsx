@@ -80,6 +80,36 @@ const roadmapItems: RoadmapItem[] = [
     category: 'core',
   },
 
+  // Core Features - Completed (v0.1.2)
+  {
+    id: 'core-snapshot',
+    title: 'Snapshot Persistence',
+    description: 'Persist knowledge graph, search index, and embeddings to disk for instant re-open',
+    status: 'completed',
+    category: 'core',
+  },
+  {
+    id: 'core-incremental',
+    title: 'Incremental Re-indexing',
+    description: 'Git-aware diffing — only re-process changed files on re-open',
+    status: 'completed',
+    category: 'core',
+  },
+  {
+    id: 'core-embedding-warm',
+    title: 'Embedding Model Warm-on-Boot',
+    description: 'Pre-load embedding model from snapshot so semantic search has zero cold-start',
+    status: 'completed',
+    category: 'core',
+  },
+  {
+    id: 'core-hmac',
+    title: 'Snapshot Integrity (HMAC)',
+    description: 'HMAC-SHA256 signing with machine-local key via OS keychain',
+    status: 'completed',
+    category: 'core',
+  },
+
   // Chat & Context - In Progress
   {
     id: 'chat-injection',

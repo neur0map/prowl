@@ -38,6 +38,13 @@ const AppContent = () => {
     isCodePanelOpen,
     startAgentWatcher,
     agentWatcherState,
+    setProjectPath,
+    setLoadedFromSnapshot,
+    loadedFromSnapshot,
+    saveSnapshot,
+    loadSnapshot,
+    incrementalUpdate,
+    projectPath: currentProjectPath,
   } = useAppState();
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -145,12 +152,96 @@ const AppContent = () => {
     }
   }, [setViewMode, setGraph, setFileContents, setProgress, setProjectName, runPipelineFromFiles, startEmbeddings, initializeAgent]);
 
-  // Local folder load — runs pipeline then auto-starts the file watcher
+  // Local folder load — checks for snapshot, runs pipeline, then auto-starts the file watcher
   const handleFolderLoad = useCallback(async (files: FileEntry[], folderPath: string) => {
     pendingFolderPathRef.current = folderPath;
+    setProjectPath(folderPath);
     const projectName = folderPath.split('/').filter(Boolean).pop() || 'project';
 
     setProjectName(projectName);
+    setLoadedFromSnapshot(false);
+
+    // Check for existing snapshot
+    const hasSnapshot = (window as any).prowl?.snapshot
+      ? await (window as any).prowl.snapshot.exists(folderPath)
+      : false;
+
+    if (hasSnapshot) {
+      setProgress({ phase: 'extracting', percent: 0, message: 'Loading cached snapshot...', detail: 'Verifying integrity' });
+      setViewMode('loading');
+
+      const result = await loadSnapshot(folderPath, (progress) => {
+        setProgress(progress);
+      });
+
+      if (result) {
+        // Check for incremental changes since snapshot
+        let needsIncrementalUpdate = false;
+        try {
+          const prowlSnapshot = (window as any).prowl?.snapshot;
+          if (prowlSnapshot) {
+            const meta = await prowlSnapshot.readMeta(folderPath) as any;
+            const manifest = await prowlSnapshot.readManifest(folderPath);
+            if (meta && manifest) {
+              const diff = await prowlSnapshot.detectChanges(folderPath, meta.gitCommit, manifest);
+              const totalChanges = (diff.added?.length || 0) + (diff.modified?.length || 0) + (diff.deleted?.length || 0);
+              if (totalChanges > 0) {
+                needsIncrementalUpdate = true;
+                setProgress({ phase: 'structure', percent: 5, message: `Updating ${totalChanges} changed files...` });
+
+                // Run incremental update via hook
+                const updatedResult = await incrementalUpdate(diff, folderPath, (p) => setProgress(p));
+
+                if (updatedResult) {
+                  setGraph(updatedResult.graph);
+                  setFileContents(updatedResult.fileContents);
+                } else {
+                  // Incremental failed — use snapshot as-is
+                  setGraph(result.graph);
+                  setFileContents(result.fileContents);
+                }
+
+                // Re-save snapshot with updated state
+                saveSnapshot(folderPath).catch(console.warn);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[prowl:snapshot] Incremental check failed:', err);
+        }
+
+        if (!needsIncrementalUpdate) {
+          setGraph(result.graph);
+          setFileContents(result.fileContents);
+        }
+
+        setViewMode('exploring');
+        setLoadedFromSnapshot(true);
+
+        if (getActiveProviderConfig()) {
+          initializeAgent(projectName);
+        }
+
+        // Embedding status is set by the worker during loadSnapshot
+        // but we still need to attempt auto-start if they weren't in the snapshot
+        startEmbeddings().catch((err) => {
+          if (err?.name === 'WebGPUNotAvailableError' || err?.message?.includes('WebGPU')) {
+            startEmbeddings('wasm').catch(console.warn);
+          } else {
+            console.warn('Embeddings auto-start failed:', err);
+          }
+        });
+
+        // Auto-start the file watcher
+        startAgentWatcher(folderPath).catch((err) => {
+          console.warn('Auto-watcher failed to start:', err);
+        });
+
+        return; // Skip full pipeline
+      }
+      // Snapshot load failed — fall through to full pipeline
+    }
+
     setProgress({ phase: 'extracting', percent: 0, message: 'Starting...', detail: 'Preparing to process files' });
     setViewMode('loading');
 
@@ -179,6 +270,9 @@ const AppContent = () => {
       startAgentWatcher(folderPath).catch((err) => {
         console.warn('Auto-watcher failed to start:', err);
       });
+
+      // Non-blocking background save of snapshot
+      saveSnapshot(folderPath).catch(console.warn);
     } catch (error) {
       console.error('Pipeline error:', error);
       setProgress({
@@ -192,7 +286,7 @@ const AppContent = () => {
         setProgress(null);
       }, 3000);
     }
-  }, [setViewMode, setGraph, setFileContents, setProgress, setProjectName, runPipelineFromFiles, startEmbeddings, initializeAgent, startAgentWatcher]);
+  }, [setViewMode, setGraph, setFileContents, setProgress, setProjectName, runPipelineFromFiles, startEmbeddings, initializeAgent, startAgentWatcher, setProjectPath, setLoadedFromSnapshot, loadSnapshot, saveSnapshot, incrementalUpdate]);
 
   const handleFocusNode = useCallback((nodeId: string) => {
     graphCanvasRef.current?.focusNode(nodeId);

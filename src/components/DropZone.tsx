@@ -22,6 +22,7 @@ export const DropZone = ({ onFileSelect, onGitClone, onFolderLoad }: DropZonePro
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [folderPath, setFolderPath] = useState('');
+  const [cloneMode, setCloneMode] = useState<'explore' | 'persistent'>('explore');
 
   const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -296,7 +297,31 @@ export const DropZone = ({ onFileSelect, onGitClone, onFolderLoad }: DropZonePro
               <p className="mt-2 text-[11px] text-text-muted text-center">Token stays local, never sent to any server</p>
             )}
 
-            <div className="mt-3 flex justify-center gap-2 text-[11px] text-text-muted">
+            <div className="mt-3 flex items-center justify-center gap-2 text-[11px]">
+              <button
+                onClick={() => setCloneMode('explore')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  cloneMode === 'explore'
+                    ? 'bg-accent/15 text-accent border border-accent/30'
+                    : 'bg-white/[0.06] text-text-muted border border-white/[0.08] hover:text-text-secondary'
+                }`}
+              >
+                Explore only
+              </button>
+              <span className="text-text-muted/30">|</span>
+              <button
+                onClick={() => setCloneMode('persistent')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  cloneMode === 'persistent'
+                    ? 'bg-accent/15 text-accent border border-accent/30'
+                    : 'bg-white/[0.06] text-text-muted border border-white/[0.08] hover:text-text-secondary'
+                }`}
+              >
+                Keep local copy
+              </button>
+            </div>
+
+            <div className="mt-2 flex justify-center gap-2 text-[11px] text-text-muted">
               <span className="px-2 py-1 rounded bg-white/[0.06] border border-white/[0.08]">
                 {githubToken ? 'Private + Public' : 'Public repos'}
               </span>

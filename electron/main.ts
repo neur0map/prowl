@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from
 import { join } from 'path'
 import { homedir } from 'os'
 import { readdir, readFile, writeFile, stat } from 'fs/promises'
+import { SnapshotIO } from './snapshot-io'
 import { WorkspaceWatcher } from './watcher'
 import { LogParser } from './parser'
 import { ClaudeLogWatcher } from './claude-log-watcher'
@@ -117,6 +118,7 @@ let claudeWatcher: ClaudeLogWatcher | null = null
 let processMonitor: ProcessFileMonitor | null = null
 let openclawClient: OpenClawWSClient | null = null
 const terminalManager = new TerminalManager()
+const snapshotIO = new SnapshotIO()
 
 // ── Secure Storage (safeStorage) ──
 // Encrypts API keys using OS keychain (macOS Keychain, Windows DPAPI, Linux libsecret)
@@ -380,6 +382,60 @@ app.whenReady().then(() => {
   ipcMain.handle('fs:writeFile', async (_, filePath: string, content: string) => {
     const resolved = resolvePath(filePath)
     await writeFile(resolved, content, 'utf-8')
+  })
+
+  // ── Snapshot Persistence Handlers ──
+  ipcMain.handle('snapshot:write', async (_, projectPath: string, data: Uint8Array) => {
+    await snapshotIO.writeSnapshot(projectPath, data)
+  })
+
+  ipcMain.handle('snapshot:read', async (_, projectPath: string) => {
+    return snapshotIO.readSnapshot(projectPath)
+  })
+
+  ipcMain.handle('snapshot:writeMeta', async (_, projectPath: string, meta: object) => {
+    await snapshotIO.writeMeta(projectPath, meta)
+  })
+
+  ipcMain.handle('snapshot:readMeta', async (_, projectPath: string) => {
+    return snapshotIO.readMeta(projectPath)
+  })
+
+  ipcMain.handle('snapshot:writeManifest', async (_, projectPath: string, manifest: object) => {
+    await snapshotIO.writeManifest(projectPath, manifest)
+  })
+
+  ipcMain.handle('snapshot:readManifest', async (_, projectPath: string) => {
+    return snapshotIO.readManifest(projectPath)
+  })
+
+  ipcMain.handle('snapshot:exists', async (_, projectPath: string) => {
+    return snapshotIO.snapshotExists(projectPath)
+  })
+
+  ipcMain.handle('snapshot:verify', async (_, data: Uint8Array, hmac: string) => {
+    return snapshotIO.verifyHMAC(data, hmac)
+  })
+
+  ipcMain.handle('snapshot:generateHMAC', async (_, data: Uint8Array) => {
+    return snapshotIO.generateHMAC(data)
+  })
+
+  ipcMain.handle('snapshot:ensureGitignore', async (_, projectPath: string) => {
+    await snapshotIO.ensureGitignore(projectPath)
+  })
+
+  ipcMain.handle('snapshot:deleteProject', async (_, projectPath: string) => {
+    await snapshotIO.deleteSnapshot(projectPath)
+  })
+
+  ipcMain.handle('snapshot:diskUsage', async (_, projectPath: string) => {
+    return snapshotIO.getDiskUsage(projectPath)
+  })
+
+  ipcMain.handle('snapshot:detectChanges', async (_, projectPath: string, gitCommit: string | null, manifest: object) => {
+    const { detectChanges } = await import('./diff-detector')
+    return detectChanges(projectPath, gitCommit, manifest as any)
   })
 
   // Terminal handlers
