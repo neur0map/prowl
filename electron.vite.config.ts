@@ -67,7 +67,7 @@ export default defineConfig({
         },
         output: {
           manualChunks: {
-            'vendor-graph': ['graphology', 'graphology-communities-louvain', '@xyflow/react', 'elkjs'],
+            'vendor-graph': ['graphology', 'graphology-communities-louvain', '@xyflow/react'],
             'vendor-editor': ['@monaco-editor/react'],
             'vendor-mermaid': ['mermaid'],
             'vendor-react': ['react', 'react-dom'],
@@ -103,7 +103,7 @@ export default defineConfig({
     },
     optimizeDeps: {
       noDiscovery: true,
-      exclude: ['kuzu-wasm', 'elkjs'],
+      exclude: ['kuzu-wasm'],
       include: [
         'base64-js',
         'buffer',
@@ -135,8 +135,6 @@ export default defineConfig({
         'pandemonium/random',
 
         '@xyflow/react',
-        'elkjs/lib/elk.bundled.js',
-
         '@langchain/core/messages',
         '@langchain/core/language_models/chat_models',
         '@langchain/core/tools',
