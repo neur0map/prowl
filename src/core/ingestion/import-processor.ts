@@ -20,6 +20,7 @@ const CANDIDATE_EXTENSIONS = [
   '.cs',
   '.go',
   '.rs', '/mod.rs',
+  '.swift',
 ];
 
 /**

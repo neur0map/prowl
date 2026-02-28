@@ -62,6 +62,20 @@ function determineExportStatus(node: any, name: string, lang: string): boolean {
 
   if (lang === 'c' || lang === 'cpp') return false;
 
+  /* Swift: internal is the default access level (visible to other files).
+     Only private/fileprivate symbols are non-exported. */
+  if (lang === 'swift') {
+    let cur2 = node;
+    while (cur2) {
+      if (cur2.type === 'modifiers' || cur2.type === 'modifier') {
+        const txt = cur2.text;
+        if (txt?.includes('private') || txt?.includes('fileprivate')) return false;
+      }
+      cur2 = cur2.parent;
+    }
+    return true;
+  }
+
   let cur = node;
   while (cur) {
     const t = cur.type;

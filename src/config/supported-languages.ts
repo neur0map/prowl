@@ -10,6 +10,7 @@ export enum SupportedLanguages {
     C = 'c',
     CPlusPlus = 'cpp',
     CSharp = 'csharp',
+    Swift = 'swift',
 }
 
 /* ── Human-readable labels per language ─────────────── */
@@ -24,6 +25,7 @@ export const LANG_LABELS: Record<SupportedLanguages, string> = {
     [SupportedLanguages.C]: 'C',
     [SupportedLanguages.CPlusPlus]: 'C++',
     [SupportedLanguages.CSharp]: 'C#',
+    [SupportedLanguages.Swift]: 'Swift',
 };
 
 /** @deprecated Use LANG_LABELS instead */
