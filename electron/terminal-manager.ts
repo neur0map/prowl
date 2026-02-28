@@ -65,11 +65,15 @@ export class TerminalManager {
     this.terminals.set(id, instance)
 
     ptyProcess.onData((data) => {
-      this.window?.webContents.send('terminal:data', { id, data })
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.webContents.send('terminal:data', { id, data })
+      }
     })
 
     ptyProcess.onExit(({ exitCode }) => {
-      this.window?.webContents.send('terminal:exit', { id, exitCode })
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.webContents.send('terminal:exit', { id, exitCode })
+      }
       this.terminals.delete(id)
     })
 
