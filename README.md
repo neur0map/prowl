@@ -22,6 +22,13 @@ See what your AI coder is actually doing — a live visual map of your entire pr
 
 <img src="public/media/focus-graph.png" alt="Prowl Focus Graph" width="800" />
 
+<br />
+
+<a href="https://www.youtube.com/watch?v=zMJWWZqRlX0">
+  <img src="https://img.youtube.com/vi/zMJWWZqRlX0/maxresdefault.jpg" alt="Prowl Demo" width="800" />
+</a>
+
+<sub>Click to watch on YouTube</sub>
 
 </div>
 
@@ -79,7 +86,7 @@ You're shipping with AI writing most of the code. Claude, Codex, or Gemini runni
 - **GitHub import** — Paste a repo URL to explore it without cloning.
 - **Smart search** — Find code by meaning, not just keywords.
 - **Snapshot restore** — Re-open projects instantly. Git-aware incremental updates re-index only what changed.
-- **Multi-language** — JavaScript, TypeScript, Python, Java, Go, Rust, C, C++, C# — with full support for structs, enums, traits, impls, macros, and more.
+- **Multi-language** — JavaScript, TypeScript, Python, Java, Go, Rust, C, C++, C#, Swift — with full support for structs, enums, traits, impls, macros, and more.
 - **Works offline** — Everything runs locally on your machine. No data leaves your computer.
 - **⚡ MCP Server** — Your AI coder queries Prowl's knowledge graph instead of reading hundreds of files. One tool call instead of thirty. **~98% fewer tokens.** Big codebases benefit the most. [Details below →](#mcp-let-your-ai-coder-use-prowls-brain)
 
@@ -276,7 +283,7 @@ You can also paste a **GitHub URL** to explore any public repo without downloadi
 
 ## Supported Languages
 
-JavaScript, TypeScript, Python, Java, Go, Rust, C, C++, C#
+JavaScript, TypeScript, Python, Java, Go, Rust, C, C++, C#, Swift
 
 Prowl understands language-specific constructs: structs, enums, traits, impls, macros, typedefs, unions, namespaces, templates, modules, and more — not just functions and classes.
 
