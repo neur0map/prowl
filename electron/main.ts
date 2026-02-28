@@ -29,6 +29,8 @@ const IGNORED_DIRS = new Set([
   'dist', 'build', 'out', 'target', '.next', '.nuxt', '.vercel',
   'coverage', '.nyc_output', 'logs', 'tmp', 'temp', 'cache', '.cache',
   '.idea', '.vscode', '.vs', '.DS_Store',
+  'DerivedData', '.build', 'Build', 'Products', 'release', 'releases',
+  'Pods', 'Carthage', '.swiftpm', 'xcuserdata',
 ])
 
 const IGNORED_EXTENSIONS = new Set([

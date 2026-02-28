@@ -5,6 +5,7 @@
 
 import { createCodeGraph } from '../graph/graph';
 import type { FileEntry } from '../../types/file-entry';
+import { shouldIgnorePath } from '../../config/ignore-service';
 import { processStructure } from './structure-processor';
 import { processParsing } from './parsing-processor';
 import { processImports, createImportMap } from './import-processor';
@@ -210,26 +211,30 @@ export async function runPipelineFromFiles(
   const cleanup = () => { cache.clear(); symbols.clear(); };
 
   try {
-    for (const f of files) fileContents.set(f.path, f.content);
+    /* Filter out files from ignored directories/patterns that slipped past
+       the main-process scanner (e.g. node_modules, build output, binary assets). */
+    const filtered = files.filter(f => !shouldIgnorePath(f.path));
 
-    emit(onProgress, 'extracting', 15, 'Source files loaded', { stats: snap(0, files.length, 0) });
+    for (const f of filtered) fileContents.set(f.path, f.content);
 
-    buildTree(graph, files, onProgress);
-    await parseSymbols(graph, files, symbols, cache, onProgress);
-    await linkImports(graph, files, cache, impMap, onProgress);
-    await linkCalls(graph, files, cache, symbols, impMap, onProgress);
-    await linkHeritage(graph, files, cache, symbols, onProgress);
+    emit(onProgress, 'extracting', 15, 'Source files loaded', { stats: snap(0, filtered.length, 0) });
 
-    const communityResult = await detectCommunities(graph, files.length, onProgress);
+    buildTree(graph, filtered, onProgress);
+    await parseSymbols(graph, filtered, symbols, cache, onProgress);
+    await linkImports(graph, filtered, cache, impMap, onProgress);
+    await linkCalls(graph, filtered, cache, symbols, impMap, onProgress);
+    await linkHeritage(graph, filtered, cache, symbols, onProgress);
+
+    const communityResult = await detectCommunities(graph, filtered.length, onProgress);
     applyCommunities(graph, communityResult);
 
-    const processResult = await detectProcesses(graph, communityResult.memberships, files.length, onProgress);
+    const processResult = await detectProcesses(graph, communityResult.memberships, filtered.length, onProgress);
     applyProcesses(graph, processResult);
 
     emit(
       onProgress, 'complete', 100,
       `Graph complete! ${communityResult.stats.totalCommunities} communities, ${processResult.stats.totalProcesses} processes detected.`,
-      { stats: snap(files.length, files.length, graph.nodeCount) },
+      { stats: snap(filtered.length, filtered.length, graph.nodeCount) },
     );
 
     cache.clear();
