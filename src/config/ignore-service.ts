@@ -16,6 +16,7 @@ const compiledOutput = {
     'coverage', '.nyc_output', 'htmlcov', '.coverage',
     '__tests__', '__mocks__', '.jest',
     'logs', 'log', 'tmp', 'temp', 'cache', '.cache', '.tmp', '.temp',
+    'DerivedData', '.build', 'Build', 'Products', 'release', 'releases',
   ],
   extensions: [
     '.exe', '.dll', '.so', '.dylib', '.a', '.lib', '.o', '.obj',
@@ -36,6 +37,7 @@ const packageDeps = {
     'venv', '.venv', 'env', '.env',
     '__pycache__', '.pytest_cache', '.mypy_cache', 'site-packages',
     '.tox', 'eggs', '.eggs', 'lib64', 'parts', 'sdist', 'wheels',
+    'Pods', 'Carthage', '.swiftpm', 'xcuserdata',
   ],
   extensions: [
     '.lock',
