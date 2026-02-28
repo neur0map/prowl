@@ -1,4 +1,4 @@
-import * as http from 'isomorphic-git/http/web';
+import * as webHttp from 'isomorphic-git/http/web';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import { shouldIgnorePath } from '../config/ignore-service';
 import type { FileEntry } from '../types/file-entry';
@@ -9,6 +9,59 @@ const loadIsomorphicGit = async () => {
   const m = await import('isomorphic-git');
   return m.default || m;
 };
+
+/* ── HTTP client that routes through Electron main process ── */
+// Avoids CORS — main process uses Electron net (Chromium networking, no CORS).
+// Falls back to isomorphic-git/http/web in pure-browser mode.
+
+const electronHttpClient = {
+  async request(config: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: AsyncIterableIterator<Uint8Array>;
+  }) {
+    // Collect request body chunks into a single array
+    let bodyBytes: number[] = [];
+    if (config.body) {
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of config.body) {
+        chunks.push(chunk);
+      }
+      if (chunks.length > 0) {
+        const total = chunks.reduce((s, c) => s + c.length, 0);
+        const merged = new Uint8Array(total);
+        let offset = 0;
+        for (const c of chunks) {
+          merged.set(c, offset);
+          offset += c.length;
+        }
+        bodyBytes = Array.from(merged);
+      }
+    }
+
+    const res = await window.prowl.git.httpRequest({
+      url: config.url,
+      method: config.method || 'GET',
+      headers: config.headers || {},
+      body: bodyBytes.length > 0 ? bodyBytes : undefined,
+    });
+
+    // Convert response body back to async iterable of Uint8Array
+    const responseBody = new Uint8Array(res.body);
+    return {
+      url: config.url,
+      method: config.method || 'GET',
+      statusCode: res.statusCode,
+      statusMessage: res.statusMessage,
+      headers: res.headers,
+      body: [responseBody],
+    };
+  },
+};
+
+const isElectron = typeof window !== 'undefined' && !!(window as any).prowl?.git;
+const http = isElectron ? electronHttpClient : webHttp;
 
 /* ── Virtual filesystem singleton ───────────────────── */
 
