@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell, net } from 'electron'
 import { join, relative } from 'path'
 import { homedir } from 'os'
 import { readdir, readFile, writeFile, stat } from 'fs/promises'
@@ -606,6 +606,58 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('conversation:delete', async (_, projectPath: string, conversationId: string) => {
     await deleteConversation(projectPath, conversationId)
+  })
+
+  // Git HTTP proxy — routes isomorphic-git requests through main process to avoid CORS
+  ipcMain.handle('git:http-request', async (_, opts: {
+    url: string
+    method: string
+    headers: Record<string, string>
+    body?: number[] // Uint8Array serialised as plain array over IPC
+  }) => {
+    return new Promise<{
+      statusCode: number
+      statusMessage: string
+      headers: Record<string, string>
+      body: number[]
+    }>((resolve, reject) => {
+      const request = net.request({
+        url: opts.url,
+        method: opts.method || 'GET',
+      })
+
+      // Copy request headers
+      for (const [k, v] of Object.entries(opts.headers || {})) {
+        request.setHeader(k, v)
+      }
+
+      const chunks: Buffer[] = []
+
+      request.on('response', (response) => {
+        response.on('data', (chunk: Buffer) => chunks.push(chunk))
+        response.on('end', () => {
+          const flat: Record<string, string> = {}
+          const raw = response.headers as Record<string, string | string[]>
+          for (const [k, v] of Object.entries(raw)) {
+            flat[k] = Array.isArray(v) ? v.join(', ') : (v ?? '')
+          }
+          resolve({
+            statusCode: response.statusCode,
+            statusMessage: response.statusMessage ?? '',
+            headers: flat,
+            body: Array.from(Buffer.concat(chunks)),
+          })
+        })
+        response.on('error', reject)
+      })
+
+      request.on('error', reject)
+
+      if (opts.body && opts.body.length > 0) {
+        request.write(Buffer.from(opts.body))
+      }
+      request.end()
+    })
   })
 
   // OAuth handlers

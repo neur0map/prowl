@@ -196,6 +196,21 @@ const prowlApi = {
     },
   },
 
+  // Git HTTP proxy (avoids CORS in renderer)
+  git: {
+    httpRequest: (opts: {
+      url: string
+      method: string
+      headers: Record<string, string>
+      body?: number[]
+    }): Promise<{
+      statusCode: number
+      statusMessage: string
+      headers: Record<string, string>
+      body: number[]
+    }> => ipcRenderer.invoke('git:http-request', opts),
+  },
+
   // MCP (Model Context Protocol) bridge
   mcp: {
     configureClaudeCode: (): Promise<{ success: boolean; path?: string; error?: string }> =>
