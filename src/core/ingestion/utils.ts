@@ -23,6 +23,7 @@ const SUFFIX_TABLE: ReadonlyArray<[string, SupportedLanguages]> = [
   ['.cs',   SupportedLanguages.CSharp],
   ['.go',   SupportedLanguages.Go],
   ['.rs',   SupportedLanguages.Rust],
+  ['.swift', SupportedLanguages.Swift],
 ];
 
 /**

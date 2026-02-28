@@ -345,6 +345,40 @@ const rsQueries = `
 (impl_item trait: (generic_type type: (type_identifier) @heritage.trait) type: (type_identifier) @heritage.class) @heritage
 `;
 
+/* ── Swift ──────────────────────────────────────────────── */
+
+const swiftQueries = `
+; class_declaration covers class, struct, enum, and actor in this grammar
+(class_declaration "class" name: (type_identifier) @name) @definition.class
+(class_declaration "struct" name: (type_identifier) @name) @definition.struct
+(class_declaration "enum" name: (type_identifier) @name) @definition.enum
+(class_declaration "actor" name: (type_identifier) @name) @definition.class
+
+; protocols
+(protocol_declaration
+  name: (type_identifier) @name) @definition.interface
+
+; functions (top-level and methods)
+(function_declaration
+  name: (simple_identifier) @name) @definition.function
+
+; properties
+(property_declaration
+  (pattern (simple_identifier) @name)) @definition.property
+
+; imports
+(import_declaration (identifier) @import.source) @import
+
+; calls
+(call_expression
+  (simple_identifier) @call.name) @call
+
+(call_expression
+  (navigation_expression
+    (navigation_suffix
+      (simple_identifier) @call.name))) @call
+`;
+
 /* ── Dispatch table ─────────────────────────────────────── */
 
 export const LANGUAGE_QUERIES: Record<SupportedLanguages, string> = {
@@ -357,4 +391,5 @@ export const LANGUAGE_QUERIES: Record<SupportedLanguages, string> = {
   [SupportedLanguages.CPlusPlus]: cppQueries,
   [SupportedLanguages.CSharp]: csQueries,
   [SupportedLanguages.Rust]: rsQueries,
+  [SupportedLanguages.Swift]: swiftQueries,
 };
