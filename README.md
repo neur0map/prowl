@@ -6,7 +6,7 @@
 
 **Your second monitor while AI writes the code.**
 
-See what your AI coder is actually doing — a live visual map of your entire project that lights up as files change.
+See what your AI coder is actually doing — a live architecture map of your entire project that rebuilds as files change.
 
 [![Version](https://img.shields.io/github/v/tag/neur0map/prowl?label=version)](https://github.com/neur0map/prowl/releases)
 [![Beta](https://img.shields.io/badge/status-beta-orange.svg)](#)
@@ -36,7 +36,7 @@ See what your AI coder is actually doing — a live visual map of your entire pr
 
 ## What is Prowl?
 
-Prowl is a desktop app that sits next to your AI coding tool. You open your project, and Prowl builds an interactive map of every file, function, and connection. When your AI starts writing code, you watch the map update live.
+Prowl is a desktop app that sits next to your AI coding tool. You open your project, and Prowl builds an architecture map — clusters of related files grouped by zone (frontend, backend, config, etc.). When your AI starts writing code, the map live-reindexes as files change.
 
 **It works with any AI coder:** Claude Code, Cursor, Codex, Gemini CLI, Aider, Windsurf — anything that edits files.
 
@@ -53,7 +53,7 @@ Prowl is a desktop app that sits next to your AI coding tool. You open your proj
          |
 3. Run your AI coder (in Prowl's terminal or your own)
          |
-4. Watch files light up as they change
+4. Watch clusters update as files change
          |
 5. Curious about something? Ask Prowl's chat
 ```
@@ -68,21 +68,21 @@ You're shipping with AI writing most of the code. Claude, Codex, or Gemini runni
 
 | Without Prowl | With Prowl |
 |---------------|------------|
-| Staring at terminal output, guessing what changed | See files light up on a map in real time |
+| Staring at terminal output, guessing what changed | See your architecture map live-reindex as files change |
 | Asking your AI coder "what does this file do?" (wasting tokens) | Ask Prowl instead — it knows your whole codebase |
 | Searching through folders for "the thing that handles login" | The map shows connections, the chat finds it instantly |
-| No idea if the AI broke something | See which files were touched and how they connect |
+| No idea if the AI broke something | See which clusters were affected and how they connect |
 | Want to look at a GitHub repo before cloning | Paste the URL into Prowl and browse it visually |
 
 ---
 
 ## Features
 
-- **Live graph** — Your entire project as an interactive map. Nodes light up as files change.
+- **Live architecture map** — Your project as clustered cards grouped by zone. The graph live-reindexes as files change.
 - **Built-in terminal** — Run Claude Code, Aider, or any tool right inside Prowl.
 - **Ask questions** — Chat about your codebase without burning tokens in your main AI.
 - **Conversation history** — Chat sessions persist across restarts. Context auto-compacts so you never hit the limit.
-- **Code viewer** — Click any node to read the code. Edit if you need to.
+- **Code viewer** — Click any cluster to browse its files and code. Edit if you need to.
 - **GitHub import** — Paste a repo URL to explore it without cloning.
 - **Smart search** — Find code by meaning, not just keywords.
 - **Snapshot restore** — Re-open projects instantly. Git-aware incremental updates re-index only what changed.
@@ -273,9 +273,9 @@ You only need to do this once. Code signing is coming soon.
 1. **Open Prowl**
 2. **Drop a folder** onto the window (or click to browse)
 3. **Wait a few seconds** while Prowl maps your project
-4. **Explore the graph** — zoom, pan, click on nodes
+4. **Explore the map** — zoom, pan, click on clusters
 5. **Open the terminal tab** and start your AI coder
-6. **Watch the graph** update as your AI makes changes
+6. **Watch the map** live-reindex as your AI makes changes
 
 You can also paste a **GitHub URL** to explore any public repo without downloading it.
 
