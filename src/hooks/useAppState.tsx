@@ -15,6 +15,7 @@ import { estimateHistoryTokens, COMPACTION_THRESHOLD } from '../core/llm/agent';
 import { DEFAULT_VISIBLE_EDGES, type EdgeType } from '../lib/constants';
 import { useAgentWatcher, type ToolEvent } from './useAgentWatcher';
 import type { McpToolName } from '../mcp/types';
+import { createComparisonTimer, type ComparisonTimer } from '../core/compare/compare-timer';
 
 export interface AgentWatcherState {
   activeNodeIds: Set<string>;
@@ -179,6 +180,9 @@ interface AppState {
 
   // Live update status
   isLiveUpdating: boolean;
+
+  // Comparison timer (expiry timestamp for StatusBar countdown)
+  comparisonExpiresAt: number | null;
 
   // Agent Watcher (Electron only)
   agentWatcherState: AgentWatcherState;
@@ -490,6 +494,44 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     return fileNode?.id;
   }, [graph, normalizePath]);
 
+  const extractNodeIdsFromTool = useCallback((
+    toolName: string,
+    args: Record<string, unknown>,
+    result?: string,
+  ): Set<string> => {
+    const ids = new Set<string>();
+    const addPath = (raw: string) => {
+      if (!raw) return;
+      const resolved = resolveFilePath(raw);
+      if (!resolved) return;
+      const nodeId = findFileNodeId(resolved);
+      if (nodeId) ids.add(nodeId);
+    };
+
+    // Extract from args (available at tool_call time, before result)
+    if (toolName === 'read') {
+      if (typeof args.filePath === 'string') addPath(args.filePath);
+    } else if (toolName === 'impact' || toolName === 'explore') {
+      if (typeof args.target === 'string') addPath(args.target);
+    }
+
+    // Extract from result text (available at tool_result time)
+    if (result) {
+      if (toolName === 'grep') {
+        const lines = result.split('\n');
+        for (const line of lines) {
+          const match = line.match(/^(.+?\.\w+):(\d+):/);
+          if (match) addPath(match[1]);
+        }
+      } else if (toolName === 'search') {
+        const fileMatches = result.matchAll(/^\s+File:\s+(.+?)(?:\s*\(|$)/gm);
+        for (const m of fileMatches) addPath(m[1].trim());
+      }
+    }
+
+    return ids;
+  }, [resolveFilePath, findFileNodeId]);
+
   // Code References methods
   const addCodeReference = useCallback((ref: Omit<CodeReference, 'id'>) => {
     const id = `ref-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -581,10 +623,16 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // ── Comparison timer ──
+  const comparisonTimerRef = useRef<ComparisonTimer | null>(null);
+  const [comparisonExpiresAt, setComparisonExpiresAt] = useState<number | null>(null);
+
   // MCP handler: receives tool requests from main process via contextBridge callback.
   // Same pattern as onFileActivity, onToolEvent, terminal.onData — proven IPC flow.
   const projectNameRef = useRef(projectName);
   projectNameRef.current = projectName;
+  const projectPathRef = useRef(projectPath);
+  projectPathRef.current = projectPath;
 
   useEffect(() => {
     let toolHandlersModule: typeof import('../mcp/tool-handlers') | null = null;
@@ -612,12 +660,36 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
             if (!toolHandlersModule) {
               toolHandlersModule = await import('../mcp/tool-handlers');
             }
+
+            // Reset comparison idle timer on compare tool access
+            if (toolName === 'compare' || toolName.startsWith('compare-')) {
+              comparisonTimerRef.current?.reset();
+              const ea = comparisonTimerRef.current?.getExpiresAt() ?? null;
+              if (ea) setComparisonExpiresAt(ea);
+            }
+
             const result = await toolHandlersModule.executeMcpTool(
               api,
               toolName as McpToolName,
               req.params,
-              { projectName: projectNameRef.current || undefined },
+              { projectName: projectNameRef.current || undefined, projectPath: projectPathRef.current || undefined },
             );
+
+            // Start comparison idle timer when compare tool succeeds
+            if (toolName === 'compare' && result.success && !comparisonTimerRef.current) {
+              comparisonTimerRef.current = createComparisonTimer(async () => {
+                try {
+                  const workerApi = apiRef.current;
+                  if (workerApi) {
+                    workerApi.closeComparison();
+                  }
+                } catch { /* cleanup is best-effort */ }
+                comparisonTimerRef.current = null;
+                setComparisonExpiresAt(null);
+              });
+              setComparisonExpiresAt(comparisonTimerRef.current.getExpiresAt());
+            }
+
             window.prowl.mcp.sendResult(requestId, result);
           } catch (err) {
             window.prowl.mcp.sendResult(requestId, {
@@ -1206,6 +1278,25 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     try {
       const onChunk = Comlink.proxy((chunk: AgentStreamChunk) => {
         switch (chunk.type) {
+          case 'thinking':
+            if (chunk.thinking) {
+              const lastStep = stepsForMessage[stepsForMessage.length - 1];
+              if (lastStep && lastStep.type === 'thinking') {
+                stepsForMessage[stepsForMessage.length - 1] = {
+                  ...lastStep,
+                  content: (lastStep.content || '') + chunk.thinking,
+                };
+              } else {
+                stepsForMessage.push({
+                  id: `step-${stepCounter++}`,
+                  type: 'thinking',
+                  content: chunk.thinking,
+                });
+              }
+              updateMessage();
+            }
+            break;
+
           case 'reasoning':
             if (chunk.reasoning) {
               const lastStep = stepsForMessage[stepsForMessage.length - 1];
@@ -1326,6 +1417,19 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
               });
               setCurrentToolCalls(prev => [...prev, tc]);
               updateMessage();
+
+              // Highlight cluster cards for files being accessed
+              const earlyIds = extractNodeIdsFromTool(tc.name, tc.args);
+              if (earlyIds.size > 0) {
+                setAIToolHighlightedNodeIds(prev => new Set([...prev, ...earlyIds]));
+                setTimeout(() => {
+                  setAIToolHighlightedNodeIds(prev => {
+                    const next = new Set(prev);
+                    for (const id of earlyIds) next.delete(id);
+                    return next;
+                  });
+                }, 3000);
+              }
             }
             break;
 
@@ -1385,6 +1489,23 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
               });
 
               updateMessage();
+
+              // Extract file paths from tool results for highlighting
+              if (tc.result) {
+                const originalTc = toolCallsForMessage.find(t => t.id === tc.id || (t.name === tc.name && t.result === tc.result));
+                const argsToUse = originalTc?.args || tc.args;
+                const resultIds = extractNodeIdsFromTool(tc.name, argsToUse, tc.result);
+                if (resultIds.size > 0) {
+                  setAIToolHighlightedNodeIds(prev => new Set([...prev, ...resultIds]));
+                  setTimeout(() => {
+                    setAIToolHighlightedNodeIds(prev => {
+                      const next = new Set(prev);
+                      for (const id of resultIds) next.delete(id);
+                      return next;
+                    });
+                  }, 3000);
+                }
+              }
 
               // Detect [HIGHLIGHT_NODES:...] and [IMPACT:...] markers in tool output
               if (tc.result) {
@@ -1493,7 +1614,7 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
       setIsChatLoading(false);
       setCurrentToolCalls([]);
     }
-  }, [chatMessages, isAgentReady, initializeAgent, resolveFilePath, findFileNodeId, addCodeReference, resetCodeRefs, resetToolHighlights, graph, embeddingStatus, ensureWorker, buildAgentMessage, compactedSummary, projectPath, conversationId, buildToolSummary]);
+  }, [chatMessages, isAgentReady, initializeAgent, resolveFilePath, findFileNodeId, extractNodeIdsFromTool, addCodeReference, resetCodeRefs, resetToolHighlights, graph, embeddingStatus, ensureWorker, buildAgentMessage, compactedSummary, projectPath, conversationId, buildToolSummary]);
 
   const stopChatResponse = useCallback(() => {
     if (workerRef.current && apiRef.current && isChatLoading) {
@@ -1699,6 +1820,7 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
     clearCodeReferences,
     codeReferenceFocus,
     isLiveUpdating,
+    comparisonExpiresAt,
     agentWatcherState,
     startAgentWatcher,
     stopAgentWatcher,

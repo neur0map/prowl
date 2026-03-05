@@ -371,6 +371,15 @@ export async function* streamAgentResponse(
           if (typeof rawContent === 'string') {
             content = rawContent;
           } else if (Array.isArray(rawContent)) {
+            // Extract thinking blocks (extended thinking models)
+            const thinkingBlocks = rawContent
+              .filter((block: any) => block.type === 'thinking')
+              .map((block: any) => block.thinking || '')
+              .join('');
+            if (thinkingBlocks) {
+              yield { type: 'thinking', thinking: thinkingBlocks };
+            }
+
             content = rawContent
               .filter((block: any) => block.type === 'text' || typeof block === 'string')
               .map((block: any) => typeof block === 'string' ? block : block.text || '')

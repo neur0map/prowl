@@ -2,6 +2,10 @@ import { app, BrowserWindow, dialog, ipcMain, safeStorage, session, shell, net }
 import { join, relative } from 'path'
 import { homedir } from 'os'
 import { readdir, readFile, writeFile, stat } from 'fs/promises'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+
+const execFileAsync = promisify(execFile)
 import { SnapshotIO } from './snapshot-io'
 import { WorkspaceWatcher } from './watcher'
 import { LogParser } from './parser'
@@ -658,6 +662,99 @@ app.whenReady().then(async () => {
       }
       request.end()
     })
+  })
+
+  // Git diff — returns changed file paths for a given scope
+  ipcMain.handle('git:diff-files', async (_, projectPath: string, scope: string, baseRef?: string) => {
+    const cwd = resolvePath(projectPath)
+    try {
+      let args: string[]
+      switch (scope) {
+        case 'staged':
+          args = ['diff', '--staged', '--name-only']
+          break
+        case 'branch': {
+          if (!baseRef) throw new Error('base_ref is required when scope is "branch"')
+          args = ['diff', `${baseRef}...HEAD`, '--name-only']
+          break
+        }
+        case 'all': {
+          // Combine HEAD diff + untracked files
+          const [diffResult, untrackedResult] = await Promise.all([
+            execFileAsync('git', ['diff', 'HEAD', '--name-only'], { cwd, maxBuffer: 1024 * 1024 }),
+            execFileAsync('git', ['ls-files', '--others', '--exclude-standard'], { cwd, maxBuffer: 1024 * 1024 }),
+          ])
+          const files = new Set<string>()
+          for (const line of diffResult.stdout.split('\n')) {
+            const trimmed = line.trim()
+            if (trimmed) files.add(trimmed)
+          }
+          for (const line of untrackedResult.stdout.split('\n')) {
+            const trimmed = line.trim()
+            if (trimmed) files.add(trimmed)
+          }
+          return Array.from(files)
+        }
+        case 'working':
+        default:
+          args = ['diff', '--name-only']
+          break
+      }
+      const { stdout } = await execFileAsync('git', args, { cwd, maxBuffer: 1024 * 1024 })
+      return stdout.split('\n').map(l => l.trim()).filter(Boolean)
+    } catch (err: any) {
+      // Non-git directory or git error
+      if (err.stderr?.includes('not a git repository')) {
+        return []
+      }
+      throw new Error(`git diff failed: ${err.message}`)
+    }
+  })
+
+  // ── GitHub REST API handlers (Compare Mode) ──
+
+  ipcMain.handle('github:repo-info', async (_, owner: string, repo: string, token?: string) => {
+    const headers: Record<string, string> = { 'Accept': 'application/vnd.github+json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const response = await net.fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers })
+    if (!response.ok) throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
+    const data = await response.json()
+    return {
+      defaultBranch: data.default_branch,
+      fullName: data.full_name,
+      description: data.description || '',
+    }
+  })
+
+  ipcMain.handle('github:repo-tree', async (_, owner: string, repo: string, branch: string, token?: string) => {
+    const headers: Record<string, string> = { 'Accept': 'application/vnd.github+json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const response = await net.fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+      { headers },
+    )
+    if (!response.ok) throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
+    const data = await response.json()
+
+    const entries = (data.tree || []).map((item: any) => ({
+      path: item.path,
+      type: item.type === 'tree' ? 'dir' : 'file',
+      size: item.size ?? 0,
+    }))
+
+    return { entries, truncated: !!data.truncated }
+  })
+
+  ipcMain.handle('github:read-file', async (_, owner: string, repo: string, branch: string, filePath: string, token?: string) => {
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`
+    const response = await net.fetch(url, { headers })
+    if (!response.ok) throw new Error(`GitHub raw fetch error: ${response.status} ${response.statusText}`)
+    return await response.text()
   })
 
   // OAuth handlers

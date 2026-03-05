@@ -19,7 +19,13 @@ export type McpToolName =
   | 'chat-history'
   | 'ask'
   | 'investigate'
-  | 'status';
+  | 'status'
+  | 'compare'
+  | 'compare-file-tree'
+  | 'compare-read-file'
+  | 'compare-grep'
+  | 'compare-summary'
+  | 'detect-changes';
 
 /* ── Input shapes per tool ─────────────────────────────── */
 
@@ -82,6 +88,34 @@ export interface InvestigateParams {
 
 export type StatusParams = Record<string, never>;
 
+export interface CompareParams {
+  repo_url: string;
+  token?: string;
+  branch?: string;
+}
+
+export interface CompareFileTreeParams {
+  dir_path?: string;
+}
+
+export interface CompareReadFileParams {
+  file_path: string;
+}
+
+export interface CompareGrepParams {
+  pattern: string;
+  file_filter?: string;
+  case_sensitive?: boolean;
+  max_results?: number;
+}
+
+export type CompareSummaryParams = Record<string, never>;
+
+export interface DetectChangesParams {
+  scope?: 'working' | 'staged' | 'all' | 'branch';
+  base_ref?: string;
+}
+
 /* ── Param union map ───────────────────────────────────── */
 
 export interface McpToolParamMap {
@@ -98,6 +132,12 @@ export interface McpToolParamMap {
   'ask': AskParams;
   'investigate': InvestigateParams;
   'status': StatusParams;
+  'compare': CompareParams;
+  'compare-file-tree': CompareFileTreeParams;
+  'compare-read-file': CompareReadFileParams;
+  'compare-grep': CompareGrepParams;
+  'compare-summary': CompareSummaryParams;
+  'detect-changes': DetectChangesParams;
 }
 
 /* ── Request / Response envelopes ──────────────────────── */

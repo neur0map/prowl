@@ -87,6 +87,13 @@ let isEmbeddingComplete = false;
 /* Full source text map — powers the grep and read tools */
 let storedFileContents: Map<string, string> = new Map();
 
+/* ── Comparison project state (lightweight GitHub REST API) ── */
+import type { ComparisonMeta, ComparisonTreeEntry, ComparisonStats } from '../core/compare/types';
+
+let comparisonMeta: ComparisonMeta | null = null;
+let comparisonTree: ComparisonTreeEntry[] | null = null;
+let comparisonFileCache: Map<string, string> = new Map();
+
 /* Path of the loaded project (used by snapshot I/O) */
 let projectPath: string | null = null;
 
@@ -1168,6 +1175,137 @@ const workerApi = {
       if (chunk.type === 'error') throw new Error(chunk.error);
     }
     return chunks.join('');
+  },
+
+  /* ── Compare Mode methods (lightweight GitHub REST API) ── */
+
+  loadComparison(meta: ComparisonMeta, tree: ComparisonTreeEntry[]): void {
+    comparisonMeta = meta;
+    comparisonTree = tree;
+    comparisonFileCache = new Map();
+  },
+
+  closeComparison(): void {
+    comparisonMeta = null;
+    comparisonTree = null;
+    comparisonFileCache = new Map();
+  },
+
+  isComparisonLoaded(): boolean {
+    return comparisonMeta !== null && comparisonTree !== null;
+  },
+
+  getComparisonMeta(): ComparisonMeta | null {
+    return comparisonMeta;
+  },
+
+  getComparisonStats(): ComparisonStats | null {
+    if (!comparisonMeta || !comparisonTree) return null;
+    const fileCount = comparisonTree.filter(e => e.type === 'file').length;
+    const dirCount = comparisonTree.filter(e => e.type === 'dir').length;
+    const totalSize = comparisonTree.reduce((sum, e) => sum + e.size, 0);
+    return {
+      repoName: comparisonMeta.repoName,
+      repoUrl: comparisonMeta.repoUrl,
+      description: comparisonMeta.description,
+      fileCount,
+      dirCount,
+      totalSize,
+      cachedFileCount: comparisonFileCache.size,
+    };
+  },
+
+  getComparisonTree(dirPath?: string): ComparisonTreeEntry[] {
+    if (!comparisonTree) return [];
+    if (!dirPath) {
+      // Top-level: return immediate children of root
+      const topLevel: ComparisonTreeEntry[] = [];
+      const seen = new Set<string>();
+      for (const entry of comparisonTree) {
+        const slashIdx = entry.path.indexOf('/');
+        if (slashIdx === -1) {
+          // Direct top-level entry (file or dir)
+          if (!seen.has(entry.path)) {
+            seen.add(entry.path);
+            topLevel.push(entry);
+          }
+        } else {
+          // Nested entry — synthesize parent dir if not already seen
+          const topDir = entry.path.substring(0, slashIdx);
+          if (!seen.has(topDir)) {
+            seen.add(topDir);
+            topLevel.push({ path: topDir, type: 'dir', size: 0 });
+          }
+        }
+      }
+      return topLevel;
+    }
+    // Scoped: return immediate children of dirPath
+    const prefix = dirPath.endsWith('/') ? dirPath : dirPath + '/';
+    const children: ComparisonTreeEntry[] = [];
+    const seen = new Set<string>();
+    for (const entry of comparisonTree) {
+      if (!entry.path.startsWith(prefix)) continue;
+      const rest = entry.path.substring(prefix.length);
+      if (!rest) continue; // skip the directory entry itself
+      const slashIdx = rest.indexOf('/');
+      if (slashIdx === -1) {
+        if (!seen.has(entry.path)) {
+          seen.add(entry.path);
+          children.push(entry);
+        }
+      } else {
+        const childDir = prefix + rest.substring(0, slashIdx);
+        if (!seen.has(childDir)) {
+          seen.add(childDir);
+          children.push({ path: childDir, type: 'dir', size: 0 });
+        }
+      }
+    }
+    return children;
+  },
+
+  cacheComparisonFile(path: string, content: string): void {
+    comparisonFileCache.set(path, content);
+  },
+
+  getComparisonFile(path: string): string | null {
+    return comparisonFileCache.get(path) ?? null;
+  },
+
+  grepComparison(
+    pattern: string,
+    fileFilter?: string,
+    caseSensitive?: boolean,
+    maxResults?: number,
+  ): Array<{ file: string; line: number; content: string }> {
+    const regexFlags = caseSensitive ? 'g' : 'gi';
+    let compiledPattern: RegExp;
+    try {
+      compiledPattern = new RegExp(pattern, regexFlags);
+    } catch {
+      throw new Error(`Invalid regex pattern: ${pattern}`);
+    }
+    const cap = maxResults ?? 100;
+    const hits: Array<{ file: string; line: number; content: string }> = [];
+
+    for (const [fp, body] of comparisonFileCache.entries()) {
+      if (fileFilter && !fp.toLowerCase().includes(fileFilter.toLowerCase())) continue;
+      const sourceLines = body.split('\n');
+      for (let lineIdx = 0; lineIdx < sourceLines.length; lineIdx++) {
+        if (compiledPattern.test(sourceLines[lineIdx])) {
+          hits.push({
+            file: fp,
+            line: lineIdx + 1,
+            content: sourceLines[lineIdx].trim().slice(0, 150),
+          });
+          if (hits.length >= cap) break;
+        }
+        compiledPattern.lastIndex = 0;
+      }
+      if (hits.length >= cap) break;
+    }
+    return hits;
   },
 };
 

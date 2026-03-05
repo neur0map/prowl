@@ -58,7 +58,7 @@ interface NavState {
 /* ── Component ────────────────────────────────────── */
 
 const ArchitectureMap = forwardRef<ArchitectureMapHandle>(function ArchitectureMap(_, ref) {
-  const { graph, setSelectedNode, selectedNode } = useAppState();
+  const { graph, setSelectedNode, selectedNode, aiToolHighlightedNodeIds } = useAppState();
   const { nodes: elkNodes, edges: elkEdges, clusters, isLayoutReady, recompute } = useElkLayout(graph);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[]);
@@ -142,19 +142,40 @@ const ArchitectureMap = forwardRef<ArchitectureMapHandle>(function ArchitectureM
     return crumbs;
   }, [nav.selectedCluster, selectedNode, handleBackToOverview]);
 
-  /* Dim non-selected clusters during drill-in */
+  /* Map graph-level highlight IDs → cluster IDs */
+  const highlightedClusterIds = useMemo(() => {
+    if (aiToolHighlightedNodeIds.size === 0) return new Set<string>();
+    const result = new Set<string>();
+    for (const c of clusters) {
+      const hit = c.files.some(f => aiToolHighlightedNodeIds.has(f.id))
+        || c.symbols.some(s => aiToolHighlightedNodeIds.has(s.id));
+      if (hit) result.add(c.id);
+    }
+    return result;
+  }, [aiToolHighlightedNodeIds, clusters]);
+
+  /* Dim non-selected clusters during drill-in + inject highlight flag */
   const styledNodes = useMemo(() => {
-    if (nav.level !== 'drillIn' || !nav.selectedCluster) return nodes;
-    return nodes.map(n => ({
-      ...n,
-      style: {
-        ...n.style,
-        opacity: n.id === nav.selectedCluster!.id ? 1 : 0.15,
-        transition: 'opacity 0.3s ease',
-        pointerEvents: (n.id === nav.selectedCluster!.id ? 'auto' : 'none') as React.CSSProperties['pointerEvents'],
-      },
-    }));
-  }, [nodes, nav]);
+    const isDrillIn = nav.level === 'drillIn' && nav.selectedCluster;
+    const hasHighlights = highlightedClusterIds.size > 0;
+
+    if (!isDrillIn && !hasHighlights) return nodes;
+
+    return nodes.map(n => {
+      const dimmed = isDrillIn && n.id !== nav.selectedCluster!.id;
+      const highlighted = n.type === 'clusterCard' && highlightedClusterIds.has(n.id);
+
+      return {
+        ...n,
+        style: dimmed
+          ? { ...n.style, opacity: 0.15, transition: 'opacity 0.3s ease', pointerEvents: 'none' as const }
+          : n.style,
+        data: highlighted
+          ? { ...n.data, isHighlighted: true }
+          : n.data,
+      };
+    });
+  }, [nodes, nav, highlightedClusterIds]);
 
   const styledEdges = useMemo(() => {
     if (nav.level !== 'drillIn') return edges;
@@ -207,16 +228,18 @@ const ArchitectureMap = forwardRef<ArchitectureMapHandle>(function ArchitectureM
         zoomOnDoubleClick={false}
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="rgba(255,255,255,0.03)" />
-        <MiniMap
-          nodeColor={(n) => {
-            const idx = clusters.findIndex(c => c.id === n.id);
-            return idx >= 0 ? getModuleColor(idx) : '#48484a';
-          }}
-          maskColor="rgba(28, 28, 30, 0.85)"
-          className="!bg-deep !border-border-subtle !rounded-lg"
-          pannable
-          zoomable
-        />
+        {clusters.length <= 60 && (
+          <MiniMap
+            nodeColor={(n) => {
+              const idx = clusters.findIndex(c => c.id === n.id);
+              return idx >= 0 ? getModuleColor(idx) : '#48484a';
+            }}
+            maskColor="rgba(28, 28, 30, 0.85)"
+            className="!bg-deep !border-border-subtle !rounded-lg"
+            pannable
+            zoomable
+          />
+        )}
         <Controls
           showInteractive={false}
           className="!bg-deep !border-border-subtle !rounded-lg !shadow-lg [&>button]:!bg-deep [&>button]:!border-border-subtle [&>button]:!fill-text-secondary hover:[&>button]:!bg-surface"

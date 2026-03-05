@@ -209,6 +209,19 @@ const prowlApi = {
       headers: Record<string, string>
       body: number[]
     }> => ipcRenderer.invoke('git:http-request', opts),
+
+    diffFiles: (projectPath: string, scope: string, baseRef?: string): Promise<string[]> =>
+      ipcRenderer.invoke('git:diff-files', projectPath, scope, baseRef),
+  },
+
+  // GitHub REST API (Compare Mode — lightweight, no disk)
+  github: {
+    getRepoInfo: (owner: string, repo: string, token?: string): Promise<{ defaultBranch: string; fullName: string; description: string }> =>
+      ipcRenderer.invoke('github:repo-info', owner, repo, token),
+    getRepoTree: (owner: string, repo: string, branch: string, token?: string): Promise<{ entries: Array<{ path: string; type: string; size: number }>; truncated: boolean }> =>
+      ipcRenderer.invoke('github:repo-tree', owner, repo, branch, token),
+    readFile: (owner: string, repo: string, branch: string, path: string, token?: string): Promise<string> =>
+      ipcRenderer.invoke('github:read-file', owner, repo, branch, path, token),
   },
 
   // MCP (Model Context Protocol) bridge

@@ -42,30 +42,17 @@ async function loadConnectionInfo(): Promise<void> {
 
 /* ── HTTP client to Prowl API ─────────────────────────── */
 
-function callProwlApi(toolName: string, params: unknown): Promise<unknown> {
-  return new Promise(async (resolve, reject) => {
-    if (!prowlPort || !prowlToken) {
-      await loadConnectionInfo()
-    }
-
-    if (!prowlPort || !prowlToken) {
-      reject(new Error(
-        'Prowl is not running. Start Prowl and load a project, then try again. ' +
-        '(Missing ~/.prowl/mcp-port or ~/.prowl/mcp-auth)'
-      ))
-      return
-    }
-
-    const body = JSON.stringify(params || {})
+function doHttpCall(toolName: string, body: string, port: number, token: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
     const req = http.request(
       {
         hostname: '127.0.0.1',
-        port: prowlPort,
+        port,
         path: `/api/${toolName}`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${prowlToken}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Length': Buffer.byteLength(body),
         },
         timeout: 120_000,
@@ -90,17 +77,7 @@ function callProwlApi(toolName: string, params: unknown): Promise<unknown> {
     )
 
     req.on('error', (err) => {
-      // Connection refused likely means Prowl isn't running
-      if ((err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
-        // Reset cached connection info so we re-read next time
-        prowlPort = null
-        prowlToken = null
-        reject(new Error(
-          'Cannot connect to Prowl. Make sure Prowl is running with a project loaded.'
-        ))
-      } else {
-        reject(err)
-      }
+      reject(err)
     })
 
     req.on('timeout', () => {
@@ -111,6 +88,43 @@ function callProwlApi(toolName: string, params: unknown): Promise<unknown> {
     req.write(body)
     req.end()
   })
+}
+
+async function callProwlApi(toolName: string, params: unknown): Promise<unknown> {
+  if (!prowlPort || !prowlToken) {
+    await loadConnectionInfo()
+  }
+
+  if (!prowlPort || !prowlToken) {
+    throw new Error(
+      'Prowl is not running. Start Prowl and load a project, then try again. ' +
+      '(Missing ~/.prowl/mcp-port or ~/.prowl/mcp-auth)'
+    )
+  }
+
+  const body = JSON.stringify(params || {})
+
+  try {
+    return await doHttpCall(toolName, body, prowlPort, prowlToken)
+  } catch (err) {
+    // On connection refused, re-read port/auth (Prowl may have restarted) and retry once
+    if ((err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
+      const oldPort = prowlPort
+      prowlPort = null
+      prowlToken = null
+      await loadConnectionInfo()
+
+      if (prowlPort && prowlToken && prowlPort !== oldPort) {
+        // Port changed — Prowl was restarted, retry with new connection info
+        return await doHttpCall(toolName, body, prowlPort, prowlToken)
+      }
+
+      throw new Error(
+        'Cannot connect to Prowl. Make sure Prowl is running with a project loaded.'
+      )
+    }
+    throw err
+  }
 }
 
 /* ── Helper to format result as MCP text content ──────── */
@@ -214,6 +228,17 @@ server.tool(
   },
 )
 
+// Tool: prowl_summary — alias for overview (most LLMs try this name first)
+server.tool(
+  'prowl_summary',
+  'Get a high-level summary of the codebase: clusters, processes, cross-cluster dependencies. Same as prowl_overview.',
+  {},
+  async () => {
+    const data = await callProwlApi('overview', {})
+    return textResult(data)
+  },
+)
+
 // Tool: prowl_overview — high-level codebase map
 server.tool(
   'prowl_overview',
@@ -307,6 +332,102 @@ server.tool(
   },
   async (params) => {
     const data = await callProwlApi('investigate', params)
+    return textResult(data)
+  },
+)
+
+// Tool: prowl_compare — load a GitHub repo for comparison (lightweight, no clone)
+server.tool(
+  'prowl_compare',
+  `Load a GitHub repo for comparison alongside the primary project.
+Fetches the file tree via GitHub REST API (no disk clone, no indexing).
+Only one comparison repo at a time — close the current one before loading another.
+After loading, use prowl_compare_file_tree to browse, prowl_compare_read_file to read files,
+prowl_compare_grep to search, and prowl_compare_summary for stats.`,
+  {
+    repo_url: z.string().describe('GitHub URL (e.g. https://github.com/owner/repo)'),
+    token: z.string().optional().describe('GitHub personal access token for private repos'),
+    branch: z.string().optional().describe('Branch (default: repo default branch)'),
+  },
+  async (params) => {
+    const data = await callProwlApi('compare', params)
+    return textResult(data)
+  },
+)
+
+// Tool: prowl_compare_file_tree — browse the comparison repo file tree
+server.tool(
+  'prowl_compare_file_tree',
+  `Browse files and directories in the comparison repo.
+Returns immediate children of the given directory (or top-level if no dir_path).
+Requires prowl_compare to be called first.`,
+  {
+    dir_path: z.string().optional().describe('Directory to list (omit for root)'),
+  },
+  async (params) => {
+    const data = await callProwlApi('compare-file-tree', params)
+    return textResult(data)
+  },
+)
+
+// Tool: prowl_compare_read_file — read a file from the comparison repo
+server.tool(
+  'prowl_compare_read_file',
+  `Read the full content of a file from the comparison repo.
+Fetches from GitHub on first access, then caches locally.
+Requires prowl_compare to be called first.`,
+  {
+    file_path: z.string().describe('File path in the comparison repo'),
+  },
+  async (params) => {
+    const data = await callProwlApi('compare-read-file', params)
+    return textResult(data)
+  },
+)
+
+// Tool: prowl_compare_grep — regex search across cached comparison files
+server.tool(
+  'prowl_compare_grep',
+  `Regex search across cached files in the comparison repo.
+Only searches files previously fetched via prowl_compare_read_file.
+Workflow: browse tree → fetch files → grep.
+Requires prowl_compare to be called first.`,
+  {
+    pattern: z.string().describe('Regex pattern to search for'),
+    file_filter: z.string().optional().describe('Only search files whose path contains this substring'),
+    case_sensitive: z.boolean().optional().describe('Match case exactly (default: false)'),
+    max_results: z.number().optional().describe('Result cap (default: 100)'),
+  },
+  async (params) => {
+    const data = await callProwlApi('compare-grep', params)
+    return textResult(data)
+  },
+)
+
+// Tool: prowl_compare_summary — stats about the comparison repo
+server.tool(
+  'prowl_compare_summary',
+  `Get summary stats for the loaded comparison repo: file count, dir count, total size, cached file count.
+Requires prowl_compare to be called first.`,
+  {},
+  async () => {
+    const data = await callProwlApi('compare-summary', {})
+    return textResult(data)
+  },
+)
+
+// Tool: prowl_changes — detect uncommitted changes and map to symbols/clusters
+server.tool(
+  'prowl_changes',
+  `Detect uncommitted code changes and map them to affected symbols and clusters.
+Scopes: "working" (unstaged, default), "staged", "all" (both + untracked), "branch" (compare against base ref).
+Returns changed files, affected symbols, impacted clusters, and risk assessment.`,
+  {
+    scope: z.enum(['working', 'staged', 'all', 'branch']).optional().describe('Change scope (default: "working")'),
+    base_ref: z.string().optional().describe('Base ref for branch comparison (required when scope is "branch")'),
+  },
+  async (params) => {
+    const data = await callProwlApi('detect-changes', params)
     return textResult(data)
   },
 )

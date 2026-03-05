@@ -61,8 +61,17 @@ const roadmapItems: RoadmapItem[] = [
   { id: 'int-graph-imports', title: 'Reliable Import Edges', description: 'All node types flow to KuzuDB, edge-preserving live updates', status: 'completed', category: 'int' },
   { id: 'int-live-pipeline', title: 'Live Update Pipeline', description: 'Chokidar watcher with debounce, concurrency guard, rollback on failure', status: 'completed', category: 'int' },
   { id: 'int-dir-events', title: 'Directory Events', description: 'Handle addDir/unlinkDir for folder create and delete during live updates', status: 'completed', category: 'int' },
+  { id: 'int-compare', title: 'Compare Mode', description: 'Load any GitHub repo via REST API for lightweight side-by-side comparison — no clone, no indexing', status: 'completed', category: 'int' },
+  { id: 'int-mcp-compare', title: 'MCP Compare Tools', description: '5 new MCP tools: browse, read, grep, and summarize a comparison repo from your AI agent', status: 'completed', category: 'int' },
+  { id: 'int-mcp-changes', title: 'MCP Change Detection', description: 'prowl_changes tool maps git diffs to affected symbols, clusters, and risk level', status: 'completed', category: 'int' },
+  { id: 'int-mcp-retry', title: 'MCP Auto-Reconnect', description: 'HTTP client retries on Prowl restart — re-reads port/auth and reconnects automatically', status: 'completed', category: 'int' },
   { id: 'int-github', title: 'GitHub PR Integration', description: 'Preview PRs with code graph context', status: 'planned', category: 'int' },
   { id: 'int-vscode', title: 'VS Code Extension', description: 'Native IDE integration', status: 'backlog', category: 'int' },
+  { id: 'graph-highlight', title: 'AI Tool Highlighting', description: 'Clusters glow and animate when AI agent accesses related files or symbols', status: 'completed', category: 'graph' },
+  { id: 'graph-perf', title: 'Graph Performance', description: 'Animated edges only when selected, MiniMap hidden for 60+ cluster graphs', status: 'completed', category: 'graph' },
+  { id: 'chat-thinking', title: 'Extended Thinking', description: 'Collapsible thinking pills show Claude model reasoning before responses', status: 'completed', category: 'chat' },
+  { id: 'ui-compare-timer', title: 'Comparison Timer', description: '30-minute countdown in status bar for shadow clone repos, turns amber under 5 minutes', status: 'completed', category: 'ui' },
+  { id: 'ui-cached-status', title: 'Cached Status Badge', description: 'Snapshot cache indicator moved to status bar with database icon', status: 'completed', category: 'ui' },
 ];
 
 const statusMark: Record<string, string> = {

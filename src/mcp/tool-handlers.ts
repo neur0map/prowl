@@ -22,7 +22,13 @@ import type {
   GetHotspotsParams,
   AskParams,
   InvestigateParams,
+  CompareParams,
+  CompareFileTreeParams,
+  CompareReadFileParams,
+  CompareGrepParams,
+  DetectChangesParams,
 } from './types';
+import { parseGitHubUrl } from '../services/git-clone';
 
 type WorkerApi = Remote<IndexerWorkerApi>;
 
@@ -46,6 +52,7 @@ export async function executeMcpTool(
   params: unknown,
   extra?: {
     projectName?: string;
+    projectPath?: string;
     chatMessages?: Array<{ role: string; content: string }>;
   },
 ): Promise<McpToolResponse> {
@@ -66,6 +73,7 @@ async function dispatch(
   params: unknown,
   extra?: {
     projectName?: string;
+    projectPath?: string;
     chatMessages?: Array<{ role: string; content: string }>;
   },
 ): Promise<unknown> {
@@ -263,6 +271,221 @@ async function dispatch(
     case 'investigate': {
       const p = params as InvestigateParams;
       return { response: await api.mcpInvestigate(p.task, p.depth) };
+    }
+
+    case 'compare': {
+      const p = params as CompareParams;
+      const parsed = parseGitHubUrl(p.repo_url);
+      if (!parsed) {
+        throw new Error('Invalid GitHub URL. Expected format: https://github.com/owner/repo');
+      }
+      const { owner, repo } = parsed;
+
+      // Only one comparison at a time
+      const existingStats = await api.getComparisonStats();
+      if (existingStats) {
+        if (existingStats.repoUrl === p.repo_url) {
+          return {
+            message: 'Comparison project already loaded.',
+            stats: existingStats,
+          };
+        }
+        throw new Error(
+          `A comparison project is already loaded ("${existingStats.repoName}"). ` +
+          'Close it first with prowl_compare_file_tree or the UI before loading another.'
+        );
+      }
+
+      // Fetch repo info + tree via GitHub REST API
+      const repoInfo = await window.prowl.github.getRepoInfo(owner, repo, p.token);
+      const branch = p.branch || repoInfo.defaultBranch;
+      const { entries, truncated } = await window.prowl.github.getRepoTree(owner, repo, branch, p.token);
+
+      const meta = {
+        owner,
+        repo,
+        branch,
+        repoName: repoInfo.fullName,
+        repoUrl: p.repo_url,
+        description: repoInfo.description,
+        token: p.token,
+      };
+
+      api.loadComparison(meta, entries);
+      const stats = await api.getComparisonStats();
+      const truncNote = truncated ? ' (tree truncated — very large repo)' : '';
+      return {
+        message: `Loaded comparison project "${repoInfo.fullName}" (${stats?.fileCount ?? 0} files, ${stats?.dirCount ?? 0} dirs).${truncNote}\nUse prowl_compare_file_tree to browse, prowl_compare_read_file to read files.`,
+        stats,
+      };
+    }
+
+    case 'compare-file-tree': {
+      const p = params as CompareFileTreeParams;
+      const loaded = await api.isComparisonLoaded();
+      if (!loaded) throw new Error('No comparison project loaded. Use prowl_compare first.');
+      const entries = await api.getComparisonTree(p.dir_path);
+      return {
+        dir_path: p.dir_path || '/',
+        entries: entries.map(e => ({
+          path: e.path,
+          type: e.type,
+          size: e.size,
+        })),
+        count: entries.length,
+      };
+    }
+
+    case 'compare-read-file': {
+      const p = params as CompareReadFileParams;
+      const loaded = await api.isComparisonLoaded();
+      if (!loaded) throw new Error('No comparison project loaded. Use prowl_compare first.');
+
+      // Check cache first
+      const cached = await api.getComparisonFile(p.file_path);
+      if (cached !== null) {
+        return { file_path: p.file_path, content: cached, cached: true };
+      }
+
+      // Fetch from GitHub
+      const meta = await api.getComparisonMeta();
+      if (!meta) throw new Error('Comparison metadata not available.');
+      const content = await window.prowl.github.readFile(
+        meta.owner, meta.repo, meta.branch, p.file_path, meta.token,
+      );
+      api.cacheComparisonFile(p.file_path, content);
+      return { file_path: p.file_path, content, cached: false };
+    }
+
+    case 'compare-grep': {
+      const p = params as CompareGrepParams;
+      const loaded = await api.isComparisonLoaded();
+      if (!loaded) throw new Error('No comparison project loaded. Use prowl_compare first.');
+      const hits = await api.grepComparison(p.pattern, p.file_filter, p.case_sensitive, p.max_results);
+      const stats = await api.getComparisonStats();
+      return {
+        hits,
+        count: hits.length,
+        note: `Searched ${stats?.cachedFileCount ?? 0} cached files. Use prowl_compare_read_file to fetch more files first.`,
+      };
+    }
+
+    case 'compare-summary': {
+      const loaded = await api.isComparisonLoaded();
+      if (!loaded) throw new Error('No comparison project loaded. Use prowl_compare first.');
+      return api.getComparisonStats();
+    }
+
+    case 'detect-changes': {
+      const p = params as DetectChangesParams;
+      const scope = p.scope || 'working';
+      const projectPath = extra?.projectPath;
+      if (!projectPath) {
+        throw new Error('No project loaded. Open a project first.');
+      }
+      if (scope === 'branch' && !p.base_ref) {
+        throw new Error('base_ref is required when scope is "branch"');
+      }
+
+      // 1. Get changed file paths via git diff IPC
+      const changedFiles = await window.prowl.git.diffFiles(projectPath, scope, p.base_ref);
+      if (changedFiles.length === 0) {
+        return {
+          summary: { changed_files: 0, affected_symbols: 0, affected_clusters: 0, risk: 'none' },
+          files: [],
+          clusters: [],
+        };
+      }
+
+      // 2. For each changed file, query KuzuDB for symbols
+      const fileResults: Array<{ path: string; symbols: string[] }> = [];
+      const allSymbolIds: string[] = [];
+
+      for (const filePath of changedFiles) {
+        const escaped = filePath.replace(/'/g, "''");
+        const rows: any[] = await api.runQuery(`
+          MATCH (n) WHERE n.filePath IS NOT NULL AND n.filePath CONTAINS '${escaped}'
+            AND label(n) <> 'File' AND label(n) <> 'Folder'
+          RETURN n.id AS id, n.name AS name
+          LIMIT 100
+        `);
+        const symbolNames = rows.map((r: any) => r.name || r[1]);
+        const symbolIds = rows.map((r: any) => r.id || r[0]);
+        fileResults.push({ path: filePath, symbols: symbolNames });
+        allSymbolIds.push(...symbolIds);
+      }
+
+      // 3. Map symbols → clusters via MEMBER_OF edges
+      const clusterMap = new Map<string, { id: string; name: string; count: number }>();
+
+      if (allSymbolIds.length > 0) {
+        // Query in batches to avoid overly long Cypher
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < allSymbolIds.length; i += BATCH_SIZE) {
+          const batch = allSymbolIds.slice(i, i + BATCH_SIZE);
+          const idList = batch.map(id => `'${String(id).replace(/'/g, "''")}'`).join(', ');
+          const clusterRows: any[] = await api.runQuery(`
+            MATCH (n)-[r:CodeEdge {type: 'MEMBER_OF'}]->(c:Community)
+            WHERE n.id IN [${idList}]
+            RETURN DISTINCT c.id AS clusterId, c.label AS clusterName, c.heuristicLabel AS hLabel
+            LIMIT 200
+          `);
+          for (const row of clusterRows) {
+            const cid = String(row.clusterId || row[0]);
+            if (!clusterMap.has(cid)) {
+              clusterMap.set(cid, {
+                id: cid,
+                name: String(row.clusterName || row.hLabel || row[1] || cid),
+                count: 0,
+              });
+            }
+          }
+        }
+
+        // Count affected symbols per cluster
+        if (clusterMap.size > 0) {
+          const idList = allSymbolIds.map(id => `'${String(id).replace(/'/g, "''")}'`).join(', ');
+          const countRows: any[] = await api.runQuery(`
+            MATCH (n)-[r:CodeEdge {type: 'MEMBER_OF'}]->(c:Community)
+            WHERE n.id IN [${idList}]
+            RETURN c.id AS clusterId, count(n) AS cnt
+            LIMIT 200
+          `);
+          for (const row of countRows) {
+            const cid = String(row.clusterId || row[0]);
+            const entry = clusterMap.get(cid);
+            if (entry) {
+              entry.count = Number(row.cnt || row[1] || 0);
+            }
+          }
+        }
+      }
+
+      // 4. Compute risk level based on cluster count
+      const clusterCount = clusterMap.size;
+      let risk: string;
+      if (clusterCount === 0) risk = 'low';
+      else if (clusterCount <= 2) risk = 'low';
+      else if (clusterCount <= 5) risk = 'medium';
+      else if (clusterCount <= 10) risk = 'high';
+      else risk = 'critical';
+
+      const totalSymbols = fileResults.reduce((sum, f) => sum + f.symbols.length, 0);
+
+      return {
+        summary: {
+          changed_files: changedFiles.length,
+          affected_symbols: totalSymbols,
+          affected_clusters: clusterCount,
+          risk,
+        },
+        files: fileResults,
+        clusters: Array.from(clusterMap.values()).map(c => ({
+          id: c.id,
+          name: c.name,
+          affected_symbols: c.count,
+        })),
+      };
     }
 
     default:
