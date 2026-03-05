@@ -4,11 +4,11 @@
 
 # Prowl
 
-**Your second monitor while AI writes the code.**
+**A knowledge graph for your codebase.**
 
-Your AI coder is editing 40 files across 6 directories. You're staring at a scrolling terminal, hoping nothing important got touched. You have no picture of what just happened.
-
-Prowl builds a live architecture map of your entire project and rebuilds it as files change. You see what changed, what's connected, and what might break — and your AI can query the same graph to skip reading hundreds of files.
+Prowl parses your project and builds a graph of every function, class,
+import, and dependency. You get a live architecture map, semantic search,
+impact analysis, and 19 tools — queryable by you or any tool you work with.
 
 [![Version](https://img.shields.io/github/v/tag/neur0map/prowl?label=version)](https://github.com/neur0map/prowl/releases)
 [![Beta](https://img.shields.io/badge/status-beta-orange.svg)](#status)
@@ -24,13 +24,11 @@ Prowl builds a live architecture map of your entire project and rebuilds it as f
 ```
 1. Download from Releases → install
 2. Open Prowl → drop your project folder
-3. Start your AI coder (in Prowl's terminal or your own)
-4. Watch the map rebuild as files change
+3. Explore the map, search, trace dependencies
+4. Optionally connect your tools via MCP
 ```
 
 ### [Download for macOS (Apple Silicon)](https://github.com/neur0map/prowl/releases/latest) · [macOS (Intel)](https://github.com/neur0map/prowl/releases/latest) · [Windows](https://github.com/neur0map/prowl/releases/latest) · [Linux](https://github.com/neur0map/prowl/releases/latest)
-
-Works with **any AI coder**: Claude Code, Cursor, Codex, Gemini CLI, Aider, Windsurf — anything that edits files.
 
 <div align="center">
 
@@ -50,93 +48,75 @@ Works with **any AI coder**: Claude Code, Cursor, Codex, Gemini CLI, Aider, Wind
 
 ## Why Prowl
 
-| Without Prowl | With Prowl |
-|---------------|------------|
-| Staring at terminal output, guessing what changed | See your architecture map live-reindex as files change |
-| AI reads 40 files to understand your project (~100K tokens) | AI calls `prowl_overview` and gets the full picture (~1K tokens) |
-| "What breaks if I refactor this?" — grep, read 30 files, pray | `prowl_impact("UserService", "upstream")` — complete answer, 1 call |
-| No idea which parts of the codebase the AI just touched | Affected clusters glow in real-time as your AI works |
-| Want to compare against another repo? Clone it, open two editors | Paste a GitHub URL, browse it side-by-side — no clone needed |
-
-**In our benchmark on a 76-file Chrome extension, Claude used ~271K tokens without Prowl vs ~5.9K with Prowl MCP — a 98% reduction.** The bigger your codebase, the more you save. [Full benchmark →](docs/mcp-benchmark.md)
-
----
-
-## Is This For You?
-
-You'll get the most out of Prowl if:
-
-- You use **Claude Code, Cursor, Codex, or any AI coder** daily
-- Your project has more than a handful of files
-- You want to **see the blast radius** before your AI commits a refactor
-- You're tired of your AI **wasting tokens** re-reading the same files
-- You want a **local-first** tool — no code leaves your machine
-
-You don't need to be a programmer to use it. If you can drag a folder onto an app, you can use Prowl.
+| Challenge | How Prowl helps |
+|-----------|-----------------|
+| New to a codebase, no idea where anything is | Drop the folder, see the architecture in seconds |
+| Need to know what breaks before refactoring | Impact analysis traces every upstream consumer |
+| Searching for "the thing that handles auth" | Semantic search finds by meaning, not keywords |
+| AI coder burning tokens re-reading your files | Connect via MCP — 1 tool call replaces 30 file reads |
+| Want to reference another repo without cloning | Compare mode loads it via GitHub API |
 
 ---
 
 ## What You Get
 
 ### Live Architecture Map
-Your project as clustered cards grouped by zone (frontend, backend, config, etc.). The graph **live-reindexes as files change** — you see AI edits land in real-time. Clusters glow when your AI agent touches related files.
+Your project as clustered cards grouped by zone (frontend, backend, config, etc.). The graph **live-reindexes as files change** — you see edits land in real-time. Clusters glow when related files are touched.
 
-### Built-in Terminal + Chat
-Run Claude Code, Aider, or any tool right inside Prowl. Ask questions about your codebase without burning tokens in your main AI. Sessions persist across restarts, context auto-compacts so you never hit the limit.
+### Query the Graph
+Semantic search finds code by meaning, not just keywords. Run Cypher queries directly against the knowledge graph. Impact analysis traces every upstream consumer before you refactor. Change detection maps uncommitted diffs to affected symbols, clusters, and a risk level.
 
-### MCP: A Graph Brain for Your AI
-19 tools your AI agent can call instead of reading hundreds of files. Architecture overview, blast radius analysis, semantic search, change detection, repo comparison — one tool call instead of thirty. **~98% fewer tokens.** [Details below →](#mcp-let-your-ai-coder-use-prowls-brain)
+### Built-in Tools
+Run commands in Prowl's terminal. Chat with your codebase using 7 providers (OpenAI, Anthropic, Gemini, Azure, Ollama, OpenRouter, Groq). Browse and edit code in the built-in viewer. Compare against any GitHub repo without cloning — paste a URL and browse side-by-side.
 
-### Compare Mode
-Paste a GitHub URL to load any repo alongside your project. Browse files, grep code, compare approaches — all via REST API with no disk clone. Auto-closes after 30 minutes of inactivity.
-
-### Change Detection
-Map your uncommitted git changes to affected symbols, clusters, and a risk level. Know what you're about to break before you commit.
-
-### Everything Else
-- **Code viewer** — Click any cluster to browse files and edit in-place
-- **Smart search** — Find code by meaning, not just keywords (semantic embeddings)
-- **Snapshot restore** — Re-open projects instantly, git-aware incremental re-indexing
-- **10 languages** — JS, TS, Python, Java, Go, Rust, C, C++, C#, Swift — structs, enums, traits, impls, macros, and more
-- **7 AI providers** — OpenAI, Anthropic, Gemini, Azure, Ollama (local), OpenRouter, Groq
-- **Works offline** — Everything runs locally. No data leaves your machine.
+### MCP Server
+Prowl exposes its knowledge graph as 19 MCP tools. Any tool that supports the Model Context Protocol can query your project's architecture, search semantically, trace dependencies, and more — without reading hundreds of files. [Details below →](#mcp-connect-your-tools-to-the-graph)
 
 ---
 
-## Example: Safe AI Refactor
+## Is This For You?
+
+- You want to see your project's architecture at a glance
+- You're onboarding to a new codebase
+- You need to know the blast radius before changing something
+- You use AI tools and want them to work smarter
+- You want everything local — nothing leaves your machine
+
+You don't need to be a programmer to use it. If you can drag a folder onto an app, you can use Prowl.
+
+---
+
+## Example: Understanding a Refactor's Blast Radius
 
 ```
-1. Open your project in Prowl. Start Claude Code in Prowl's terminal.
+1. Open your project in Prowl.
 
-2. Tell Claude: "Refactor UserService to use dependency injection."
+2. You're about to refactor UserService to use dependency injection.
 
-3. Watch Prowl's map — the Auth and API clusters glow as Claude
-   edits files. You see exactly what's being touched.
+3. Run prowl_impact("UserService", "upstream")
+   → 3 clusters affected, 12 upstream consumers.
 
-4. Before committing, Claude calls prowl_impact("UserService", "upstream")
-   → sees 3 clusters affected, 12 upstream consumers.
-
-5. Claude calls prowl_changes(scope: "all")
+4. Run prowl_changes(scope: "all")
    → 5 files changed, risk level "medium", 2 clusters impacted.
 
-6. You see the full picture. Commit with confidence.
+5. You see the full picture before touching a line of code.
 ```
 
 ---
 
-## MCP: Let Your AI Coder Use Prowl's Brain
+## MCP: Connect Your Tools to the Graph
 
 <div align="center">
 
 **Prowl has a built-in [Model Context Protocol](https://modelcontextprotocol.io) server.**
 
-Your AI coding agent connects to Prowl and queries the knowledge graph directly — instead of reading hundreds of files to understand your project.
+Prowl exposes its knowledge graph as 19 MCP tools. If you use AI coding tools, this makes them dramatically more efficient — one tool call replaces dozens of file reads.
 
 </div>
 
 ### The Problem
 
-Every time an AI coder needs to understand your project, it reads files. Lots of files. Each file read costs tokens — and tokens cost money. In a large codebase, your AI burns most of its budget just figuring out where things are.
+Every time a tool needs to understand your project, it reads files. Lots of files. Each file read costs tokens — and tokens cost money. In a large codebase, most of the budget goes to figuring out where things are.
 
 <div align="center">
 <img src="public/media/no-mcp-example.png" alt="Without MCP — excessive file reads" width="700" />
@@ -144,13 +124,13 @@ Every time an AI coder needs to understand your project, it reads files. Lots of
 </div>
 
 ```
-You: "What breaks if I refactor UserService?"
+"What breaks if I refactor UserService?"
 
-AI without Prowl:    grep → read 30 files → trace imports → read more files
-                     Result: ~100,000 tokens, 30+ tool calls, maybe misses things
+Without Prowl:    grep → read 30 files → trace imports → read more files
+                  Result: ~100,000 tokens, 30+ tool calls, maybe misses things
 
-AI with Prowl:       prowl_impact("UserService", "upstream")
-                     Result: ~1,000 tokens, 1 tool call, complete answer
+With Prowl:       prowl_impact("UserService", "upstream")
+                  Result: ~1,000 tokens, 1 tool call, complete answer
 ```
 
 ### Measured Results
@@ -159,8 +139,8 @@ AI with Prowl:       prowl_impact("UserService", "upstream")
 > - **Full project understanding:** ~84,795 tokens vs ~8,035 tokens. **90.5% reduction.**
 > - **Delegated research (8 questions):** ~134,500 tokens vs ~9,114 tokens. **93.2% reduction.**
 
-| What the AI needs | Without Prowl | With Prowl MCP | Saved |
-|:------------------|:-------------:|:--------------:|:-----:|
+| What the tool needs | Without Prowl | With Prowl MCP | Saved |
+|:--------------------|:-------------:|:--------------:|:-----:|
 | Understand project architecture | Read all files | `prowl_overview` | **96%** |
 | Blast radius of a refactor | Recursive grep + read chain | `prowl_impact` | **98%** |
 | Find code by meaning | Multiple greps + read matches | `prowl_search` | **95%** |
@@ -193,14 +173,14 @@ Token approximation: 1 token ~ 4 bytes.
 
 ### What About Prowl's Own AI Cost?
 
-`prowl_ask` and `prowl_investigate` use Prowl's internal AI agent. Your AI coder only pays for the final answer.
+`prowl_ask` and `prowl_investigate` use Prowl's internal agent. Your tool only pays for the final answer.
 
 | Prowl's LLM | `ask` cost | `investigate` cost |
 |:-------------|:----------:|:------------------:|
 | **Ollama (local)** | $0.00 | $0.00 |
 | **Groq** | $0.006 | $0.022 |
 
-With Ollama, the research is free — Prowl's AI runs on your machine while your expensive cloud AI gets a compact, pre-researched answer.
+With Ollama, the research is free — Prowl's agent runs on your machine while your expensive cloud tool gets a compact, pre-researched answer.
 
 ### 19 Tools
 
@@ -216,7 +196,7 @@ With Ollama, the research is free — Prowl's AI runs on your machine while your
 | `prowl_impact` | Blast radius for any function, class, or file |
 | `prowl_context` | Project stats, hotspots, directory tree |
 | `prowl_hotspots` | Most connected symbols |
-| `prowl_ask` | Ask Prowl's AI a question (internal agent) |
+| `prowl_ask` | Ask Prowl's agent a question (internal tools) |
 | `prowl_investigate` | Multi-step research (deeper, multiple internal tools) |
 | `prowl_changes` | Map git diffs to affected symbols, clusters, risk level |
 | `prowl_compare` | Load a GitHub repo for side-by-side comparison |
