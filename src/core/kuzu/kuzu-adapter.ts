@@ -99,7 +99,7 @@ export const initKuzu = async () => {
       await wasmLib.init();
     }
 
-    const POOL_BYTES = 1024 * 1024 * 1024; // 1 GB — 512 MB was too small for large codebases
+    const POOL_BYTES = 256 * 1024 * 1024; // 256 MB — fits within WASM 4 GB ceiling
     database = new wasmLib.Database(':memory:', POOL_BYTES);
     connection = new wasmLib.Connection(database);
 
@@ -146,7 +146,7 @@ export const loadGraphToKuzu = async (
     await wasmLib.init();
   }
 
-  const POOL_BYTES = 1024 * 1024 * 1024;
+  const POOL_BYTES = 256 * 1024 * 1024; // 256 MB — fits within WASM 4 GB ceiling
   database = new wasmLib.Database(':memory:', POOL_BYTES);
   connection = new wasmLib.Connection(database);
 

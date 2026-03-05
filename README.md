@@ -80,10 +80,13 @@ You're shipping with AI writing most of the code. Claude, Codex, or Gemini runni
 
 - **Live architecture map** — Your project as clustered cards grouped by zone. The graph live-reindexes as files change.
 - **Built-in terminal** — Run Claude Code, Aider, or any tool right inside Prowl.
-- **Ask questions** — Chat about your codebase without burning tokens in your main AI.
+- **Ask questions** — Chat about your codebase without burning tokens in your main AI. Extended thinking shows model reasoning.
 - **Conversation history** — Chat sessions persist across restarts. Context auto-compacts so you never hit the limit.
 - **Code viewer** — Click any cluster to browse its files and code. Edit if you need to.
 - **GitHub import** — Paste a repo URL to explore it without cloning.
+- **Compare mode** — Load a GitHub repo alongside your project for side-by-side analysis. REST API only — no clone, no indexing. Auto-closes after 30 minutes of inactivity.
+- **AI tool highlighting** — Clusters glow and animate in real-time when your AI agent reads files, searches, or runs impact analysis.
+- **Change detection** — Map uncommitted git changes to affected symbols, clusters, and risk level.
 - **Smart search** — Find code by meaning, not just keywords.
 - **Snapshot restore** — Re-open projects instantly. Git-aware incremental updates re-index only what changed.
 - **Multi-language** — JavaScript, TypeScript, Python, Java, Go, Rust, C, C++, C#, Swift — with full support for structs, enums, traits, impls, macros, and more.
@@ -140,7 +143,7 @@ We tested all 12 MCP tools against a real project (40 files, 242 nodes, 654 edge
 | Find code by meaning | Multiple greps + read matches | `prowl_search` | **95%** |
 | Answer a codebase question | 10+ searches + file reads | `prowl_ask` | **99%** |
 | Deep multi-step investigation | 20+ reads + manual reasoning | `prowl_investigate` | **97%** |
-| **Total (12 tool calls)** | **~271,000 tokens** | **~5,900 tokens** | **97.8%** |
+| **Total (12 core tool calls)** | **~271,000 tokens** | **~5,900 tokens** | **97.8%** |
 
 <details>
 <summary><strong>Raw data</strong></summary>
@@ -185,7 +188,7 @@ When you call `prowl_ask` or `prowl_investigate`, Prowl's internal AI agent does
 
 With Ollama, the research is literally free — Prowl's AI runs on your machine while your expensive cloud AI gets a compact, pre-researched answer.
 
-### 12 Tools Available
+### 19 Tools Available
 
 | Tool | What it does |
 |:-----|:-------------|
@@ -195,12 +198,19 @@ With Ollama, the research is literally free — Prowl's AI runs on your machine 
 | `prowl_grep` | Regex search across all indexed source files |
 | `prowl_read_file` | Read full source code with fuzzy path matching |
 | `prowl_overview` | High-level map: clusters, processes, cross-cluster dependencies |
+| `prowl_summary` | Alias for `prowl_overview` (LLMs try this name first) |
 | `prowl_explore` | Drill into a symbol, cluster, or process |
 | `prowl_impact` | Change-impact analysis (blast radius) for any function, class, or file |
 | `prowl_context` | Project stats, hotspots, and directory tree |
 | `prowl_hotspots` | Most connected symbols in the codebase |
 | `prowl_ask` | Ask Prowl's AI a question (delegates to internal agent) |
 | `prowl_investigate` | Multi-step research task (deeper, uses multiple tools internally) |
+| `prowl_changes` | Map uncommitted git changes to affected symbols, clusters, and risk level |
+| `prowl_compare` | Load a GitHub repo for lightweight side-by-side comparison |
+| `prowl_compare_file_tree` | Browse files and directories in the comparison repo |
+| `prowl_compare_read_file` | Read a file from the comparison repo (lazy-fetched, cached) |
+| `prowl_compare_grep` | Regex search across cached comparison files |
+| `prowl_compare_summary` | Stats for the loaded comparison repo |
 
 ### Setup
 
@@ -220,7 +230,7 @@ With Ollama, the research is literally free — Prowl's AI runs on your machine 
 }
 ```
 
-**Verify** — Run `/mcp` in Claude Code. Prowl should show as connected with 12 tools.
+**Verify** — Run `/mcp` in Claude Code. Prowl should show as connected with 19 tools.
 
 ---
 

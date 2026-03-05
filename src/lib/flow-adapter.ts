@@ -10,6 +10,7 @@ import { ZONE_META } from './elk-adapter';
 
 export interface ClusterNodeData {
   cluster: ClusterSummary;
+  isHighlighted?: boolean;
   [key: string]: unknown;
 }
 

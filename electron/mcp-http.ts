@@ -34,7 +34,8 @@ const DISPATCH_INTERVAL_MS = 50
 const VALID_TOOLS = new Set<McpToolName>([
   'search', 'cypher', 'grep', 'read-file', 'overview', 'explore',
   'impact', 'get-context', 'get-hotspots', 'chat-history', 'ask',
-  'investigate', 'status',
+  'investigate', 'status', 'compare',
+  'compare-file-tree', 'compare-read-file', 'compare-grep', 'compare-summary',
 ])
 
 interface QueuedRequest {
@@ -87,7 +88,7 @@ export async function startMcpHttpServer(
 
   function callRenderer(toolName: McpToolName, params: unknown): Promise<unknown> {
     const requestId = randomUUID()
-    const timeoutMs = toolName === 'ask' || toolName === 'investigate' ? REQUEST_TIMEOUT_MS : 30_000
+    const timeoutMs = toolName === 'ask' || toolName === 'investigate' || toolName === 'compare' || toolName === 'compare-read-file' ? REQUEST_TIMEOUT_MS : 30_000
 
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {

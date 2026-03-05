@@ -1,6 +1,7 @@
-import { Terminal, PanelRight } from 'lucide-react';
+import { Terminal, PanelRight, Database } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { EmbeddingStatus } from './EmbeddingStatus';
+import { useState, useEffect } from 'react';
 
 /* ── Pipeline status indicator ─────────────────────── */
 
@@ -62,6 +63,47 @@ function PipelineStatus() {
   );
 }
 
+/* ── Comparison countdown timer ──────────────────────── */
+
+function ComparisonCountdown({ expiresAt }: { expiresAt: number }) {
+  const [remaining, setRemaining] = useState('');
+
+  useEffect(() => {
+    function tick() {
+      const diff = Math.max(0, expiresAt - Date.now());
+      const mins = Math.floor(diff / 60_000);
+      const secs = Math.floor((diff % 60_000) / 1_000);
+      setRemaining(`${mins}:${secs.toString().padStart(2, '0')}`);
+    }
+    tick();
+    const id = setInterval(tick, 1_000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  const diff = Math.max(0, expiresAt - Date.now());
+  const totalMs = 30 * 60 * 1000;
+  const pct = Math.min(100, (diff / totalMs) * 100);
+  const isLow = diff < 5 * 60 * 1000;
+
+  return (
+    <div className="flex items-center gap-1.5" title={`Shadow clone expires in ${remaining}`}>
+      <div className="w-10 h-[3px] rounded-full overflow-hidden bg-white/[0.06]">
+        <div
+          className={`h-full rounded-full transition-all duration-1000 ${
+            isLow ? 'bg-amber-400/70' : 'bg-violet-400/50'
+          }`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className={`text-[10px] font-mono tabular-nums ${
+        isLow ? 'text-amber-400/70' : 'text-violet-300/50'
+      }`}>
+        {remaining}
+      </span>
+    </div>
+  );
+}
+
 /* ── Status bar ──────────────────────────────────────── */
 
 interface StatusBarProps {
@@ -71,7 +113,25 @@ interface StatusBarProps {
 }
 
 export const StatusBar = ({ isTerminalOpen, onTerminalToggle, onOpenRoadmap }: StatusBarProps) => {
-  const { graph, agentWatcherState, isRightPanelOpen, setRightPanelOpen, isLiveUpdating } = useAppState();
+  const { graph, agentWatcherState, isRightPanelOpen, setRightPanelOpen, isLiveUpdating, loadedFromSnapshot, comparisonExpiresAt, getWorkerApi } = useAppState();
+
+  // Comparison mode badge
+  const [isComparisonActive, setIsComparisonActive] = useState(false);
+  useEffect(() => {
+    const poll = async () => {
+      const api = getWorkerApi();
+      if (!api) return;
+      try {
+        const loaded = await api.isComparisonLoaded();
+        setIsComparisonActive(loaded);
+      } catch {
+        setIsComparisonActive(false);
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 10_000);
+    return () => clearInterval(interval);
+  }, [getWorkerApi]);
 
   const nodeCount = graph?.nodes.length ?? 0;
   const edgeCount = graph?.relationships.length ?? 0;
@@ -99,6 +159,21 @@ export const StatusBar = ({ isTerminalOpen, onTerminalToggle, onOpenRoadmap }: S
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-accent/70 animate-pulse" />
             <span className="text-accent/70">syncing</span>
+          </div>
+        )}
+
+        {loadedFromSnapshot && (
+          <div className="flex items-center gap-1.5" title="Loaded from snapshot cache">
+            <Database className="w-3 h-3 text-text-muted/50" />
+            <span className="text-text-muted/60">cached</span>
+          </div>
+        )}
+
+        {isComparisonActive && (
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400/70" />
+            <span className="text-violet-300/70">cmp</span>
+            {comparisonExpiresAt && <ComparisonCountdown expiresAt={comparisonExpiresAt} />}
           </div>
         )}
       </div>

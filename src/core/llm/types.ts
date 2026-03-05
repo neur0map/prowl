@@ -159,7 +159,7 @@ export interface ToolCallInfo {
 
 export interface MessageStep {
   id: string;
-  type: 'reasoning' | 'tool_call' | 'content';
+  type: 'reasoning' | 'tool_call' | 'content' | 'thinking';
   content?: string;
   toolCall?: ToolCallInfo;
 }
@@ -186,9 +186,10 @@ export interface ChatMessage {
 }
 
 export interface AgentStreamChunk {
-  type: 'reasoning' | 'tool_call' | 'tool_result' | 'content' | 'error' | 'done';
+  type: 'reasoning' | 'tool_call' | 'tool_result' | 'content' | 'thinking' | 'error' | 'done';
   reasoning?: string;
   content?: string;
+  thinking?: string;
   toolCall?: ToolCallInfo;
   error?: string;
 }

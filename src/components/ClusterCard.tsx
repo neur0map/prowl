@@ -31,7 +31,7 @@ const LANG_COLORS: Record<string, string> = {
 };
 
 function ClusterCard({ data, selected }: NodeProps) {
-  const { cluster } = data as ClusterNodeData;
+  const { cluster, isHighlighted } = data as ClusterNodeData;
   const accent = getModuleColor(cluster.communityIndex);
   const zoneMeta = ZONE_META[cluster.zone];
 
@@ -50,7 +50,7 @@ function ClusterCard({ data, selected }: NodeProps) {
       className={`
         relative rounded-2xl overflow-hidden cursor-pointer
         transition-all duration-300 ease-out group
-        ${selected ? 'scale-[1.02]' : 'hover:scale-[1.015]'}
+        ${selected ? 'scale-[1.02]' : isHighlighted ? 'scale-[1.025]' : 'hover:scale-[1.015]'}
       `}
       style={{
         width: 280,
@@ -64,19 +64,65 @@ function ClusterCard({ data, selected }: NodeProps) {
         WebkitBackdropFilter: 'blur(32px) saturate(180%)',
         border: selected
           ? `1px solid ${accent}55`
-          : '1px solid rgba(255, 255, 255, 0.07)',
+          : isHighlighted
+            ? `1px solid ${accent}66`
+            : '1px solid rgba(255, 255, 255, 0.07)',
         boxShadow: selected
           ? `0 0 0 1px ${accent}22, 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 60px ${accent}11`
-          : '0 2px 8px rgba(0, 0, 0, 0.2), 0 8px 32px rgba(0, 0, 0, 0.15)',
+          : isHighlighted
+            ? `0 0 0 1px ${accent}44, 0 4px 20px ${accent}22, 0 8px 40px rgba(0,0,0,0.4), 0 0 60px ${accent}18`
+            : '0 2px 8px rgba(0, 0, 0, 0.2), 0 8px 32px rgba(0, 0, 0, 0.15)',
       }}
     >
-      {/* Accent gradient at top */}
+      {/* Keyframes for AI tool activity */}
+      {isHighlighted && (
+        <style>{`
+          @keyframes prowl-glow-breathe {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+          }
+          @keyframes prowl-shimmer-sweep {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(200%); }
+          }
+          @keyframes prowl-border-pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.9; }
+          }
+          @keyframes prowl-dot-ping {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(2.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 0; }
+          }
+        `}</style>
+      )}
+
+      {/* Accent gradient at top — animated when highlighted */}
       <div
-        className="absolute top-0 left-0 right-0 h-[2px]"
+        className="absolute top-0 left-0 right-0"
         style={{
-          background: `linear-gradient(90deg, ${accent}, ${accent}44)`,
+          height: isHighlighted ? 3 : 2,
+          background: isHighlighted
+            ? `linear-gradient(90deg, ${accent}88, ${accent}, ${accent}88)`
+            : `linear-gradient(90deg, ${accent}, ${accent}44)`,
+          boxShadow: isHighlighted ? `0 0 12px ${accent}66, 0 0 4px ${accent}44` : undefined,
+          transition: 'all 0.3s ease',
         }}
       />
+
+      {/* Shimmer sweep across top when highlighted */}
+      {isHighlighted && (
+        <div className="absolute top-0 left-0 right-0 h-[3px] overflow-hidden pointer-events-none">
+          <div
+            style={{
+              width: '40%',
+              height: '100%',
+              background: `linear-gradient(90deg, transparent, ${accent}cc, white, ${accent}cc, transparent)`,
+              animation: 'prowl-shimmer-sweep 2s ease-in-out infinite',
+            }}
+          />
+        </div>
+      )}
 
       {/* Subtle radial glow on hover */}
       <div
@@ -86,6 +132,35 @@ function ClusterCard({ data, selected }: NodeProps) {
         }}
       />
 
+      {/* AI tool activity — layered glow */}
+      {isHighlighted && (
+        <>
+          {/* Inner ambient glow from top */}
+          <div
+            className="absolute inset-0 pointer-events-none rounded-2xl"
+            style={{
+              background: `radial-gradient(ellipse at 50% -20%, ${accent}30 0%, transparent 60%)`,
+              animation: 'prowl-glow-breathe 2s ease-in-out infinite',
+            }}
+          />
+          {/* Edge glow ring */}
+          <div
+            className="absolute -inset-[1px] pointer-events-none rounded-2xl"
+            style={{
+              border: `1px solid ${accent}55`,
+              animation: 'prowl-border-pulse 2s ease-in-out infinite',
+            }}
+          />
+          {/* Bottom reflection */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none rounded-b-2xl"
+            style={{
+              background: `linear-gradient(to top, ${accent}08, transparent)`,
+            }}
+          />
+        </>
+      )}
+
       <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-4 !h-1" />
       <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-4 !h-1" />
 
@@ -93,13 +168,24 @@ function ClusterCard({ data, selected }: NodeProps) {
         {/* Header row */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{
-                background: accent,
-                boxShadow: `0 0 8px ${accent}66`,
-              }}
-            />
+            <div className="relative w-2 h-2 shrink-0">
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{
+                  background: accent,
+                  boxShadow: isHighlighted ? `0 0 12px ${accent}` : `0 0 8px ${accent}66`,
+                }}
+              />
+              {isHighlighted && (
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background: accent,
+                    animation: 'prowl-dot-ping 1.5s ease-out infinite',
+                  }}
+                />
+              )}
+            </div>
             <span className="text-[13px] font-semibold text-text-primary truncate leading-tight">
               {cluster.name}
             </span>

@@ -54,14 +54,16 @@ function AnimatedEdge({
         className="transition-opacity duration-300"
       />
 
-      {/* Animated dot */}
-      <circle r={3} fill="#5A9EAA" opacity={Math.min(1, opacity + 0.3)}>
-        <animateMotion
-          dur={`${duration}s`}
-          repeatCount="indefinite"
-          path={edgePath}
-        />
-      </circle>
+      {/* Animated dot — only when selected to avoid 100s of concurrent SVG animations */}
+      {selected && (
+        <circle r={3} fill="#5A9EAA" opacity={1}>
+          <animateMotion
+            dur={`${duration}s`}
+            repeatCount="indefinite"
+            path={edgePath}
+          />
+        </circle>
+      )}
 
       {/* Weight label on hover — shown via CSS */}
       {selected && (

@@ -3,7 +3,7 @@ import {
   Send, Square, Loader2,
   AlertTriangle, Radio, Trash2,
   ChevronDown, ChevronRight, Wrench, X, File, Folder,
-  History, Plus
+  History, Plus, Brain
 } from 'lucide-react';
 import { useAppState } from '../hooks/useAppState';
 import { useAtMention } from '../hooks/useAtMention';
@@ -72,6 +72,33 @@ const ToolCallGroup = ({ steps }: { steps: { id: string; toolCall: any }[] }) =>
           {steps.map((ts) => (
             <ToolCallPill key={ts.id} toolCall={ts.toolCall!} />
           ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── Thinking pill for extended-thinking models ── */
+const ThinkingPill = ({ content, isActive }: { content: string; isActive: boolean }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] bg-white/[0.04] border border-white/[0.08] text-text-secondary hover:bg-white/[0.06] transition-all cursor-pointer select-none"
+      >
+        {isActive ? (
+          <Loader2 size={12} className="opacity-50 animate-spin" />
+        ) : (
+          <Brain size={12} className="opacity-50" />
+        )}
+        <span>{isActive ? 'thinking...' : 'model thought'}</span>
+        {expanded ? <ChevronDown size={11} className="opacity-40" /> : <ChevronRight size={11} className="opacity-40" />}
+      </button>
+      {expanded && (
+        <div className="mt-1.5 max-h-60 overflow-y-auto rounded-md bg-white/[0.03] border border-white/[0.06] p-3 text-[12px] text-text-muted leading-relaxed whitespace-pre-wrap">
+          {content}
         </div>
       )}
     </div>
@@ -542,6 +569,12 @@ export const RightPanel = ({ onFocusNode, activeTab: controlledTab, onTabChange,
                                       <ToolCallGroup key={`tools-${acc.pendingTools[0].id}`} steps={acc.pendingTools as any} />
                                     );
                                     acc.pendingTools = [];
+                                  }
+                                  if (step.type === 'thinking' && step.content) {
+                                    const isThinkingActive = isChatLoading && message === chatMessages[chatMessages.length - 1];
+                                    acc.groups.push(
+                                      <ThinkingPill key={step.id} content={step.content} isActive={isThinkingActive} />
+                                    );
                                   }
                                   if (step.type === 'reasoning' && step.content) {
                                     acc.groups.push(
