@@ -60,3 +60,104 @@ func TestReplaceFile(t *testing.T) {
 		t.Errorf("expected 0 imports after replace, got %d", len(imports))
 	}
 }
+
+func TestEdgesOfType(t *testing.T) {
+	g := New()
+	g.AddFile(FileRecord{Path: "a.ts", Hash: "1"})
+	g.AddFile(FileRecord{Path: "b.ts", Hash: "2"})
+	g.AddFile(FileRecord{Path: "c.ts", Hash: "3"})
+
+	g.AddEdge(Edge{SourcePath: "a.ts", TargetPath: "b.ts", Type: "IMPORTS"})
+	g.AddEdge(Edge{SourcePath: "a.ts", TargetPath: "c.ts", Type: "CALLS", Confidence: 0.9})
+	g.AddEdge(Edge{SourcePath: "b.ts", TargetPath: "c.ts", Type: "IMPORTS"})
+
+	imports := g.EdgesOfType("IMPORTS")
+	if len(imports) != 2 {
+		t.Errorf("expected 2 IMPORTS edges, got %d", len(imports))
+	}
+
+	calls := g.EdgesOfType("CALLS")
+	if len(calls) != 1 {
+		t.Errorf("expected 1 CALLS edge, got %d", len(calls))
+	}
+	if calls[0].Confidence != 0.9 {
+		t.Errorf("expected confidence 0.9, got %f", calls[0].Confidence)
+	}
+
+	extends := g.EdgesOfType("EXTENDS")
+	if len(extends) != 0 {
+		t.Errorf("expected 0 EXTENDS edges, got %d", len(extends))
+	}
+}
+
+func TestAllSymbols(t *testing.T) {
+	g := New()
+	g.AddFile(FileRecord{Path: "a.ts", Hash: "1"})
+	g.AddFile(FileRecord{Path: "b.ts", Hash: "2"})
+
+	g.AddSymbol(Symbol{Name: "foo", Kind: "function", FilePath: "a.ts"})
+	g.AddSymbol(Symbol{Name: "bar", Kind: "class", FilePath: "a.ts"})
+	g.AddSymbol(Symbol{Name: "baz", Kind: "function", FilePath: "b.ts"})
+
+	all := g.AllSymbols()
+	if len(all) != 3 {
+		t.Fatalf("expected 3 symbols, got %d", len(all))
+	}
+
+	names := make(map[string]bool)
+	for _, s := range all {
+		names[s.Name] = true
+	}
+	for _, want := range []string{"foo", "bar", "baz"} {
+		if !names[want] {
+			t.Errorf("expected symbol %q in AllSymbols()", want)
+		}
+	}
+}
+
+func TestCommunitySetAndGet(t *testing.T) {
+	g := New()
+	g.AddFile(FileRecord{Path: "a.ts", Hash: "1"})
+	g.AddFile(FileRecord{Path: "b.ts", Hash: "2"})
+
+	g.SetCommunity("a.ts", CommunityInfo{ID: 0, Name: "core", Label: "Core Module"})
+	g.SetCommunity("b.ts", CommunityInfo{ID: 1, Name: "utils", Label: "Utilities"})
+
+	c, ok := g.CommunityOf("a.ts")
+	if !ok {
+		t.Fatal("expected community for a.ts")
+	}
+	if c.ID != 0 || c.Name != "core" {
+		t.Errorf("unexpected community for a.ts: %+v", c)
+	}
+
+	_, ok = g.CommunityOf("nonexistent.ts")
+	if ok {
+		t.Error("expected no community for nonexistent file")
+	}
+}
+
+func TestAllCommunities(t *testing.T) {
+	g := New()
+	g.AddFile(FileRecord{Path: "a.ts", Hash: "1"})
+	g.AddFile(FileRecord{Path: "b.ts", Hash: "2"})
+	g.AddFile(FileRecord{Path: "c.ts", Hash: "3"})
+
+	c0 := CommunityInfo{ID: 0, Name: "core", Label: "Core"}
+	c1 := CommunityInfo{ID: 1, Name: "utils", Label: "Utils"}
+
+	g.SetCommunity("a.ts", c0)
+	g.SetCommunity("b.ts", c0) // same community as a.ts
+	g.SetCommunity("c.ts", c1)
+
+	all := g.AllCommunities()
+	if len(all) != 2 {
+		t.Fatalf("expected 2 unique communities, got %d", len(all))
+	}
+	if all[0].Name != "core" {
+		t.Errorf("expected community 0 name 'core', got %q", all[0].Name)
+	}
+	if all[1].Name != "utils" {
+		t.Errorf("expected community 1 name 'utils', got %q", all[1].Name)
+	}
+}

@@ -19,9 +19,10 @@ type Symbol struct {
 
 // Edge represents a relationship between two files.
 type Edge struct {
-	SourcePath string // importing file
-	TargetPath string // imported file
-	Type       string // IMPORTS (CALLS, EXTENDS, IMPLEMENTS in M2)
+	SourcePath string  // importing file
+	TargetPath string  // imported file
+	Type       string  // IMPORTS, CALLS, EXTENDS, IMPLEMENTS
+	Confidence float64 // 0-1, used for CALLS/EXTENDS/IMPLEMENTS edges
 }
 
 // CallRef represents a function/method call site found in source code.

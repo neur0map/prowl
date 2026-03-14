@@ -2,21 +2,30 @@ package graph
 
 import "sort"
 
+// CommunityInfo holds the community assignment for a file.
+type CommunityInfo struct {
+	ID    int
+	Name  string
+	Label string
+}
+
 // Graph holds the in-memory representation of files, symbols, and edges.
 type Graph struct {
-	files   map[string]FileRecord   // path -> file
-	symbols map[string][]Symbol     // filePath -> symbols
-	edges   map[string][]Edge       // sourcePath -> outgoing edges
-	reverse map[string][]string     // targetPath -> list of source paths (upstream)
+	files       map[string]FileRecord      // path -> file
+	symbols     map[string][]Symbol        // filePath -> symbols
+	edges       map[string][]Edge          // sourcePath -> outgoing edges
+	reverse     map[string][]string        // targetPath -> list of source paths (upstream)
+	communities map[string]CommunityInfo   // filePath -> community assignment
 }
 
 // New creates an empty graph.
 func New() *Graph {
 	return &Graph{
-		files:   make(map[string]FileRecord),
-		symbols: make(map[string][]Symbol),
-		edges:   make(map[string][]Edge),
-		reverse: make(map[string][]string),
+		files:       make(map[string]FileRecord),
+		symbols:     make(map[string][]Symbol),
+		edges:       make(map[string][]Edge),
+		reverse:     make(map[string][]string),
+		communities: make(map[string]CommunityInfo),
 	}
 }
 
@@ -119,4 +128,46 @@ func (g *Graph) Stats() (files, symbols, edges int) {
 		edges += len(e)
 	}
 	return
+}
+
+// EdgesOfType returns all edges of a specific type (e.g. "CALLS", "IMPORTS").
+func (g *Graph) EdgesOfType(edgeType string) []Edge {
+	var out []Edge
+	for _, edges := range g.edges {
+		for _, e := range edges {
+			if e.Type == edgeType {
+				out = append(out, e)
+			}
+		}
+	}
+	return out
+}
+
+// AllSymbols returns all symbols across all files.
+func (g *Graph) AllSymbols() []Symbol {
+	var out []Symbol
+	for _, syms := range g.symbols {
+		out = append(out, syms...)
+	}
+	return out
+}
+
+// SetCommunity assigns a community to a file.
+func (g *Graph) SetCommunity(filePath string, c CommunityInfo) {
+	g.communities[filePath] = c
+}
+
+// CommunityOf returns the community assignment for a file, and whether one exists.
+func (g *Graph) CommunityOf(filePath string) (CommunityInfo, bool) {
+	c, ok := g.communities[filePath]
+	return c, ok
+}
+
+// AllCommunities returns a deduplicated map of community ID to CommunityInfo.
+func (g *Graph) AllCommunities() map[int]CommunityInfo {
+	out := make(map[int]CommunityInfo)
+	for _, c := range g.communities {
+		out[c.ID] = c
+	}
+	return out
 }
