@@ -160,6 +160,24 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 				},
 			},
 			{
+				"name":        "prowl_impact",
+				"description": "Blast radius analysis. Given a file (and optionally a symbol), returns all direct and transitive dependents that would be affected by changing it. Use before making edits to understand risk.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Project-relative file path to analyze",
+						},
+						"symbol": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional symbol name to narrow the analysis (e.g. function name)",
+						},
+					},
+					"required": []string{"path"},
+				},
+			},
+			{
 				"name":        "prowl_semantic_search",
 				"description": "Search the codebase by meaning. Use when filesystem navigation of .prowl/context/ isn't enough for fuzzy semantic queries like 'where is the auth logic?' or 'password hashing'.",
 				"inputSchema": map[string]interface{}{
@@ -201,6 +219,9 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 		return
 	case "prowl_scope":
 		s.handleScope(w, req.ID, params.Arguments)
+		return
+	case "prowl_impact":
+		s.handleImpact(w, req.ID, params.Arguments)
 		return
 	case "prowl_semantic_search":
 		// fall through to existing code below
