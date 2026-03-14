@@ -119,6 +119,14 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 	s.writeResult(w, req.ID, map[string]interface{}{
 		"tools": []map[string]interface{}{
 			{
+				"name":        "prowl_overview",
+				"description": "Get a structured summary of the entire codebase. Agent's first call on any project. Returns file/symbol/edge counts, language breakdown, community clusters, and key processes.",
+				"inputSchema": map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				},
+			},
+			{
 				"name":        "prowl_semantic_search",
 				"description": "Search the codebase by meaning. Use when filesystem navigation of .prowl/context/ isn't enough for fuzzy semantic queries like 'where is the auth logic?' or 'password hashing'.",
 				"inputSchema": map[string]interface{}{
@@ -151,7 +159,13 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 		return
 	}
 
-	if params.Name != "prowl_semantic_search" {
+	switch params.Name {
+	case "prowl_overview":
+		s.handleOverview(w, req.ID)
+		return
+	case "prowl_semantic_search":
+		// fall through to existing code below
+	default:
 		s.writeError(w, req.ID, -32602, "Unknown tool: "+params.Name)
 		return
 	}
