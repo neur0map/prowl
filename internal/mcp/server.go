@@ -14,13 +14,14 @@ import (
 
 // Server handles MCP protocol communication over stdio.
 type Server struct {
-	store    *store.Store
-	embedder *embed.Embedder
+	store      *store.Store
+	embedder   *embed.Embedder
+	contextDir string
 }
 
 // New creates an MCP server.
-func New(st *store.Store, embedder *embed.Embedder) *Server {
-	return &Server{store: st, embedder: embedder}
+func New(st *store.Store, embedder *embed.Embedder, contextDir string) *Server {
+	return &Server{store: st, embedder: embedder, contextDir: contextDir}
 }
 
 // Run starts the JSON-RPC stdio loop using stdin/stdout. Blocks until stdin closes.

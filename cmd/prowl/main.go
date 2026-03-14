@@ -185,7 +185,7 @@ var mcpCmd = &cobra.Command{
 		}
 		defer embedder.Close()
 
-		server := mcp.New(st, embedder)
+		server := mcp.New(st, embedder, "")
 		return server.Run()
 	},
 }
