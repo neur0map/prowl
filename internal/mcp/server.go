@@ -141,6 +141,25 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 				},
 			},
 			{
+				"name":        "prowl_scope",
+				"description": "Given a task description, returns exactly the files and context needed. Combines semantic search with 1-hop graph expansion. One call replaces the entire exploration phase.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"task": map[string]interface{}{
+							"type":        "string",
+							"description": "Natural language task description (e.g. 'fix the template installer')",
+						},
+						"limit": map[string]interface{}{
+							"type":        "integer",
+							"description": "Maximum number of files to return (default: 10)",
+							"default":     10,
+						},
+					},
+					"required": []string{"task"},
+				},
+			},
+			{
 				"name":        "prowl_semantic_search",
 				"description": "Search the codebase by meaning. Use when filesystem navigation of .prowl/context/ isn't enough for fuzzy semantic queries like 'where is the auth logic?' or 'password hashing'.",
 				"inputSchema": map[string]interface{}{
@@ -179,6 +198,9 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 		return
 	case "prowl_file_context":
 		s.handleFileContext(w, req.ID, params.Arguments)
+		return
+	case "prowl_scope":
+		s.handleScope(w, req.ID, params.Arguments)
 		return
 	case "prowl_semantic_search":
 		// fall through to existing code below
