@@ -162,6 +162,75 @@ func TestHeritageExtendsResolves(t *testing.T) {
 	}
 }
 
+func TestAmbiguousCallResolvesWithLowConfidence(t *testing.T) {
+	g := setupGraph()
+
+	// Add a second "format" symbol in db.ts so it's ambiguous
+	g.AddSymbol(graph.Symbol{
+		Name: "format", Kind: "function", FilePath: "src/db.ts",
+		IsExported: true,
+	})
+
+	// app.ts does not import utils.ts or db.ts, calls "format" which exists in both
+	callsByFile := map[string][]graph.CallRef{
+		"src/app.ts": {
+			{CalleeName: "format", Line: 20},
+		},
+	}
+
+	edges := ResolveCalls(g, callsByFile, nil)
+
+	if len(edges) != 2 {
+		t.Fatalf("expected 2 ambiguous edges, got %d", len(edges))
+	}
+	for _, e := range edges {
+		if e.Confidence != 0.3 {
+			t.Errorf("expected confidence 0.3 for ambiguous match, got %f (target: %s)", e.Confidence, e.TargetPath)
+		}
+		if e.Type != "CALLS" {
+			t.Errorf("expected type CALLS, got %s", e.Type)
+		}
+	}
+}
+
+func TestHeritageImplementsResolves(t *testing.T) {
+	g := graph.New()
+
+	g.AddFile(graph.FileRecord{Path: "src/iface.ts", Hash: "i1"})
+	g.AddFile(graph.FileRecord{Path: "src/impl.ts", Hash: "i2"})
+
+	g.AddSymbol(graph.Symbol{
+		Name: "Serializable", Kind: "interface", FilePath: "src/iface.ts",
+		IsExported: true,
+	})
+	g.AddSymbol(graph.Symbol{
+		Name: "UserModel", Kind: "class", FilePath: "src/impl.ts",
+		IsExported: true,
+	})
+
+	heritageByFile := map[string][]graph.HeritageRef{
+		"src/impl.ts": {
+			{ChildName: "UserModel", ParentName: "Serializable", Type: "implements"},
+		},
+	}
+
+	edges := ResolveCalls(g, nil, heritageByFile)
+
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(edges))
+	}
+	e := edges[0]
+	if e.Type != "IMPLEMENTS" {
+		t.Errorf("expected type IMPLEMENTS, got %s", e.Type)
+	}
+	if e.TargetPath != "src/iface.ts" {
+		t.Errorf("expected target src/iface.ts, got %s", e.TargetPath)
+	}
+	if e.Confidence != 0.9 {
+		t.Errorf("expected confidence 0.9, got %f", e.Confidence)
+	}
+}
+
 func TestDeduplication(t *testing.T) {
 	g := setupGraph()
 

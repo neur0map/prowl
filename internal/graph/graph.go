@@ -54,6 +54,7 @@ func (g *Graph) ReplaceFile(path string, f FileRecord) {
 	}
 	delete(g.edges, path)
 	delete(g.symbols, path)
+	delete(g.communities, path)
 	g.files[path] = f
 }
 
