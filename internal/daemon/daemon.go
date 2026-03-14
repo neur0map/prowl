@@ -11,11 +11,14 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/fsnotify/fsnotify"
+	"github.com/neur0map/prowl/internal/community"
 	"github.com/neur0map/prowl/internal/graph"
 	"github.com/neur0map/prowl/internal/ignore"
 	"github.com/neur0map/prowl/internal/output"
 	"github.com/neur0map/prowl/internal/parser"
 	"github.com/neur0map/prowl/internal/pipeline"
+	"github.com/neur0map/prowl/internal/process"
+	"github.com/neur0map/prowl/internal/resolve"
 	"github.com/neur0map/prowl/internal/store"
 )
 
@@ -29,6 +32,8 @@ type Daemon struct {
 	store      *store.Store
 	ig         *ignore.Checker
 	memGraph   *graph.Graph
+	embedder   *lazyEmbedder
+	idle       *idleTracker
 	stop       chan struct{}
 	mu         sync.Mutex
 }
@@ -51,8 +56,9 @@ func New(projectDir string, debounce time.Duration) (*Daemon, error) {
 	}
 
 	ig := ignore.New(absDir)
+	modelDir := filepath.Join(os.Getenv("HOME"), ".prowl", "models")
 
-	return &Daemon{
+	d := &Daemon{
 		projectDir: absDir,
 		prowlDir:   prowlDir,
 		contextDir: filepath.Join(prowlDir, "context"),
@@ -62,7 +68,13 @@ func New(projectDir string, debounce time.Duration) (*Daemon, error) {
 		ig:         ig,
 		memGraph:   graph.New(),
 		stop:       make(chan struct{}),
-	}, nil
+	}
+	d.embedder = newLazyEmbedder(modelDir, 10*time.Minute)
+	d.idle = newIdleTracker(30*time.Second, func() {
+		d.runGlobalPhases()
+	})
+
+	return d, nil
 }
 
 // Run starts the watcher loop. Blocks until Stop is called.
@@ -148,6 +160,8 @@ func (d *Daemon) Run() {
 func (d *Daemon) Stop() {
 	close(d.stop)
 	d.watcher.Close()
+	d.idle.Stop()
+	d.embedder.Close()
 	d.store.Close()
 }
 
@@ -170,6 +184,61 @@ func (d *Daemon) loadGraphFromStore() {
 	}
 }
 
+// runGlobalPhases runs community detection and process detection across the entire graph.
+func (d *Daemon) runGlobalPhases() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// Phase 6: Community detection
+	communities := community.DetectCommunities(d.memGraph)
+	d.store.ClearCommunities()
+	commMap := make(map[string]int)
+	for _, c := range communities {
+		d.store.InsertCommunity(c.ID, c.Name, c.Label)
+		for _, member := range c.Members {
+			fid, _ := d.store.FileID(member)
+			if fid > 0 {
+				d.store.InsertCommunityMember(fid, c.ID)
+			}
+			d.memGraph.SetCommunity(member, graph.CommunityInfo{
+				ID: c.ID, Name: c.Name, Label: c.Label,
+			})
+			commMap[member] = c.ID
+		}
+	}
+
+	// Phase 7: Process detection
+	processes := process.DetectProcesses(d.memGraph, commMap)
+
+	// Convert for output
+	comData := make([]output.CommunityData, len(communities))
+	for i, c := range communities {
+		comData[i] = output.CommunityData{ID: c.ID, Name: c.Name, Members: c.Members}
+	}
+	procData := make([]output.ProcessData, len(processes))
+	for i, p := range processes {
+		procData[i] = output.ProcessData{
+			Name:  p.Name,
+			Type:  p.Type,
+			Entry: p.Entry,
+			Steps: p.Steps,
+		}
+	}
+
+	// Rewrite _meta files
+	output.WriteMetaCommunities(d.contextDir, comData)
+	output.WriteMetaProcesses(d.contextDir, procData)
+
+	// Rewrite .community for all files
+	for _, f := range d.memGraph.Files() {
+		if ci, ok := d.memGraph.CommunityOf(f.Path); ok {
+			output.WriteCommunity(d.contextDir, f.Path, fmt.Sprintf("%s (ID: %d)", ci.Name, ci.ID))
+		}
+	}
+
+	fmt.Println("[daemon] global phases complete — communities and processes updated")
+}
+
 func (d *Daemon) processFile(relPath string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -186,8 +255,16 @@ func (d *Daemon) processFile(relPath string) {
 		return
 	}
 
-	// Compute old upstream set before changes
+	// Check if this is a new file (for index update)
+	_, isExistingFile := d.memGraph.File(relPath)
+
+	// Snapshot old edges for cascading updates (before ReplaceFile clears them)
 	oldImports := d.memGraph.ImportsOf(relPath)
+	oldCallEdges := d.memGraph.EdgesFromFile(relPath, "CALLS")
+	oldCallTargets := make(map[string]bool)
+	for _, e := range oldCallEdges {
+		oldCallTargets[e.TargetPath] = true
+	}
 
 	// Clear old data and re-add
 	d.memGraph.ReplaceFile(relPath, graph.FileRecord{Path: relPath, Hash: newHash})
@@ -217,35 +294,130 @@ func (d *Daemon) processFile(relPath string) {
 		}
 	}
 
+	// Phase 4: Resolve calls + heritage for this file
+	callEdges := resolve.ResolveCallsForFile(d.memGraph, relPath, result.Calls, result.Heritage)
+	for _, e := range callEdges {
+		d.memGraph.AddEdge(e)
+	}
+
+	// Track new call targets for cascading
+	newCallTargets := make(map[string]bool)
+	for _, e := range callEdges {
+		if e.Type == "CALLS" {
+			newCallTargets[e.TargetPath] = true
+		}
+	}
+
 	// Update SQLite
 	fid, _ := d.store.UpsertFile(relPath, newHash)
 	d.store.DeleteSymbolsForFile(fid)
 	d.store.InsertSymbols(fid, result.Symbols)
 	d.store.DeleteEdgesFromFile(fid)
+
+	// Persist ALL edges (imports + calls + heritage)
 	for _, imp := range newImports {
 		tgtID, _ := d.store.FileID(imp)
 		if tgtID > 0 {
 			d.store.UpsertEdge(fid, tgtID, "IMPORTS")
 		}
 	}
+	for _, e := range callEdges {
+		tgtID, _ := d.store.FileID(e.TargetPath)
+		if tgtID > 0 {
+			d.store.UpsertEdgeWithConfidence(fid, tgtID, e.Type, e.Confidence)
+		}
+	}
+
+	// Phase 8: Re-embed if signatures changed
+	d.reembedFile(fid, relPath)
 
 	// Rewrite context for the changed file
 	output.WriteFileContext(d.contextDir, d.memGraph, relPath)
 
-	// Find files whose .upstream changed and rewrite them
-	affectedFiles := make(map[string]bool)
+	// Write .calls for this file
+	newCallEdges := d.memGraph.EdgesFromFile(relPath, "CALLS")
+	callPaths := make([]string, 0, len(newCallEdges))
+	for _, e := range newCallEdges {
+		callPaths = append(callPaths, e.TargetPath)
+	}
+	output.WriteCalls(d.contextDir, relPath, callPaths)
+
+	// Cascade .upstream updates
+	affectedUpstream := make(map[string]bool)
 	for _, imp := range oldImports {
-		affectedFiles[imp] = true
+		affectedUpstream[imp] = true
 	}
 	for _, imp := range newImports {
-		affectedFiles[imp] = true
+		affectedUpstream[imp] = true
 	}
-	for path := range affectedFiles {
+	for path := range affectedUpstream {
 		upstream := d.memGraph.UpstreamOf(path)
 		output.WriteUpstream(d.contextDir, path, upstream)
 	}
 
-	fmt.Printf("[daemon] updated %s (%d symbols, %d imports)\n", relPath, len(result.Symbols), len(newImports))
+	// Cascade .callers updates — use store.CallersOf for efficiency
+	affectedCallers := make(map[string]bool)
+	for t := range oldCallTargets {
+		affectedCallers[t] = true
+	}
+	for t := range newCallTargets {
+		affectedCallers[t] = true
+	}
+	for path := range affectedCallers {
+		callers, _ := d.store.CallersOf(path)
+		output.WriteCallers(d.contextDir, path, callers)
+	}
+
+	// Update _meta/index.txt if this is a new file
+	if !isExistingFile {
+		var allPaths []string
+		for _, f := range d.memGraph.Files() {
+			allPaths = append(allPaths, f.Path)
+		}
+		output.WriteIndexFile(d.contextDir, allPaths)
+	}
+
+	// Mark dirty for global phases
+	d.idle.MarkDirty()
+
+	fmt.Printf("[daemon] updated %s (%d symbols, %d imports, %d calls)\n",
+		relPath, len(result.Symbols), len(newImports), len(callEdges))
+}
+
+// reembedFile re-embeds a file if its signature text has changed.
+func (d *Daemon) reembedFile(fid int64, relPath string) {
+	syms := d.memGraph.SymbolsForFile(relPath)
+	if len(syms) == 0 {
+		return
+	}
+
+	var sigParts []string
+	for _, s := range syms {
+		if s.Signature != "" {
+			sigParts = append(sigParts, s.Signature)
+		} else {
+			sigParts = append(sigParts, fmt.Sprintf("%s %s", s.Kind, s.Name))
+		}
+	}
+	sigText := strings.Join(sigParts, "\n")
+	textHash := fmt.Sprintf("%x", xxhash.Sum64String(sigText))
+
+	storedHash, _ := d.store.EmbeddingTextHash(fid)
+	if storedHash == textHash {
+		return
+	}
+
+	emb, err := d.embedder.Get()
+	if err != nil || emb == nil {
+		return // model not available, skip silently
+	}
+
+	vecs, err := emb.Encode([]string{sigText})
+	if err != nil || len(vecs) == 0 {
+		return
+	}
+
+	d.store.UpsertEmbedding(fid, vecs[0], textHash)
 }
 
 // resolveImport maps a raw import specifier to a project file path.
