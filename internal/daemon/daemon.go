@@ -161,11 +161,12 @@ func (d *Daemon) loadGraphFromStore() {
 		for _, s := range syms {
 			d.memGraph.AddSymbol(s)
 		}
+	}
 
-		imports, _ := d.store.ImportsOf(path)
-		for _, imp := range imports {
-			d.memGraph.AddEdge(graph.Edge{SourcePath: path, TargetPath: imp, Type: "IMPORTS"})
-		}
+	// Load ALL edge types (IMPORTS, CALLS, EXTENDS, IMPLEMENTS)
+	edges, _ := d.store.AllEdges()
+	for _, e := range edges {
+		d.memGraph.AddEdge(e)
 	}
 }
 
