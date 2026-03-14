@@ -271,6 +271,43 @@ func TestCallsOfAndCallersOf(t *testing.T) {
 	}
 }
 
+func TestFileDigest(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	fid1, _ := s.UpsertFile("src/auth.ts", "h1")
+	fid2, _ := s.UpsertFile("src/db.ts", "h2")
+
+	s.InsertSymbols(fid1, []graph.Symbol{
+		{Name: "login", Kind: "function", StartLine: 1, EndLine: 5, IsExported: true},
+		{Name: "logout", Kind: "function", StartLine: 6, EndLine: 10, IsExported: true},
+		{Name: "helper", Kind: "function", StartLine: 11, EndLine: 15, IsExported: false},
+	})
+
+	s.UpsertEdge(fid1, fid2, "CALLS")
+
+	digest := s.FileDigest("src/auth.ts")
+	expected := "src/auth.ts: src | 2 exports, 1 calls, 0 callers"
+	if digest != expected {
+		t.Errorf("digest = %q, want %q", digest, expected)
+	}
+
+	digest2 := s.FileDigest("src/db.ts")
+	expected2 := "src/db.ts: src | 0 exports, 0 calls, 1 callers"
+	if digest2 != expected2 {
+		t.Errorf("digest = %q, want %q", digest2, expected2)
+	}
+
+	digest3 := s.FileDigest("nonexistent.go")
+	expected3 := "nonexistent.go: . | 0 exports, 0 calls, 0 callers"
+	if digest3 != expected3 {
+		t.Errorf("digest = %q, want %q", digest3, expected3)
+	}
+}
+
 func TestDeleteFileSymbolsCascade(t *testing.T) {
 	s, err := Open(":memory:")
 	if err != nil {

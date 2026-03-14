@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -369,6 +370,27 @@ func (s *Store) EmbeddingCount() (int, error) {
 	var count int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM embeddings").Scan(&count)
 	return count, err
+}
+
+// FileDigest returns a one-line structural summary for a file.
+// Format: "<path>: <parent_dir> | <N> exports, <N> calls, <N> callers"
+func (s *Store) FileDigest(path string) string {
+	fid, _ := s.FileID(path)
+
+	var exports, outCalls, inCallers int
+	if fid > 0 {
+		s.db.QueryRow("SELECT COUNT(*) FROM symbols WHERE file_id = ? AND is_exported = 1", fid).Scan(&exports)
+		s.db.QueryRow("SELECT COUNT(*) FROM edges WHERE source_file_id = ? AND type = 'CALLS'", fid).Scan(&outCalls)
+		s.db.QueryRow("SELECT COUNT(*) FROM edges WHERE target_file_id = ? AND type = 'CALLS'", fid).Scan(&inCallers)
+	}
+
+	dir := filepath.Base(filepath.Dir(path))
+	if dir == "" || dir == "." {
+		dir = "."
+	}
+
+	return fmt.Sprintf("%s: %s | %d exports, %d calls, %d callers",
+		path, dir, exports, outCalls, inCallers)
 }
 
 // DeleteFile removes a file by path. CASCADE constraints handle symbols, edges, embeddings, and community_members.
