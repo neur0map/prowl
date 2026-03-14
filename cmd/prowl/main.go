@@ -160,10 +160,14 @@ var searchCmd = &cobra.Command{
 }
 
 var mcpCmd = &cobra.Command{
-	Use:   "mcp",
+	Use:   "mcp [path]",
 	Short: "Start MCP server for AI agent integration",
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dir := "."
+		if len(args) > 0 {
+			dir = args[0]
+		}
 		absDir, _ := filepath.Abs(dir)
 		prowlDir := filepath.Join(absDir, ".prowl")
 		dbPath := filepath.Join(prowlDir, "prowl.db")
