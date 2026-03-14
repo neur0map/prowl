@@ -139,3 +139,73 @@ func TestDaemonHandlesFileDeletion(t *testing.T) {
 
 	d.Stop()
 }
+
+func TestDaemonFullCycleIntegration(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "src")
+	os.MkdirAll(srcDir, 0o755)
+
+	// Create initial files
+	os.WriteFile(filepath.Join(srcDir, "a.ts"), []byte(`
+import { helper } from './b';
+export function main() { helper(); }
+`), 0o644)
+	os.WriteFile(filepath.Join(srcDir, "b.ts"), []byte(`
+export function helper() { return 42; }
+`), 0o644)
+
+	// Full index first
+	if err := pipeline.Index(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Start daemon
+	d, err := New(dir, 50*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.loadGraphFromStore()
+
+	// Verify initial state
+	if len(d.memGraph.Files()) < 2 {
+		t.Fatal("should have at least 2 files")
+	}
+
+	// Simulate file modification
+	os.WriteFile(filepath.Join(srcDir, "a.ts"), []byte(`
+import { helper } from './b';
+export function main() { helper(); }
+export function newFunc() { return "new"; }
+`), 0o644)
+
+	d.processFile("src/a.ts")
+
+	// Verify symbols updated
+	syms := d.memGraph.SymbolsForFile("src/a.ts")
+	found := false
+	for _, s := range syms {
+		if s.Name == "newFunc" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("newFunc should appear after re-parse")
+	}
+
+	// Verify .calls context file exists
+	callsFile := filepath.Join(dir, ".prowl", "context", "src", "a.ts", ".calls")
+	if _, err := os.Stat(callsFile); os.IsNotExist(err) {
+		t.Fatal(".calls file should exist")
+	}
+
+	// Simulate deletion
+	d.deleteFile("src/a.ts")
+
+	// Verify file removed
+	_, ok := d.memGraph.File("src/a.ts")
+	if ok {
+		t.Fatal("a.ts should be gone after deletion")
+	}
+
+	d.Stop()
+}
