@@ -56,6 +56,220 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
+func TestUpsertEdgeWithConfidence(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	fid1, _ := s.UpsertFile("src/a.ts", "h1")
+	fid2, _ := s.UpsertFile("src/b.ts", "h2")
+
+	// Insert a CALLS edge with 0.9 confidence
+	if err := s.UpsertEdgeWithConfidence(fid1, fid2, "CALLS", 0.9); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the edge is stored with correct confidence
+	var confidence float64
+	err = s.db.QueryRow(
+		"SELECT confidence FROM edges WHERE source_file_id = ? AND target_file_id = ? AND type = ?",
+		fid1, fid2, "CALLS",
+	).Scan(&confidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confidence != 0.9 {
+		t.Errorf("expected confidence 0.9, got %f", confidence)
+	}
+
+	// Upsert the same edge with different confidence — should update
+	if err := s.UpsertEdgeWithConfidence(fid1, fid2, "CALLS", 0.75); err != nil {
+		t.Fatal(err)
+	}
+	err = s.db.QueryRow(
+		"SELECT confidence FROM edges WHERE source_file_id = ? AND target_file_id = ? AND type = ?",
+		fid1, fid2, "CALLS",
+	).Scan(&confidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confidence != 0.75 {
+		t.Errorf("expected updated confidence 0.75, got %f", confidence)
+	}
+
+	// Verify default UpsertEdge sets confidence to 1.0
+	if err := s.UpsertEdge(fid1, fid2, "IMPORTS"); err != nil {
+		t.Fatal(err)
+	}
+	err = s.db.QueryRow(
+		"SELECT confidence FROM edges WHERE source_file_id = ? AND target_file_id = ? AND type = ?",
+		fid1, fid2, "IMPORTS",
+	).Scan(&confidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confidence != 1.0 {
+		t.Errorf("expected default confidence 1.0, got %f", confidence)
+	}
+}
+
+func TestCommunityOperations(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	// Create files
+	fid1, _ := s.UpsertFile("src/auth.ts", "h1")
+	fid2, _ := s.UpsertFile("src/login.ts", "h2")
+	fid3, _ := s.UpsertFile("src/api.ts", "h3")
+
+	// Insert communities
+	if err := s.InsertCommunity(0, "auth-cluster", "Authentication"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertCommunity(1, "api-cluster", "API Layer"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assign members
+	if err := s.InsertCommunityMember(fid1, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertCommunityMember(fid2, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InsertCommunityMember(fid3, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	// CommunityOf
+	name, err := s.CommunityOf("src/auth.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "auth-cluster" {
+		t.Errorf("expected community 'auth-cluster', got %q", name)
+	}
+
+	// CommunityOf for unassigned file
+	name, err = s.CommunityOf("src/nonexistent.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "" {
+		t.Errorf("expected empty community for unassigned file, got %q", name)
+	}
+
+	// AllCommunities
+	communities, err := s.AllCommunities()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(communities) != 2 {
+		t.Fatalf("expected 2 communities, got %d", len(communities))
+	}
+	if communities[0].Name != "auth-cluster" || communities[0].MemberCount != 2 {
+		t.Errorf("expected auth-cluster with 2 members, got %+v", communities[0])
+	}
+	if communities[1].Name != "api-cluster" || communities[1].MemberCount != 1 {
+		t.Errorf("expected api-cluster with 1 member, got %+v", communities[1])
+	}
+
+	// ClearCommunities
+	if err := s.ClearCommunities(); err != nil {
+		t.Fatal(err)
+	}
+	communities, err = s.AllCommunities()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(communities) != 0 {
+		t.Errorf("expected 0 communities after clear, got %d", len(communities))
+	}
+
+	// CommunityOf should return empty after clear
+	name, err = s.CommunityOf("src/auth.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "" {
+		t.Errorf("expected empty community after clear, got %q", name)
+	}
+}
+
+func TestCallsOfAndCallersOf(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	// Setup: a.ts calls b.ts and c.ts; d.ts calls b.ts
+	fidA, _ := s.UpsertFile("src/a.ts", "h1")
+	fidB, _ := s.UpsertFile("src/b.ts", "h2")
+	fidC, _ := s.UpsertFile("src/c.ts", "h3")
+	fidD, _ := s.UpsertFile("src/d.ts", "h4")
+
+	s.UpsertEdgeWithConfidence(fidA, fidB, "CALLS", 0.95)
+	s.UpsertEdgeWithConfidence(fidA, fidC, "CALLS", 0.80)
+	s.UpsertEdgeWithConfidence(fidD, fidB, "CALLS", 0.70)
+
+	// CallsOf: a.ts should call b.ts and c.ts
+	calls, err := s.CallsOf("src/a.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 calls from a.ts, got %d", len(calls))
+	}
+	if calls[0] != "src/b.ts" || calls[1] != "src/c.ts" {
+		t.Errorf("expected [src/b.ts, src/c.ts], got %v", calls)
+	}
+
+	// CallersOf: b.ts should be called by a.ts and d.ts
+	callers, err := s.CallersOf("src/b.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(callers) != 2 {
+		t.Fatalf("expected 2 callers of b.ts, got %d", len(callers))
+	}
+	if callers[0] != "src/a.ts" || callers[1] != "src/d.ts" {
+		t.Errorf("expected [src/a.ts, src/d.ts], got %v", callers)
+	}
+
+	// CallsOf: d.ts should only call b.ts
+	calls, err = s.CallsOf("src/d.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0] != "src/b.ts" {
+		t.Errorf("expected [src/b.ts], got %v", calls)
+	}
+
+	// CallersOf: c.ts should only be called by a.ts
+	callers, err = s.CallersOf("src/c.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(callers) != 1 || callers[0] != "src/a.ts" {
+		t.Errorf("expected [src/a.ts], got %v", callers)
+	}
+
+	// CallsOf with no calls should return nil/empty
+	calls, err = s.CallsOf("src/b.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 0 {
+		t.Errorf("expected 0 calls from b.ts, got %d", len(calls))
+	}
+}
+
 func TestDeleteFileSymbolsCascade(t *testing.T) {
 	s, err := Open(":memory:")
 	if err != nil {

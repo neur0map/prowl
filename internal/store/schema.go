@@ -23,7 +23,20 @@ CREATE TABLE IF NOT EXISTS edges (
     source_file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     target_file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     type           TEXT NOT NULL,
+    confidence     REAL NOT NULL DEFAULT 1.0,
     PRIMARY KEY (source_file_id, target_file_id, type)
+);
+
+CREATE TABLE IF NOT EXISTS communities (
+    id    INTEGER PRIMARY KEY,
+    name  TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS community_members (
+    file_id      INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    PRIMARY KEY (file_id, community_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_file_id, type);

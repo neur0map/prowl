@@ -117,13 +117,145 @@ func (s *Store) DeleteEdgesFromFile(fileID int64) error {
 	return err
 }
 
-// UpsertEdge inserts an edge if it doesn't exist.
+// UpsertEdge inserts an edge if it doesn't exist (confidence defaults to 1.0).
 func (s *Store) UpsertEdge(sourceID, targetID int64, edgeType string) error {
+	return s.UpsertEdgeWithConfidence(sourceID, targetID, edgeType, 1.0)
+}
+
+// UpsertEdgeWithConfidence inserts an edge with a confidence score.
+func (s *Store) UpsertEdgeWithConfidence(sourceID, targetID int64, edgeType string, confidence float64) error {
 	_, err := s.db.Exec(
-		`INSERT OR IGNORE INTO edges (source_file_id, target_file_id, type) VALUES (?, ?, ?)`,
-		sourceID, targetID, edgeType,
+		`INSERT INTO edges (source_file_id, target_file_id, type, confidence) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(source_file_id, target_file_id, type) DO UPDATE SET confidence = excluded.confidence`,
+		sourceID, targetID, edgeType, confidence,
 	)
 	return err
+}
+
+// InsertCommunity inserts a community record.
+func (s *Store) InsertCommunity(id int, name, label string) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO communities (id, name, label) VALUES (?, ?, ?)`,
+		id, name, label,
+	)
+	return err
+}
+
+// InsertCommunityMember links a file to a community.
+func (s *Store) InsertCommunityMember(fileID int64, communityID int) error {
+	_, err := s.db.Exec(
+		`INSERT OR IGNORE INTO community_members (file_id, community_id) VALUES (?, ?)`,
+		fileID, communityID,
+	)
+	return err
+}
+
+// ClearCommunities removes all community data (called before re-running community detection).
+func (s *Store) ClearCommunities() error {
+	_, err := s.db.Exec("DELETE FROM community_members")
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec("DELETE FROM communities")
+	return err
+}
+
+// CommunityRow represents a community with its member count.
+type CommunityRow struct {
+	ID          int
+	Name        string
+	Label       string
+	MemberCount int
+}
+
+// CallsOf returns file paths that the given file calls into (outgoing CALLS edges).
+func (s *Store) CallsOf(path string) ([]string, error) {
+	rows, err := s.db.Query(`
+		SELECT t.path FROM edges e
+		JOIN files f ON f.id = e.source_file_id
+		JOIN files t ON t.id = e.target_file_id
+		WHERE f.path = ? AND e.type = 'CALLS'
+		ORDER BY t.path
+	`, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, rows.Err()
+}
+
+// CallersOf returns file paths that call into the given file (incoming CALLS edges).
+func (s *Store) CallersOf(path string) ([]string, error) {
+	rows, err := s.db.Query(`
+		SELECT f.path FROM edges e
+		JOIN files f ON f.id = e.source_file_id
+		JOIN files t ON t.id = e.target_file_id
+		WHERE t.path = ? AND e.type = 'CALLS'
+		ORDER BY f.path
+	`, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, rows.Err()
+}
+
+// CommunityOf returns the community name for a file, or "" if not assigned.
+func (s *Store) CommunityOf(path string) (string, error) {
+	var name string
+	err := s.db.QueryRow(`
+		SELECT c.name FROM communities c
+		JOIN community_members cm ON cm.community_id = c.id
+		JOIN files f ON f.id = cm.file_id
+		WHERE f.path = ?
+	`, path).Scan(&name)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return name, err
+}
+
+// AllCommunities returns all communities with member counts.
+func (s *Store) AllCommunities() ([]CommunityRow, error) {
+	rows, err := s.db.Query(`
+		SELECT c.id, c.name, c.label, COUNT(cm.file_id) AS member_count
+		FROM communities c
+		LEFT JOIN community_members cm ON cm.community_id = c.id
+		GROUP BY c.id, c.name, c.label
+		ORDER BY c.id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []CommunityRow
+	for rows.Next() {
+		var cr CommunityRow
+		if err := rows.Scan(&cr.ID, &cr.Name, &cr.Label, &cr.MemberCount); err != nil {
+			return nil, err
+		}
+		result = append(result, cr)
+	}
+	return result, rows.Err()
 }
 
 // UpstreamOf returns file paths that import the given file (reverse edges).
