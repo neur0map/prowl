@@ -13,6 +13,7 @@ import (
 
 	"github.com/neur0map/prowl/internal/daemon"
 	"github.com/neur0map/prowl/internal/embed"
+	"github.com/neur0map/prowl/internal/mcp"
 	"github.com/neur0map/prowl/internal/pipeline"
 	"github.com/neur0map/prowl/internal/store"
 )
@@ -158,6 +159,37 @@ var searchCmd = &cobra.Command{
 	},
 }
 
+var mcpCmd = &cobra.Command{
+	Use:   "mcp",
+	Short: "Start MCP server for AI agent integration",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dir := "."
+		absDir, _ := filepath.Abs(dir)
+		dbPath := filepath.Join(absDir, ".prowl", "prowl.db")
+
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+			return fmt.Errorf("no index found at %s - run 'prowl index' first", absDir)
+		}
+
+		st, err := store.Open(dbPath)
+		if err != nil {
+			return err
+		}
+		defer st.Close()
+
+		homeDir, _ := os.UserHomeDir()
+		modelDir := filepath.Join(homeDir, ".prowl", "models")
+		embedder, err := embed.New(modelDir)
+		if err != nil {
+			return fmt.Errorf("load embedding model: %w", err)
+		}
+		defer embedder.Close()
+
+		server := mcp.New(st, embedder)
+		return server.Run()
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(indexCmd)
 	rootCmd.AddCommand(statusCmd)
@@ -165,6 +197,7 @@ func init() {
 	rootCmd.AddCommand(daemonCmd)
 	searchCmd.Flags().IntP("limit", "n", 5, "max results")
 	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(mcpCmd)
 }
 
 func main() {
