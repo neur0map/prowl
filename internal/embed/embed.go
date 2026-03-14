@@ -11,6 +11,7 @@ import (
 
 const (
 	modelName    = "Snowflake/snowflake-arctic-embed-xs"
+	onnxFilename = "onnx/model.onnx"
 	pipelineName = "prowl-embed"
 	embeddingDim = 384
 	batchSize    = 32
@@ -32,8 +33,10 @@ func New(modelDir string) (*Embedder, error) {
 	// Check if model is already downloaded by looking for the expected directory.
 	modelPath := filepath.Join(modelDir, "Snowflake_snowflake-arctic-embed-xs")
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		opts := hugot.NewDownloadOptions()
+		opts.OnnxFilePath = onnxFilename
 		var dlErr error
-		modelPath, dlErr = hugot.DownloadModel(modelName, modelDir, hugot.NewDownloadOptions())
+		modelPath, dlErr = hugot.DownloadModel(modelName, modelDir, opts)
 		if dlErr != nil {
 			return nil, fmt.Errorf("embed: download model: %w", dlErr)
 		}
@@ -45,8 +48,9 @@ func New(modelDir string) (*Embedder, error) {
 	}
 
 	config := hugot.FeatureExtractionConfig{
-		ModelPath: modelPath,
-		Name:      pipelineName,
+		ModelPath:    modelPath,
+		Name:         pipelineName,
+		OnnxFilename: onnxFilename,
 		Options: []hugot.FeatureExtractionOption{
 			pipelines.WithNormalization(),
 		},
