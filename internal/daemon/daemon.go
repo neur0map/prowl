@@ -114,9 +114,6 @@ func (d *Daemon) Run() {
 			if !ok {
 				return
 			}
-			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
-				continue
-			}
 
 			rel, err := filepath.Rel(d.projectDir, event.Name)
 			if err != nil {
@@ -130,6 +127,26 @@ func (d *Daemon) Run() {
 
 			lang := parser.DetectLanguage(rel)
 			if lang == "" {
+				continue
+			}
+
+			if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+				// Check if file still exists (atomic saves use rename-and-replace)
+				absPath := filepath.Join(d.projectDir, filepath.FromSlash(rel))
+				if _, statErr := os.Stat(absPath); os.IsNotExist(statErr) {
+					// Cancel any pending debounce for this file
+					pendingMu.Lock()
+					if t, exists := pending[rel]; exists {
+						t.Stop()
+						delete(pending, rel)
+					}
+					pendingMu.Unlock()
+					d.deleteFile(rel)
+				}
+				continue
+			}
+
+			if event.Op&(fsnotify.Write|fsnotify.Create) == 0 {
 				continue
 			}
 
@@ -382,6 +399,53 @@ func (d *Daemon) processFile(relPath string) {
 
 	fmt.Printf("[daemon] updated %s (%d symbols, %d imports, %d calls)\n",
 		relPath, len(result.Symbols), len(newImports), len(callEdges))
+}
+
+// deleteFile removes a file from the graph, store, and context directory,
+// then cascades updates to callers/upstream context files.
+func (d *Daemon) deleteFile(relPath string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// Snapshot edges BEFORE RemoveFile (which clears them)
+	oldCallEdges := d.memGraph.EdgesFromFile(relPath, "CALLS")
+	oldImports := d.memGraph.ImportsOf(relPath)
+
+	// Remove from in-memory graph (clears all edges in both directions)
+	d.memGraph.RemoveFile(relPath)
+
+	// Remove from SQLite (CASCADE handles symbols, edges, embeddings, community_members)
+	d.store.DeleteFile(relPath)
+
+	// Remove context directory
+	contextPath := filepath.Join(d.contextDir, relPath)
+	os.RemoveAll(contextPath)
+
+	// Update .callers for files the deleted file previously called
+	// Use store.CallersOf for efficiency — edges already deleted from store by CASCADE,
+	// so the remaining callers are exactly right
+	for _, e := range oldCallEdges {
+		callers, _ := d.store.CallersOf(e.TargetPath)
+		output.WriteCallers(d.contextDir, e.TargetPath, callers)
+	}
+
+	// Update .upstream for files the deleted file imported
+	for _, imp := range oldImports {
+		upstream := d.memGraph.UpstreamOf(imp)
+		output.WriteUpstream(d.contextDir, imp, upstream)
+	}
+
+	// Update _meta/index.txt
+	var allPaths []string
+	for _, f := range d.memGraph.Files() {
+		allPaths = append(allPaths, f.Path)
+	}
+	output.WriteIndexFile(d.contextDir, allPaths)
+
+	// Mark dirty for global recomputation
+	d.idle.MarkDirty()
+
+	fmt.Printf("[daemon] deleted %s\n", relPath)
 }
 
 // reembedFile re-embeds a file if its signature text has changed.

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/neur0map/prowl/internal/graph"
+	"github.com/neur0map/prowl/internal/pipeline"
 	"github.com/neur0map/prowl/internal/store"
 )
 
@@ -85,4 +86,46 @@ func TestDaemonLoadsCallsEdgesOnStartup(t *testing.T) {
 	if callEdges[0].Confidence != 0.9 {
 		t.Fatalf("expected confidence 0.9, got %f", callEdges[0].Confidence)
 	}
+}
+
+func TestDaemonHandlesFileDeletion(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a source file
+	srcDir := filepath.Join(dir, "src")
+	os.MkdirAll(srcDir, 0o755)
+	os.WriteFile(filepath.Join(srcDir, "a.ts"), []byte("export function foo() {}"), 0o644)
+
+	// Index first
+	pipeline.Index(dir)
+
+	d, err := New(dir, 100*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d.loadGraphFromStore()
+
+	// Verify file exists in graph
+	_, ok := d.memGraph.File("src/a.ts")
+	if !ok {
+		t.Fatal("file should exist in graph after index")
+	}
+
+	// Simulate deletion
+	d.deleteFile("src/a.ts")
+
+	// File should be gone from graph
+	_, ok = d.memGraph.File("src/a.ts")
+	if ok {
+		t.Fatal("file should be removed from graph after deletion")
+	}
+
+	// Context directory should be removed
+	contextPath := filepath.Join(dir, ".prowl", "context", "src", "a.ts")
+	if _, err := os.Stat(contextPath); !os.IsNotExist(err) {
+		t.Fatal("context directory should be removed")
+	}
+
+	d.Stop()
 }
