@@ -93,3 +93,59 @@ func TestProwlOverview(t *testing.T) {
 		t.Fatal("expected communities array")
 	}
 }
+
+func TestProwlFileContext(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	contextDir := setupTestContext(t)
+
+	s := New(st, nil, contextDir)
+	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_file_context","arguments":{"path":"src/auth.ts"}}}`)
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %+v", resp.Error)
+	}
+
+	result := resp.Result.(map[string]interface{})
+	content := result["content"].([]interface{})
+	text := content[0].(map[string]interface{})["text"].(string)
+
+	var fc FileContext
+	if err := json.Unmarshal([]byte(text), &fc); err != nil {
+		t.Fatalf("response is not valid JSON: %v\nraw: %s", err, text)
+	}
+
+	if fc.Path != "src/auth.ts" {
+		t.Errorf("path = %q, want src/auth.ts", fc.Path)
+	}
+	if fc.Community != "auth" {
+		t.Errorf("community = %q, want auth", fc.Community)
+	}
+	if len(fc.Exports) != 1 {
+		t.Errorf("exports = %d, want 1", len(fc.Exports))
+	}
+	if len(fc.Calls) != 1 {
+		t.Errorf("calls = %d, want 1", len(fc.Calls))
+	}
+}
+
+func TestProwlFileContextMissing(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+
+	s := New(st, nil, t.TempDir())
+	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_file_context","arguments":{"path":"nonexistent.ts"}}}`)
+
+	if resp.Error == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestProwlFileContextMissingPath(t *testing.T) {
+	s := New(nil, nil, "")
+	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_file_context","arguments":{}}}`)
+
+	if resp.Error == nil {
+		t.Fatal("expected error for missing path parameter")
+	}
+}

@@ -127,6 +127,20 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 				},
 			},
 			{
+				"name":        "prowl_file_context",
+				"description": "Get all context for a single file: exports, signatures, imports, calls, callers, upstream dependencies, and community. Returns structured JSON.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Project-relative file path (e.g. src/auth.ts)",
+						},
+					},
+					"required": []string{"path"},
+				},
+			},
+			{
 				"name":        "prowl_semantic_search",
 				"description": "Search the codebase by meaning. Use when filesystem navigation of .prowl/context/ isn't enough for fuzzy semantic queries like 'where is the auth logic?' or 'password hashing'.",
 				"inputSchema": map[string]interface{}{
@@ -162,6 +176,9 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 	switch params.Name {
 	case "prowl_overview":
 		s.handleOverview(w, req.ID)
+		return
+	case "prowl_file_context":
+		s.handleFileContext(w, req.ID, params.Arguments)
 		return
 	case "prowl_semantic_search":
 		// fall through to existing code below

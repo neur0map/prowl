@@ -78,6 +78,30 @@ func (s *Server) handleOverview(w io.Writer, id interface{}) {
 	})
 }
 
+func (s *Server) handleFileContext(w io.Writer, id interface{}, params json.RawMessage) {
+	var args struct {
+		Path string `json:"path"`
+	}
+	json.Unmarshal(params, &args)
+	if args.Path == "" {
+		s.writeError(w, id, -32602, "Missing required parameter: path")
+		return
+	}
+
+	fc, err := readFileContext(s.contextDir, args.Path)
+	if err != nil {
+		s.writeError(w, id, -32602, "File not indexed: "+args.Path)
+		return
+	}
+
+	data, _ := json.Marshal(fc)
+	s.writeResult(w, id, map[string]interface{}{
+		"content": []map[string]interface{}{
+			{"type": "text", "text": string(data)},
+		},
+	})
+}
+
 func extToLanguage(ext string) string {
 	switch ext {
 	case "ts", "tsx":
