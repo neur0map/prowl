@@ -1,0 +1,220 @@
+package parser
+
+import (
+	"context"
+	"embed"
+	"strings"
+	"unicode"
+
+	sitter "github.com/smacker/go-tree-sitter"
+
+	"github.com/neur0map/prowl/internal/graph"
+)
+
+//go:embed queries/*.scm
+var queryFS embed.FS
+
+// ParseResult holds the extracted symbols and raw import specifiers for one file.
+type ParseResult struct {
+	Symbols []graph.Symbol
+	Imports []string // raw specifier strings (e.g. "./db", "fmt")
+}
+
+// captureToKind maps tree-sitter capture names to symbol kinds.
+var captureToKind = map[string]string{
+	"definition.function":  "function",
+	"definition.class":     "class",
+	"definition.interface": "interface",
+	"definition.method":    "method",
+	"definition.struct":    "struct",
+	"definition.enum":      "enum",
+	"definition.const":     "const",
+	"definition.type":      "type",
+}
+
+// ParseFile extracts symbols and imports from a single source file.
+// Returns nil (no error) for unsupported languages.
+func ParseFile(filePath string, source []byte) (*ParseResult, error) {
+	lang := DetectLanguage(filePath)
+	if lang == "" {
+		return nil, nil
+	}
+
+	tsLang := GetLanguage(lang)
+	if tsLang == nil {
+		return nil, nil
+	}
+
+	// Load the query file
+	queryFile := "queries/" + string(lang) + ".scm"
+	queryBytes, err := queryFS.ReadFile(queryFile)
+	if err != nil {
+		return nil, nil // no query for this language
+	}
+
+	// Parse the source
+	parser := sitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(tsLang)
+
+	tree, err := parser.ParseCtx(context.Background(), nil, source)
+	if err != nil {
+		return nil, err
+	}
+	root := tree.RootNode()
+
+	// Execute the query
+	q, err := sitter.NewQuery(queryBytes, tsLang)
+	if err != nil {
+		return nil, err
+	}
+	defer q.Close()
+
+	qc := sitter.NewQueryCursor()
+	defer qc.Close()
+	qc.Exec(q, root)
+
+	result := &ParseResult{}
+	// seenIdx tracks the index of each symbol in result.Symbols by name, for dedup/upgrade.
+	seenIdx := make(map[string]int)
+	// kindPriority: higher = more specific; used to upgrade "type" -> "struct"/"interface"
+	kindPriority := map[string]int{
+		"type":      1,
+		"const":     2,
+		"function":  3,
+		"method":    3,
+		"class":     3,
+		"enum":      3,
+		"struct":    4,
+		"interface": 4,
+	}
+
+	for {
+		match, ok := qc.NextMatch()
+		if !ok {
+			break
+		}
+		match = qc.FilterPredicates(match, source)
+
+		// Build capture map
+		caps := make(map[string]*sitter.Node)
+		for _, c := range match.Captures {
+			name := q.CaptureNameForId(c.Index)
+			caps[name] = c.Node
+		}
+
+		// Handle import captures
+		if _, isImport := caps["import"]; isImport {
+			if srcNode, ok := caps["import.source"]; ok {
+				raw := srcNode.Content(source)
+				// Strip quotes
+				raw = strings.Trim(raw, "'\"")
+				result.Imports = append(result.Imports, raw)
+			}
+			continue
+		}
+
+		// Handle definition captures
+		nameNode, hasName := caps["name"]
+		if !hasName {
+			continue
+		}
+
+		name := nameNode.Content(source)
+
+		// Determine kind from capture names
+		kind := "unknown"
+		for capName, k := range captureToKind {
+			if _, ok := caps[capName]; ok {
+				kind = k
+				break
+			}
+		}
+		if kind == "unknown" {
+			continue
+		}
+
+		// Check if we've already seen this name
+		if idx, alreadySeen := seenIdx[name]; alreadySeen {
+			// Upgrade kind if this match is more specific (e.g. "type" -> "struct")
+			existingKind := result.Symbols[idx].Kind
+			if kindPriority[kind] > kindPriority[existingKind] {
+				result.Symbols[idx].Kind = kind
+				// Also update signature with the more specific match
+				sig := extractSignature(match, q, source)
+				if sig != "" {
+					result.Symbols[idx].Signature = sig
+				}
+			}
+			continue
+		}
+		seenIdx[name] = len(result.Symbols)
+
+		// Determine export status
+		exported := isExported(nameNode, name, lang, source)
+
+		// Extract signature: the full text of the definition capture node,
+		// but only the first line (signature, not body)
+		sig := extractSignature(match, q, source)
+
+		sym := graph.Symbol{
+			Name:       name,
+			Kind:       kind,
+			FilePath:   filePath,
+			StartLine:  int(nameNode.StartPoint().Row) + 1,
+			EndLine:    int(nameNode.EndPoint().Row) + 1,
+			IsExported: exported,
+			Signature:  sig,
+		}
+		result.Symbols = append(result.Symbols, sym)
+	}
+
+	return result, nil
+}
+
+// isExported determines whether a symbol is publicly visible.
+func isExported(nameNode *sitter.Node, name string, lang Lang, source []byte) bool {
+	switch lang {
+	case LangGo:
+		if len(name) == 0 {
+			return false
+		}
+		return unicode.IsUpper(rune(name[0]))
+	case LangTypeScript:
+		// Walk up to check for export_statement ancestor
+		node := nameNode.Parent()
+		for node != nil {
+			if node.Type() == "export_statement" {
+				return true
+			}
+			node = node.Parent()
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// extractSignature pulls the definition text, taking only up to the opening brace.
+func extractSignature(match *sitter.QueryMatch, q *sitter.Query, source []byte) string {
+	// Find the outermost definition capture node
+	for _, c := range match.Captures {
+		capName := q.CaptureNameForId(c.Index)
+		if strings.HasPrefix(capName, "definition.") {
+			text := c.Node.Content(source)
+			// Truncate at opening brace to get just the signature
+			if idx := strings.Index(text, "{"); idx > 0 {
+				return strings.TrimSpace(text[:idx])
+			}
+			// For single-line definitions without braces
+			if idx := strings.Index(text, "\n"); idx > 0 {
+				return strings.TrimSpace(text[:idx])
+			}
+			if len(text) > 200 {
+				return text[:200]
+			}
+			return strings.TrimSpace(text)
+		}
+	}
+	return ""
+}
