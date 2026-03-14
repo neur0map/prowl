@@ -1,6 +1,7 @@
 package store
 
 import (
+	"math"
 	"testing"
 
 	"github.com/neur0map/prowl/internal/graph"
@@ -290,5 +291,162 @@ func TestDeleteFileSymbolsCascade(t *testing.T) {
 	syms, _ := s.SymbolsForFile("src/auth.ts")
 	if len(syms) != 0 {
 		t.Errorf("expected 0 symbols after delete, got %d", len(syms))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Embedding tests
+// ---------------------------------------------------------------------------
+
+func makeVec(dim int, val float32) []float32 {
+	v := make([]float32, dim)
+	for i := range v {
+		v[i] = val
+	}
+	// Normalize to unit length.
+	norm := float32(math.Sqrt(float64(dim))) * val
+	if norm == 0 {
+		return v
+	}
+	for i := range v {
+		v[i] /= norm
+	}
+	return v
+}
+
+func TestUpsertAndQueryEmbedding(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	fid, err := s.UpsertFile("src/auth.ts", "hash1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vec := makeVec(384, 1.0)
+	if err := s.UpsertEmbedding(fid, vec, "abc123"); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.AllEmbeddings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("expected 1 embedding, got %d", len(all))
+	}
+	if all[0].FilePath != "src/auth.ts" {
+		t.Errorf("expected path 'src/auth.ts', got %q", all[0].FilePath)
+	}
+	if len(all[0].Vector) != 384 {
+		t.Errorf("expected dim 384, got %d", len(all[0].Vector))
+	}
+	// Verify values round-trip correctly.
+	for i := range vec {
+		if math.Abs(float64(all[0].Vector[i]-vec[i])) > 1e-6 {
+			t.Errorf("vector mismatch at index %d: got %f, want %f", i, all[0].Vector[i], vec[i])
+			break
+		}
+	}
+}
+
+func TestEmbeddingTextHash(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	fid, _ := s.UpsertFile("src/a.ts", "h1")
+	vec := makeVec(384, 1.0)
+
+	// Store with initial hash.
+	if err := s.UpsertEmbedding(fid, vec, "hash_v1"); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := s.EmbeddingTextHash(fid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != "hash_v1" {
+		t.Errorf("expected 'hash_v1', got %q", hash)
+	}
+
+	// Update with new hash.
+	if err := s.UpsertEmbedding(fid, vec, "hash_v2"); err != nil {
+		t.Fatal(err)
+	}
+	hash, err = s.EmbeddingTextHash(fid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != "hash_v2" {
+		t.Errorf("expected 'hash_v2', got %q", hash)
+	}
+
+	// Non-existent file returns empty string.
+	hash, err = s.EmbeddingTextHash(9999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != "" {
+		t.Errorf("expected empty hash for non-existent file, got %q", hash)
+	}
+}
+
+func TestSearchSimilar(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	fid1, _ := s.UpsertFile("src/auth.ts", "h1")
+	fid2, _ := s.UpsertFile("src/db.ts", "h2")
+	fid3, _ := s.UpsertFile("src/util.ts", "h3")
+
+	// Create three distinct vectors.
+	// vec1: heavy on first dimensions.
+	vec1 := make([]float32, 384)
+	vec1[0] = 1.0
+	// vec2: heavy on middle dimensions.
+	vec2 := make([]float32, 384)
+	vec2[192] = 1.0
+	// vec3: heavy on last dimensions.
+	vec3 := make([]float32, 384)
+	vec3[383] = 1.0
+
+	s.UpsertEmbedding(fid1, vec1, "")
+	s.UpsertEmbedding(fid2, vec2, "")
+	s.UpsertEmbedding(fid3, vec3, "")
+
+	// Query similar to vec1 — should rank auth.ts first.
+	query := make([]float32, 384)
+	query[0] = 1.0
+
+	results, err := s.SearchSimilar(query, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	if results[0].FilePath != "src/auth.ts" {
+		t.Errorf("expected first result 'src/auth.ts', got %q", results[0].FilePath)
+	}
+	if results[0].Score < 0.99 {
+		t.Errorf("expected score ~1.0 for exact match, got %f", results[0].Score)
+	}
+
+	// Limit to 1 result.
+	results, err = s.SearchSimilar(query, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result with limit, got %d", len(results))
 	}
 }

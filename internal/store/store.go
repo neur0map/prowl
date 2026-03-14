@@ -3,11 +3,18 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/neur0map/prowl/internal/graph"
+	"github.com/viant/sqlite-vec/engine"
+	"github.com/viant/sqlite-vec/vector"
 	_ "modernc.org/sqlite"
 )
+
+func init() {
+	engine.RegisterVectorFunctions(nil)
+}
 
 // Store wraps a SQLite database for persisting the code graph.
 type Store struct {
@@ -355,4 +362,129 @@ func (s *Store) Stats() (files, symbols, edges int, err error) {
 	s.db.QueryRow("SELECT COUNT(*) FROM symbols").Scan(&symbols)
 	s.db.QueryRow("SELECT COUNT(*) FROM edges").Scan(&edges)
 	return
+}
+
+// ---------------------------------------------------------------------------
+// Embedding storage
+// ---------------------------------------------------------------------------
+
+// StoredEmbedding represents a file's embedding from the database.
+type StoredEmbedding struct {
+	FileID   int64
+	FilePath string
+	Vector   []float32
+}
+
+// SearchResult represents a semantic search result.
+type SearchResult struct {
+	FilePath   string
+	Score      float64
+	Signatures string
+}
+
+// UpsertEmbedding stores a vector for a file.
+func (s *Store) UpsertEmbedding(fileID int64, vec []float32, textHash string) error {
+	blob, err := vector.EncodeEmbedding(vec)
+	if err != nil {
+		return fmt.Errorf("encode embedding: %w", err)
+	}
+	_, err = s.db.Exec(
+		`INSERT INTO embeddings (file_id, vector, text_hash) VALUES (?, ?, ?)
+		 ON CONFLICT(file_id) DO UPDATE SET vector = excluded.vector, text_hash = excluded.text_hash`,
+		fileID, blob, textHash,
+	)
+	return err
+}
+
+// DeleteEmbedding removes a file's vector.
+func (s *Store) DeleteEmbedding(fileID int64) error {
+	_, err := s.db.Exec("DELETE FROM embeddings WHERE file_id = ?", fileID)
+	return err
+}
+
+// EmbeddingTextHash returns the stored text hash for a file.
+func (s *Store) EmbeddingTextHash(fileID int64) (string, error) {
+	var hash string
+	err := s.db.QueryRow("SELECT text_hash FROM embeddings WHERE file_id = ?", fileID).Scan(&hash)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return hash, err
+}
+
+// AllEmbeddings returns all stored embeddings for search.
+func (s *Store) AllEmbeddings() ([]StoredEmbedding, error) {
+	rows, err := s.db.Query(`
+		SELECT e.file_id, f.path, e.vector
+		FROM embeddings e
+		JOIN files f ON f.id = e.file_id
+		ORDER BY f.path
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []StoredEmbedding
+	for rows.Next() {
+		var se StoredEmbedding
+		var blob []byte
+		if err := rows.Scan(&se.FileID, &se.FilePath, &blob); err != nil {
+			return nil, err
+		}
+		vec, err := vector.DecodeEmbedding(blob)
+		if err != nil {
+			return nil, fmt.Errorf("decode embedding for %s: %w", se.FilePath, err)
+		}
+		se.Vector = vec
+		result = append(result, se)
+	}
+	return result, rows.Err()
+}
+
+// SearchSimilar finds the most similar files to a query vector.
+// Computes cosine similarity in Go using all stored embeddings.
+func (s *Store) SearchSimilar(queryVec []float32, limit int) ([]SearchResult, error) {
+	all, err := s.AllEmbeddings()
+	if err != nil {
+		return nil, err
+	}
+
+	type scored struct {
+		filePath string
+		score    float64
+	}
+	results := make([]scored, 0, len(all))
+	for _, emb := range all {
+		sim, err := vector.CosineSimilarity(queryVec, emb.Vector)
+		if err != nil {
+			continue
+		}
+		results = append(results, scored{filePath: emb.FilePath, score: sim})
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].score > results[j].score
+	})
+
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+
+	// Gather signatures for top results.
+	out := make([]SearchResult, len(results))
+	for i, r := range results {
+		out[i] = SearchResult{FilePath: r.filePath, Score: r.score}
+		var sigs sql.NullString
+		err := s.db.QueryRow(`
+			SELECT GROUP_CONCAT(s.signature, char(10))
+			FROM symbols s
+			JOIN files f ON f.id = s.file_id
+			WHERE f.path = ?
+		`, r.filePath).Scan(&sigs)
+		if err == nil && sigs.Valid {
+			out[i].Signatures = sigs.String
+		}
+	}
+	return out, nil
 }

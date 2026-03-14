@@ -39,6 +39,12 @@ CREATE TABLE IF NOT EXISTS community_members (
     PRIMARY KEY (file_id, community_id)
 );
 
+CREATE TABLE IF NOT EXISTS embeddings (
+    file_id    INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    vector     BLOB NOT NULL,
+    text_hash  TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_file_id, type);
 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
 CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
