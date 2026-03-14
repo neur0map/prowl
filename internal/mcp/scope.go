@@ -63,10 +63,11 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 
 	// Step 2: Build hit set and expand 1-hop
 	type fileEntry struct {
-		path   string
-		reason string
-		score  float64
-		hops   int // number of edges connecting to search hits
+		path           string
+		reason         string
+		score          float64
+		hops           int // number of edges connecting to search hits
+		communityBonus int // 1 if shares community with a search hit
 	}
 
 	seen := map[string]*fileEntry{}
@@ -132,7 +133,24 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 		}
 	}
 
-	// Step 4: Rank — search hits first (by score desc), then expanded (by hops desc)
+	// Step 3.5: Compute community bonus for expanded files
+	hitCommunities := map[string]bool{}
+	for _, hitPath := range hitPaths {
+		comm, _ := s.store.CommunityOf(hitPath)
+		if comm != "" {
+			hitCommunities[comm] = true
+		}
+	}
+	for _, e := range seen {
+		if e.reason != "search_hit" {
+			comm, _ := s.store.CommunityOf(e.path)
+			if comm != "" && hitCommunities[comm] {
+				e.communityBonus = 1
+			}
+		}
+	}
+
+	// Step 4: Rank — search hits first (by blended score), then expanded (by communityBonus+hops)
 	var entries []*fileEntry
 	for _, e := range seen {
 		entries = append(entries, e)
@@ -144,14 +162,26 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 			return iHit
 		}
 		if iHit {
-			return entries[i].score > entries[j].score
+			iScore := 0.85*entries[i].score + 0.15*s.heatScore(entries[i].path)
+			jScore := 0.85*entries[j].score + 0.15*s.heatScore(entries[j].path)
+			return iScore > jScore
 		}
-		return entries[i].hops > entries[j].hops
+		iRank := entries[i].communityBonus + entries[i].hops
+		jRank := entries[j].communityBonus + entries[j].hops
+		if iRank != jRank {
+			return iRank > jRank
+		}
+		return s.heatScore(entries[i].path) > s.heatScore(entries[j].path)
 	})
 
 	// Step 5: Cap at limit
 	if len(entries) > args.Limit {
 		entries = entries[:args.Limit]
+	}
+
+	// Step 5.5: Record heat for returned files
+	for _, e := range entries {
+		s.recordAccess(e.path)
 	}
 
 	// Step 6: Assemble response with context
