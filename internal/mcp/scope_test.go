@@ -3,6 +3,8 @@ package mcp
 import (
 	"sort"
 	"testing"
+
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestScopeCommunityBoost(t *testing.T) {
@@ -89,5 +91,64 @@ func TestProwlScopeMissingTask(t *testing.T) {
 	}
 	if resp.Error.Code != -32602 {
 		t.Errorf("error code = %d, want -32602", resp.Error.Code)
+	}
+}
+
+func TestComputeDepth(t *testing.T) {
+	st, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	// a.go -> b.go -> c.go (a calls b, b calls c)
+	fA, _ := st.UpsertFile("a.go", "h1")
+	fB, _ := st.UpsertFile("b.go", "h2")
+	fC, _ := st.UpsertFile("c.go", "h3")
+	st.UpsertEdge(fA, fB, "CALLS")
+	st.UpsertEdge(fB, fC, "CALLS")
+
+	paths := []string{"a.go", "b.go", "c.go"}
+	depths := computeDepth(st, paths)
+
+	// c.go has no dependencies in the set -> depth 0
+	// b.go depends on c.go -> depth 1
+	// a.go depends on b.go -> depth 2
+	if depths["c.go"] != 0 {
+		t.Errorf("c.go depth = %d, want 0", depths["c.go"])
+	}
+	if depths["b.go"] != 1 {
+		t.Errorf("b.go depth = %d, want 1", depths["b.go"])
+	}
+	if depths["a.go"] != 2 {
+		t.Errorf("a.go depth = %d, want 2", depths["a.go"])
+	}
+}
+
+func TestComputeDepthCycle(t *testing.T) {
+	st, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	// Cycle: a -> b -> a, plus a -> c
+	fA, _ := st.UpsertFile("a.go", "h1")
+	fB, _ := st.UpsertFile("b.go", "h2")
+	fC, _ := st.UpsertFile("c.go", "h3")
+	st.UpsertEdge(fA, fB, "CALLS")
+	st.UpsertEdge(fB, fA, "CALLS")
+	st.UpsertEdge(fA, fC, "CALLS")
+
+	paths := []string{"a.go", "b.go", "c.go"}
+	depths := computeDepth(st, paths)
+
+	// c.go has no deps -> depth 0
+	if depths["c.go"] != 0 {
+		t.Errorf("c.go depth = %d, want 0", depths["c.go"])
+	}
+	// a.go and b.go form a cycle -> same depth
+	if depths["a.go"] != depths["b.go"] {
+		t.Errorf("cycle members should have same depth: a=%d, b=%d", depths["a.go"], depths["b.go"])
 	}
 }

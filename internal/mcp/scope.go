@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"sort"
+
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // scopeResponse is the JSON structure returned by prowl_scope.
@@ -16,6 +18,7 @@ type scopeFile struct {
 	Path       string   `json:"path"`
 	Reason     string   `json:"reason"`
 	Score      float64  `json:"score,omitempty"`
+	Depth      int      `json:"depth"`
 	Community  string   `json:"community,omitempty"`
 	Exports    []string `json:"exports"`
 	Signatures []string `json:"signatures"`
@@ -184,6 +187,13 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 		s.recordAccess(e.path)
 	}
 
+	// Step 5.6: Compute dependency depth
+	var resultPaths []string
+	for _, e := range entries {
+		resultPaths = append(resultPaths, e.path)
+	}
+	depthMap := computeDepth(s.store, resultPaths)
+
 	// Step 6: Assemble response with context
 	var files []scopeFile
 	for _, e := range entries {
@@ -191,6 +201,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 			Path:   e.path,
 			Reason: e.reason,
 			Score:  e.score,
+			Depth:  depthMap[e.path],
 		}
 
 		fc, err := readFileContext(s.contextDir, e.path)
@@ -207,6 +218,11 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 		files = append(files, sf)
 	}
 
+	// Final sort: depth ascending, preserve score order within same depth
+	sort.SliceStable(files, func(i, j int) bool {
+		return files[i].Depth < files[j].Depth
+	})
+
 	resp := scopeResponse{
 		Task:  args.Task,
 		Files: files,
@@ -218,4 +234,79 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 			{"type": "text", "text": string(data)},
 		},
 	})
+}
+
+// computeDepth runs Kahn's algorithm on the result set to assign dependency depth.
+// Depth 0 = leaf files (no dependencies within the set). Higher depth = depends on lower.
+// Files in cycles get the same depth as the deepest non-cycle file + 1.
+func computeDepth(st *store.Store, paths []string) map[string]int {
+	pathSet := map[string]bool{}
+	for _, p := range paths {
+		pathSet[p] = true
+	}
+
+	// For each file, count how many in-set files it depends on (calls/imports)
+	depCount := map[string]int{}
+	dependents := map[string][]string{} // file -> files that depend on it
+
+	for _, p := range paths {
+		depCount[p] = 0
+	}
+
+	for _, p := range paths {
+		calls, _ := st.CallsOf(p)
+		imports, _ := st.ImportsOf(p)
+		seen := map[string]bool{}
+		for _, t := range append(calls, imports...) {
+			if pathSet[t] && t != p && !seen[t] {
+				seen[t] = true
+				depCount[p]++
+				dependents[t] = append(dependents[t], p)
+			}
+		}
+	}
+
+	// Kahn's: start with files that have depCount == 0 (no in-set dependencies)
+	depth := map[string]int{}
+	tentative := map[string]int{} // track max incoming depth before node resolves
+
+	var queue []string
+	for _, p := range paths {
+		if depCount[p] == 0 {
+			queue = append(queue, p)
+			depth[p] = 0
+		}
+	}
+
+	for len(queue) > 0 {
+		var next []string
+		for _, p := range queue {
+			for _, dep := range dependents[p] {
+				depCount[dep]--
+				if d := depth[p] + 1; d > tentative[dep] {
+					tentative[dep] = d
+				}
+				if depCount[dep] == 0 {
+					depth[dep] = tentative[dep]
+					next = append(next, dep)
+				}
+			}
+		}
+		queue = next
+	}
+
+	// Handle cycles: any file not fully resolved gets max_depth + 1
+	maxDepth := 0
+	for _, d := range depth {
+		if d > maxDepth {
+			maxDepth = d
+		}
+	}
+	for _, p := range paths {
+		if _, ok := depth[p]; !ok {
+			depth[p] = maxDepth + 1
+		}
+	}
+
+	return depth
 }
