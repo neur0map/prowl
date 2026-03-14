@@ -200,6 +200,59 @@ func TestWriteContextProcesses(t *testing.T) {
 	}
 }
 
+func TestWriteCalls(t *testing.T) {
+	dir := t.TempDir()
+	WriteCalls(dir, "src/a.ts", []string{"src/b.ts", "src/c.ts"})
+
+	data, err := os.ReadFile(filepath.Join(dir, "src/a.ts/.calls"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.TrimSpace(string(data))
+	if lines != "src/b.ts\nsrc/c.ts" {
+		t.Fatalf("unexpected .calls content: %q", lines)
+	}
+}
+
+func TestWriteCallers(t *testing.T) {
+	dir := t.TempDir()
+	WriteCallers(dir, "src/b.ts", []string{"src/a.ts"})
+
+	data, err := os.ReadFile(filepath.Join(dir, "src/b.ts/.callers"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(data)) != "src/a.ts" {
+		t.Fatalf("unexpected .callers content: %q", string(data))
+	}
+}
+
+func TestWriteCommunity(t *testing.T) {
+	dir := t.TempDir()
+	WriteCommunity(dir, "src/a.ts", "auth (ID: 3)")
+
+	data, err := os.ReadFile(filepath.Join(dir, "src/a.ts/.community"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(data)) != "auth (ID: 3)" {
+		t.Fatalf("unexpected .community content: %q", string(data))
+	}
+}
+
+func TestWriteIndexFile(t *testing.T) {
+	dir := t.TempDir()
+	WriteIndexFile(dir, []string{"src/a.ts", "src/b.ts"})
+
+	data, err := os.ReadFile(filepath.Join(dir, "_meta/index.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(data)) != "src/a.ts\nsrc/b.ts" {
+		t.Fatalf("unexpected index.txt content: %q", string(data))
+	}
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)

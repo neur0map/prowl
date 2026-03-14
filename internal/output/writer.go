@@ -155,6 +155,55 @@ func WriteUpstream(contextDir string, filePath string, upstream []string) error 
 	return writeLines(filepath.Join(fileDir, ".upstream"), upstream)
 }
 
+// WriteCalls rewrites the .calls file for a single file.
+func WriteCalls(contextDir, filePath string, calls []string) {
+	writeContextFile(contextDir, filePath, ".calls", calls)
+}
+
+// WriteCallers rewrites the .callers file for a single file.
+func WriteCallers(contextDir, filePath string, callers []string) {
+	writeContextFile(contextDir, filePath, ".callers", callers)
+}
+
+// WriteCommunity rewrites the .community file for a single file.
+func WriteCommunity(contextDir, filePath, community string) {
+	dir := filepath.Join(contextDir, filePath)
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, ".community"), []byte(community+"\n"), 0o644)
+}
+
+// WriteIndexFile rewrites _meta/index.txt with the full file list.
+func WriteIndexFile(contextDir string, files []string) {
+	metaDir := filepath.Join(contextDir, "_meta")
+	os.MkdirAll(metaDir, 0o755)
+	sorted := make([]string, len(files))
+	copy(sorted, files)
+	sort.Strings(sorted)
+	writeLines(filepath.Join(metaDir, "index.txt"), sorted)
+}
+
+// WriteMetaCommunities rewrites _meta/communities.txt.
+func WriteMetaCommunities(contextDir string, communities []CommunityData) {
+	metaDir := filepath.Join(contextDir, "_meta")
+	os.MkdirAll(metaDir, 0o755)
+	writeCommunities(metaDir, communities)
+}
+
+// WriteMetaProcesses rewrites _meta/processes.txt.
+func WriteMetaProcesses(contextDir string, processes []ProcessData) {
+	metaDir := filepath.Join(contextDir, "_meta")
+	os.MkdirAll(metaDir, 0o755)
+	writeProcesses(metaDir, processes)
+}
+
+// writeContextFile writes a named context file for a specific source file.
+// Named differently from writeLines to avoid collision with the existing helper.
+func writeContextFile(contextDir, filePath, name string, lines []string) {
+	dir := filepath.Join(contextDir, filePath)
+	os.MkdirAll(dir, 0o755)
+	writeLines(filepath.Join(dir, name), lines)
+}
+
 func kindAbbrev(kind string) string {
 	switch kind {
 	case "function":

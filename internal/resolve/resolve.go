@@ -135,6 +135,147 @@ func resolveCallRef(
 	return edges
 }
 
+// ResolveCallsForFile resolves CALLS and heritage edges for a single file.
+// Takes parsed CallRefs and HeritageRefs since these come from parser output.
+func ResolveCallsForFile(g *graph.Graph, path string, calls []graph.CallRef, heritage []graph.HeritageRef) []graph.Edge {
+	// Build name index for ALL symbols (matching existing buildNameIndex behavior)
+	nameIndex := buildNameIndex(g)
+
+	seen := make(map[string]bool) // dedup key: "target|type"
+	var edges []graph.Edge
+
+	for _, call := range calls {
+		name := call.CalleeName
+		// Strip qualifier: "foo.bar" -> "bar"
+		if idx := strings.LastIndex(name, "."); idx >= 0 {
+			name = name[idx+1:]
+		}
+
+		edge, ok := resolveOneCall(g, path, name, nameIndex, seen)
+		if ok {
+			edges = append(edges, edge)
+		}
+	}
+
+	for _, h := range heritage {
+		edgeType := "EXTENDS"
+		if h.Type == "implements" {
+			edgeType = "IMPLEMENTS"
+		}
+
+		// Search imported files first, then global
+		var targetPath string
+		var confidence float64
+
+		for _, imp := range g.ImportsOf(path) {
+			for _, sym := range g.SymbolsForFile(imp) {
+				if sym.Name == h.ParentName {
+					targetPath = imp
+					confidence = 0.9
+					break
+				}
+			}
+			if targetPath != "" {
+				break
+			}
+		}
+
+		if targetPath == "" {
+			if candidates, ok := nameIndex[h.ParentName]; ok {
+				// Filter to external candidates (excluding self)
+				var external []string
+				for _, c := range candidates {
+					if c != path {
+						external = append(external, c)
+					}
+				}
+				if len(external) > 0 {
+					targetPath = external[0]
+					// Match existing resolveHeritageRef confidence: 0.9 unique, 0.5 ambiguous
+					confidence = 0.9
+					if len(external) > 1 {
+						confidence = 0.5
+					}
+				}
+			}
+		}
+
+		if targetPath != "" {
+			key := targetPath + "|" + edgeType
+			if !seen[key] {
+				seen[key] = true
+				edges = append(edges, graph.Edge{
+					SourcePath: path,
+					TargetPath: targetPath,
+					Type:       edgeType,
+					Confidence: confidence,
+				})
+			}
+		}
+	}
+
+	return edges
+}
+
+func resolveOneCall(g *graph.Graph, sourcePath, name string, nameIndex map[string][]string, seen map[string]bool) (graph.Edge, bool) {
+	// Tier 1: imported files (check ALL symbols, matching existing resolveCallRef)
+	for _, imp := range g.ImportsOf(sourcePath) {
+		for _, sym := range g.SymbolsForFile(imp) {
+			if sym.Name == name {
+				key := imp + "|CALLS"
+				if seen[key] {
+					return graph.Edge{}, false
+				}
+				seen[key] = true
+				return graph.Edge{
+					SourcePath: sourcePath,
+					TargetPath: imp,
+					Type:       "CALLS",
+					Confidence: 0.9,
+				}, true
+			}
+		}
+	}
+
+	// Tier 2: same-file symbol — skip
+	for _, sym := range g.SymbolsForFile(sourcePath) {
+		if sym.Name == name {
+			return graph.Edge{}, false
+		}
+	}
+
+	// Tier 3: global search — count external candidates (excluding self)
+	candidates, ok := nameIndex[name]
+	if !ok {
+		return graph.Edge{}, false
+	}
+	var external []string
+	for _, c := range candidates {
+		if c != sourcePath {
+			external = append(external, c)
+		}
+	}
+	if len(external) == 0 {
+		return graph.Edge{}, false
+	}
+	conf := 0.5
+	if len(external) > 1 {
+		conf = 0.3
+	}
+	target := external[0]
+	key := target + "|CALLS"
+	if seen[key] {
+		return graph.Edge{}, false
+	}
+	seen[key] = true
+	return graph.Edge{
+		SourcePath: sourcePath,
+		TargetPath: target,
+		Type:       "CALLS",
+		Confidence: conf,
+	}, true
+}
+
 // resolveHeritageRef resolves an extends/implements ref to a cross-file edge.
 func resolveHeritageRef(
 	nameIndex map[string][]string,

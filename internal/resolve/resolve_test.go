@@ -231,6 +231,51 @@ func TestHeritageImplementsResolves(t *testing.T) {
 	}
 }
 
+func TestResolveCallsForFileSingleFile(t *testing.T) {
+	g := graph.New()
+	g.AddFile(graph.FileRecord{Path: "a.ts", Hash: "aaa"})
+	g.AddFile(graph.FileRecord{Path: "b.ts", Hash: "bbb"})
+	g.AddSymbol(graph.Symbol{FilePath: "b.ts", Name: "helper", Kind: "function", IsExported: true})
+	g.AddEdge(graph.Edge{SourcePath: "a.ts", TargetPath: "b.ts", Type: "IMPORTS"})
+
+	calls := []graph.CallRef{{CalleeName: "helper", Line: 10}}
+	heritage := []graph.HeritageRef{}
+
+	edges := ResolveCallsForFile(g, "a.ts", calls, heritage)
+
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(edges))
+	}
+	if edges[0].TargetPath != "b.ts" {
+		t.Fatalf("expected target b.ts, got %s", edges[0].TargetPath)
+	}
+	if edges[0].Type != "CALLS" {
+		t.Fatalf("expected CALLS edge, got %s", edges[0].Type)
+	}
+	if edges[0].Confidence != 0.9 {
+		t.Fatalf("expected confidence 0.9, got %f", edges[0].Confidence)
+	}
+}
+
+func TestResolveCallsForFileHeritage(t *testing.T) {
+	g := graph.New()
+	g.AddFile(graph.FileRecord{Path: "a.ts", Hash: "aaa"})
+	g.AddFile(graph.FileRecord{Path: "b.ts", Hash: "bbb"})
+	g.AddSymbol(graph.Symbol{FilePath: "b.ts", Name: "BaseClass", Kind: "class", IsExported: true})
+
+	calls := []graph.CallRef{}
+	heritage := []graph.HeritageRef{{ChildName: "MyClass", ParentName: "BaseClass", Type: "extends"}}
+
+	edges := ResolveCallsForFile(g, "a.ts", calls, heritage)
+
+	if len(edges) != 1 {
+		t.Fatalf("expected 1 edge, got %d", len(edges))
+	}
+	if edges[0].Type != "EXTENDS" {
+		t.Fatalf("expected EXTENDS, got %s", edges[0].Type)
+	}
+}
+
 func TestDeduplication(t *testing.T) {
 	g := setupGraph()
 
