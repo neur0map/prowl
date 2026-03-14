@@ -29,7 +29,7 @@ func TestWriteContext(t *testing.T) {
 	g.AddEdge(graph.Edge{SourcePath: "src/login.ts", TargetPath: "src/auth.ts", Type: "IMPORTS"})
 	g.AddEdge(graph.Edge{SourcePath: "src/auth.ts", TargetPath: "src/db.ts", Type: "IMPORTS"})
 
-	err := WriteContext(dir, g)
+	err := WriteContext(dir, g, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +65,138 @@ func TestWriteContext(t *testing.T) {
 	index := readFile(t, filepath.Join(dir, "_meta", "index.txt"))
 	if !strings.Contains(index, "src/auth.ts") {
 		t.Errorf("_meta/index.txt missing src/auth.ts")
+	}
+}
+
+func TestWriteContextCallsAndCallers(t *testing.T) {
+	dir := t.TempDir()
+	g := graph.New()
+
+	g.AddFile(graph.FileRecord{Path: "src/handler.ts", Hash: "a"})
+	g.AddFile(graph.FileRecord{Path: "src/service.ts", Hash: "b"})
+	g.AddFile(graph.FileRecord{Path: "src/repo.ts", Hash: "c"})
+
+	// handler calls service, service calls repo
+	g.AddEdge(graph.Edge{SourcePath: "src/handler.ts", TargetPath: "src/service.ts", Type: "CALLS", Confidence: 0.9})
+	g.AddEdge(graph.Edge{SourcePath: "src/service.ts", TargetPath: "src/repo.ts", Type: "CALLS", Confidence: 0.8})
+
+	err := WriteContext(dir, g, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// handler.ts .calls should contain service.ts
+	calls := readFile(t, filepath.Join(dir, "src", "handler.ts", ".calls"))
+	if !strings.Contains(calls, "src/service.ts") {
+		t.Errorf(".calls missing src/service.ts, got:\n%s", calls)
+	}
+
+	// service.ts .callers should contain handler.ts
+	callers := readFile(t, filepath.Join(dir, "src", "service.ts", ".callers"))
+	if !strings.Contains(callers, "src/handler.ts") {
+		t.Errorf(".callers missing src/handler.ts, got:\n%s", callers)
+	}
+
+	// service.ts .calls should contain repo.ts
+	serviceCalls := readFile(t, filepath.Join(dir, "src", "service.ts", ".calls"))
+	if !strings.Contains(serviceCalls, "src/repo.ts") {
+		t.Errorf("service .calls missing src/repo.ts, got:\n%s", serviceCalls)
+	}
+
+	// repo.ts .callers should contain service.ts
+	repoCallers := readFile(t, filepath.Join(dir, "src", "repo.ts", ".callers"))
+	if !strings.Contains(repoCallers, "src/service.ts") {
+		t.Errorf("repo .callers missing src/service.ts, got:\n%s", repoCallers)
+	}
+
+	// handler.ts .callers should be empty (no one calls it)
+	handlerCallers := readFile(t, filepath.Join(dir, "src", "handler.ts", ".callers"))
+	if strings.TrimSpace(handlerCallers) != "" {
+		t.Errorf("handler .callers should be empty, got:\n%s", handlerCallers)
+	}
+
+	// repo.ts .calls should be empty (it calls nothing)
+	repoCalls := readFile(t, filepath.Join(dir, "src", "repo.ts", ".calls"))
+	if strings.TrimSpace(repoCalls) != "" {
+		t.Errorf("repo .calls should be empty, got:\n%s", repoCalls)
+	}
+}
+
+func TestWriteContextCommunity(t *testing.T) {
+	dir := t.TempDir()
+	g := graph.New()
+
+	g.AddFile(graph.FileRecord{Path: "src/auth.ts", Hash: "a"})
+	g.AddFile(graph.FileRecord{Path: "src/login.ts", Hash: "b"})
+	g.AddFile(graph.FileRecord{Path: "src/db.ts", Hash: "c"})
+
+	communities := []CommunityData{
+		{ID: 0, Name: "auth", Members: []string{"src/auth.ts", "src/login.ts"}},
+		{ID: 1, Name: "data", Members: []string{"src/db.ts"}},
+	}
+
+	err := WriteContext(dir, g, communities, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check per-file .community
+	authComm := readFile(t, filepath.Join(dir, "src", "auth.ts", ".community"))
+	if !strings.Contains(authComm, "auth (id: 0)") {
+		t.Errorf(".community missing 'auth (id: 0)', got:\n%s", authComm)
+	}
+
+	dbComm := readFile(t, filepath.Join(dir, "src", "db.ts", ".community"))
+	if !strings.Contains(dbComm, "data (id: 1)") {
+		t.Errorf(".community missing 'data (id: 1)', got:\n%s", dbComm)
+	}
+
+	// Check _meta/communities.txt
+	commFile := readFile(t, filepath.Join(dir, "_meta", "communities.txt"))
+	if !strings.Contains(commFile, "auth (2 members)") {
+		t.Errorf("communities.txt missing 'auth (2 members)', got:\n%s", commFile)
+	}
+	if !strings.Contains(commFile, "data (1 members)") {
+		t.Errorf("communities.txt missing 'data (1 members)', got:\n%s", commFile)
+	}
+}
+
+func TestWriteContextProcesses(t *testing.T) {
+	dir := t.TempDir()
+	g := graph.New()
+
+	g.AddFile(graph.FileRecord{Path: "src/main.ts", Hash: "a"})
+
+	processes := []ProcessData{
+		{
+			Name:  "handleRequest",
+			Entry: "src/handler.ts",
+			Steps: []string{"src/handler.ts", "src/service.ts", "src/repo.ts"},
+			Type:  "cross_community",
+		},
+	}
+
+	err := WriteContext(dir, g, nil, processes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check _meta/processes.txt
+	procFile := readFile(t, filepath.Join(dir, "_meta", "processes.txt"))
+	if !strings.Contains(procFile, "process: handleRequest [cross_community]") {
+		t.Errorf("processes.txt missing process header, got:\n%s", procFile)
+	}
+	if !strings.Contains(procFile, "entry: src/handler.ts") {
+		t.Errorf("processes.txt missing entry, got:\n%s", procFile)
+	}
+	if !strings.Contains(procFile, "-> src/handler.ts") {
+		t.Errorf("processes.txt missing step handler, got:\n%s", procFile)
+	}
+	if !strings.Contains(procFile, "-> src/service.ts") {
+		t.Errorf("processes.txt missing step service, got:\n%s", procFile)
+	}
+	if !strings.Contains(procFile, "-> src/repo.ts") {
+		t.Errorf("processes.txt missing step repo, got:\n%s", procFile)
 	}
 }
 

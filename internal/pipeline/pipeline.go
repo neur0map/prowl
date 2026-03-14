@@ -8,10 +8,13 @@ import (
 	"strings"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/neur0map/prowl/internal/community"
 	"github.com/neur0map/prowl/internal/graph"
 	"github.com/neur0map/prowl/internal/ignore"
 	"github.com/neur0map/prowl/internal/output"
 	"github.com/neur0map/prowl/internal/parser"
+	"github.com/neur0map/prowl/internal/process"
+	"github.com/neur0map/prowl/internal/resolve"
 	"github.com/neur0map/prowl/internal/store"
 )
 
@@ -134,6 +137,52 @@ func Index(projectDir string) error {
 		}
 	}
 
+	// Phase 4: Call tracing
+	fmt.Println("Phase 4: Resolving calls...")
+	callsByFile := map[string][]graph.CallRef{}
+	heritageByFile := map[string][]graph.HeritageRef{}
+	for _, pe := range parsed {
+		if len(pe.result.Calls) > 0 {
+			callsByFile[pe.relPath] = pe.result.Calls
+		}
+		if len(pe.result.Heritage) > 0 {
+			heritageByFile[pe.relPath] = pe.result.Heritage
+		}
+	}
+	resolved := resolve.ResolveCalls(g, callsByFile, heritageByFile)
+	for _, re := range resolved {
+		g.AddEdge(graph.Edge{
+			SourcePath: re.SourcePath,
+			TargetPath: re.TargetPath,
+			Type:       re.Type,
+			Confidence: re.Confidence,
+		})
+	}
+
+	// Phase 5: Heritage (already resolved in phase 4 via ResolveCalls)
+	// Heritage edges are included in the resolve.ResolveCalls output above.
+
+	// Phase 6: Community detection
+	fmt.Println("Phase 6: Detecting communities...")
+	communities := community.DetectCommunities(g)
+	for _, c := range communities {
+		for _, member := range c.Members {
+			g.SetCommunity(member, graph.CommunityInfo{
+				ID: c.ID, Name: c.Name, Label: c.Label,
+			})
+		}
+	}
+
+	// Phase 7: Process detection
+	fmt.Println("Phase 7: Detecting processes...")
+	communityMap := map[string]int{}
+	for _, c := range communities {
+		for _, member := range c.Members {
+			communityMap[member] = c.ID
+		}
+	}
+	processes := process.DetectProcesses(g, communityMap)
+
 	// Persist to SQLite
 	fmt.Println("Persisting to SQLite...")
 	for _, f := range g.Files() {
@@ -149,13 +198,48 @@ func Index(projectDir string) error {
 		srcID, _ := st.FileID(e.SourcePath)
 		tgtID, _ := st.FileID(e.TargetPath)
 		if srcID > 0 && tgtID > 0 {
-			st.UpsertEdge(srcID, tgtID, e.Type)
+			if e.Confidence != 0 {
+				st.UpsertEdgeWithConfidence(srcID, tgtID, e.Type, e.Confidence)
+			} else {
+				st.UpsertEdge(srcID, tgtID, e.Type)
+			}
+		}
+	}
+
+	// Persist communities
+	st.ClearCommunities()
+	for _, c := range communities {
+		st.InsertCommunity(c.ID, c.Name, c.Label)
+		for _, member := range c.Members {
+			fid, err := st.FileID(member)
+			if err == nil && fid > 0 {
+				st.InsertCommunityMember(fid, c.ID)
+			}
+		}
+	}
+
+	// Convert to output types
+	outCommunities := make([]output.CommunityData, len(communities))
+	for i, c := range communities {
+		outCommunities[i] = output.CommunityData{
+			ID:      c.ID,
+			Name:    c.Name,
+			Members: c.Members,
+		}
+	}
+	outProcesses := make([]output.ProcessData, len(processes))
+	for i, p := range processes {
+		outProcesses[i] = output.ProcessData{
+			Name:  p.Name,
+			Entry: p.Entry,
+			Steps: p.Steps,
+			Type:  p.Type,
 		}
 	}
 
 	// Write filesystem output
 	fmt.Println("Writing .prowl/context/...")
-	if err := output.WriteContext(contextDir, g); err != nil {
+	if err := output.WriteContext(contextDir, g, outCommunities, outProcesses); err != nil {
 		return fmt.Errorf("write context: %w", err)
 	}
 
