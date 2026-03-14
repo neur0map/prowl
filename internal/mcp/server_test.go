@@ -72,16 +72,32 @@ func TestMCPToolsList(t *testing.T) {
 		t.Fatal("no tools returned")
 	}
 
-	// Check prowl_semantic_search is present (don't assume ordering)
-	found := false
+	if len(tools) != 5 {
+		t.Errorf("expected 5 tools, got %d", len(tools))
+	}
+
+	expectedTools := map[string]bool{
+		"prowl_overview":        false,
+		"prowl_file_context":    false,
+		"prowl_scope":           false,
+		"prowl_impact":          false,
+		"prowl_semantic_search": false,
+	}
+
 	for _, raw := range tools {
 		tool := raw.(map[string]interface{})
-		if tool["name"] == "prowl_semantic_search" {
-			found = true
+		name := tool["name"].(string)
+		if _, ok := expectedTools[name]; ok {
+			expectedTools[name] = true
+		} else {
+			t.Errorf("unexpected tool: %s", name)
 		}
 	}
-	if !found {
-		t.Error("prowl_semantic_search not found in tools list")
+
+	for name, found := range expectedTools {
+		if !found {
+			t.Errorf("missing tool: %s", name)
+		}
 	}
 }
 

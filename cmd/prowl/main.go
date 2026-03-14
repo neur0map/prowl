@@ -165,7 +165,9 @@ var mcpCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dir := "."
 		absDir, _ := filepath.Abs(dir)
-		dbPath := filepath.Join(absDir, ".prowl", "prowl.db")
+		prowlDir := filepath.Join(absDir, ".prowl")
+		dbPath := filepath.Join(prowlDir, "prowl.db")
+		contextDir := filepath.Join(prowlDir, "context")
 
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			return fmt.Errorf("no index found at %s - run 'prowl index' first", absDir)
@@ -185,7 +187,7 @@ var mcpCmd = &cobra.Command{
 		}
 		defer embedder.Close()
 
-		server := mcp.New(st, embedder, "")
+		server := mcp.New(st, embedder, contextDir)
 		return server.Run()
 	},
 }

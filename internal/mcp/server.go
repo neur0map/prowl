@@ -213,57 +213,50 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 	switch params.Name {
 	case "prowl_overview":
 		s.handleOverview(w, req.ID)
-		return
 	case "prowl_file_context":
 		s.handleFileContext(w, req.ID, params.Arguments)
-		return
 	case "prowl_scope":
 		s.handleScope(w, req.ID, params.Arguments)
-		return
 	case "prowl_impact":
 		s.handleImpact(w, req.ID, params.Arguments)
-		return
 	case "prowl_semantic_search":
-		// fall through to existing code below
+		s.handleSemanticSearch(w, req.ID, params.Arguments)
 	default:
 		s.writeError(w, req.ID, -32602, "Unknown tool: "+params.Name)
-		return
 	}
+}
 
+func (s *Server) handleSemanticSearch(w io.Writer, id interface{}, params json.RawMessage) {
 	var args struct {
 		Query string `json:"query"`
 		Limit int    `json:"limit"`
 	}
-	json.Unmarshal(params.Arguments, &args)
+	json.Unmarshal(params, &args)
 	if args.Query == "" {
-		s.writeError(w, req.ID, -32602, "Missing required parameter: query")
+		s.writeError(w, id, -32602, "Missing required parameter: query")
 		return
 	}
 	if args.Limit <= 0 {
 		args.Limit = 5
 	}
 
-	// Guard against nil embedder (e.g. in tests or misconfiguration).
 	if s.embedder == nil {
-		s.writeError(w, req.ID, -32603, "Embedder not available")
+		s.writeError(w, id, -32603, "Embedder not available")
 		return
 	}
 
-	// Encode query
 	vecs, err := s.embedder.Encode([]string{args.Query})
 	if err != nil {
-		s.writeError(w, req.ID, -32603, "Encode error: "+err.Error())
+		s.writeError(w, id, -32603, "Encode error: "+err.Error())
 		return
 	}
 
-	// Search
 	results, err := s.store.SearchSimilar(vecs[0], args.Limit)
 	if err != nil {
-		s.writeError(w, req.ID, -32603, "Search error: "+err.Error())
+		s.writeError(w, id, -32603, "Search error: "+err.Error())
 		return
 	}
 
-	// Format response
 	var content strings.Builder
 	if len(results) == 0 {
 		content.WriteString("No results found.")
@@ -279,7 +272,7 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 		}
 	}
 
-	s.writeResult(w, req.ID, map[string]interface{}{
+	s.writeResult(w, id, map[string]interface{}{
 		"content": []map[string]interface{}{
 			{
 				"type": "text",
