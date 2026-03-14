@@ -411,6 +411,9 @@ func (d *Daemon) deleteFile(relPath string) {
 	oldCallEdges := d.memGraph.EdgesFromFile(relPath, "CALLS")
 	oldImports := d.memGraph.ImportsOf(relPath)
 
+	// Snapshot reverse callers BEFORE store.DeleteFile (CASCADE deletes these edges)
+	reverseCallers, _ := d.store.CallersOf(relPath)
+
 	// Remove from in-memory graph (clears all edges in both directions)
 	d.memGraph.RemoveFile(relPath)
 
@@ -422,11 +425,22 @@ func (d *Daemon) deleteFile(relPath string) {
 	os.RemoveAll(contextPath)
 
 	// Update .callers for files the deleted file previously called
-	// Use store.CallersOf for efficiency — edges already deleted from store by CASCADE,
-	// so the remaining callers are exactly right
+	// Edges already deleted from store by CASCADE, so remaining callers are exactly right
 	for _, e := range oldCallEdges {
 		callers, _ := d.store.CallersOf(e.TargetPath)
 		output.WriteCallers(d.contextDir, e.TargetPath, callers)
+	}
+
+	// Update .calls for files that called INTO the deleted file (reverse direction)
+	// Their CALLS edges to the deleted file are gone from both graph and store,
+	// so re-reading from graph gives the correct remaining targets
+	for _, caller := range reverseCallers {
+		callEdges := d.memGraph.EdgesFromFile(caller, "CALLS")
+		callPaths := make([]string, 0, len(callEdges))
+		for _, e := range callEdges {
+			callPaths = append(callPaths, e.TargetPath)
+		}
+		output.WriteCalls(d.contextDir, caller, callPaths)
 	}
 
 	// Update .upstream for files the deleted file imported

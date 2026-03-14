@@ -97,7 +97,9 @@ func TestDaemonHandlesFileDeletion(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "a.ts"), []byte("export function foo() {}"), 0o644)
 
 	// Index first
-	pipeline.Index(dir)
+	if err := pipeline.Index(dir); err != nil {
+		t.Fatal(err)
+	}
 
 	d, err := New(dir, 100*time.Millisecond)
 	if err != nil {
@@ -119,6 +121,14 @@ func TestDaemonHandlesFileDeletion(t *testing.T) {
 	_, ok = d.memGraph.File("src/a.ts")
 	if ok {
 		t.Fatal("file should be removed from graph after deletion")
+	}
+
+	// File should be gone from SQLite store
+	files, _ := d.store.AllFiles()
+	for _, f := range files {
+		if f == "src/a.ts" {
+			t.Fatal("file should be removed from store after deletion")
+		}
 	}
 
 	// Context directory should be removed
