@@ -58,6 +58,47 @@ func (g *Graph) ReplaceFile(path string, f FileRecord) {
 	g.files[path] = f
 }
 
+// EdgesFromFile returns outgoing edges from a specific file, filtered by type.
+// If edgeType is empty, returns all edge types.
+func (g *Graph) EdgesFromFile(path, edgeType string) []Edge {
+	edges := g.edges[path]
+	if edgeType == "" {
+		out := make([]Edge, len(edges))
+		copy(out, edges)
+		return out
+	}
+	var out []Edge
+	for _, e := range edges {
+		if e.Type == edgeType {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// RemoveFile completely removes a file and all its edges in both directions.
+func (g *Graph) RemoveFile(path string) {
+	// Remove outgoing edges from reverse index
+	for _, e := range g.edges[path] {
+		g.removeReverse(e.TargetPath, path)
+	}
+	// Remove incoming edges: find all files that have edges pointing to this file
+	for _, src := range g.reverse[path] {
+		filtered := g.edges[src][:0]
+		for _, e := range g.edges[src] {
+			if e.TargetPath != path {
+				filtered = append(filtered, e)
+			}
+		}
+		g.edges[src] = filtered
+	}
+	delete(g.files, path)
+	delete(g.edges, path)
+	delete(g.symbols, path)
+	delete(g.communities, path)
+	delete(g.reverse, path)
+}
+
 func (g *Graph) removeReverse(target, source string) {
 	rev := g.reverse[target]
 	for i, s := range rev {

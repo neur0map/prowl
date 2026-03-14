@@ -161,3 +161,66 @@ func TestAllCommunities(t *testing.T) {
 		t.Errorf("expected community 1 name 'utils', got %q", all[1].Name)
 	}
 }
+
+func TestEdgesFromFile(t *testing.T) {
+	g := New()
+	g.AddFile(FileRecord{Path: "a.ts", Hash: "aaa"})
+	g.AddFile(FileRecord{Path: "b.ts", Hash: "bbb"})
+	g.AddEdge(Edge{SourcePath: "a.ts", TargetPath: "b.ts", Type: "IMPORTS"})
+	g.AddEdge(Edge{SourcePath: "a.ts", TargetPath: "b.ts", Type: "CALLS", Confidence: 0.9})
+
+	imports := g.EdgesFromFile("a.ts", "IMPORTS")
+	if len(imports) != 1 {
+		t.Fatalf("expected 1 IMPORTS edge, got %d", len(imports))
+	}
+	calls := g.EdgesFromFile("a.ts", "CALLS")
+	if len(calls) != 1 || calls[0].Confidence != 0.9 {
+		t.Fatal("expected 1 CALLS edge with confidence 0.9")
+	}
+	// Empty type returns all edges from file
+	all := g.EdgesFromFile("a.ts", "")
+	if len(all) != 2 {
+		t.Fatalf("expected 2 edges with empty type filter, got %d", len(all))
+	}
+}
+
+func TestRemoveFile(t *testing.T) {
+	g := New()
+	g.AddFile(FileRecord{Path: "a.ts", Hash: "aaa"})
+	g.AddFile(FileRecord{Path: "b.ts", Hash: "bbb"})
+	g.AddSymbol(Symbol{FilePath: "a.ts", Name: "foo", Kind: "function"})
+	g.AddEdge(Edge{SourcePath: "a.ts", TargetPath: "b.ts", Type: "IMPORTS"})
+	g.AddEdge(Edge{SourcePath: "a.ts", TargetPath: "b.ts", Type: "CALLS", Confidence: 0.9})
+	g.AddEdge(Edge{SourcePath: "b.ts", TargetPath: "a.ts", Type: "CALLS", Confidence: 0.5})
+	g.SetCommunity("a.ts", CommunityInfo{ID: 1, Name: "test"})
+
+	g.RemoveFile("a.ts")
+
+	_, ok := g.File("a.ts")
+	if ok {
+		t.Fatal("file a.ts should be removed")
+	}
+	if len(g.SymbolsForFile("a.ts")) != 0 {
+		t.Fatal("symbols for a.ts should be empty")
+	}
+	if len(g.EdgesFromFile("a.ts", "IMPORTS")) != 0 {
+		t.Fatal("outgoing IMPORTS from a.ts should be gone")
+	}
+	if len(g.EdgesFromFile("a.ts", "CALLS")) != 0 {
+		t.Fatal("outgoing CALLS from a.ts should be gone")
+	}
+	for _, e := range g.EdgesFromFile("b.ts", "CALLS") {
+		if e.TargetPath == "a.ts" {
+			t.Fatal("incoming CALLS edge from b.ts to a.ts should be removed")
+		}
+	}
+	_, hasCommunity := g.CommunityOf("a.ts")
+	if hasCommunity {
+		t.Fatal("community for a.ts should be cleared")
+	}
+	for _, u := range g.UpstreamOf("b.ts") {
+		if u == "a.ts" {
+			t.Fatal("a.ts should not appear in upstream of b.ts")
+		}
+	}
+}
