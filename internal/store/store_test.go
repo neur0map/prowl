@@ -462,6 +462,33 @@ func TestEmbeddingTextHash(t *testing.T) {
 	}
 }
 
+func TestEmbeddingCount(t *testing.T) {
+	st, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	count, err := st.EmbeddingCount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 embeddings, got %d", count)
+	}
+
+	fid, _ := st.UpsertFile("a.go", "abc")
+	st.UpsertEmbedding(fid, []float32{0.1, 0.2, 0.3}, "hash1")
+
+	count, err = st.EmbeddingCount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 embedding, got %d", count)
+	}
+}
+
 func TestSearchSimilar(t *testing.T) {
 	s, err := Open(":memory:")
 	if err != nil {

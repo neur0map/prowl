@@ -364,6 +364,13 @@ func (s *Store) Stats() (files, symbols, edges int, err error) {
 	return
 }
 
+// EmbeddingCount returns the number of files with embeddings.
+func (s *Store) EmbeddingCount() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM embeddings").Scan(&count)
+	return count, err
+}
+
 // DeleteFile removes a file by path. CASCADE constraints handle symbols, edges, embeddings, and community_members.
 func (s *Store) DeleteFile(path string) error {
 	_, err := s.db.Exec("DELETE FROM files WHERE path = ?", path)
