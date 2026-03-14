@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/neur0map/prowl/internal/graph"
@@ -91,6 +92,16 @@ func TestProwlOverview(t *testing.T) {
 	communities, ok := overview["communities"].([]interface{})
 	if !ok || len(communities) == 0 {
 		t.Fatal("expected communities array")
+	}
+	// Verify community members use glance digest format
+	comm := communities[0].(map[string]interface{})
+	members := comm["members"].([]interface{})
+	if len(members) == 0 {
+		t.Fatal("expected community members")
+	}
+	firstMember := members[0].(string)
+	if !strings.Contains(firstMember, " | ") || !strings.Contains(firstMember, "exports") {
+		t.Errorf("expected digest format, got %q", firstMember)
 	}
 }
 

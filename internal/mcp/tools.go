@@ -134,7 +134,7 @@ func communityMembersByName(st *store.Store, commName string, allFiles []string)
 	for _, f := range allFiles {
 		name, err := st.CommunityOf(f)
 		if err == nil && name == commName {
-			members = append(members, f)
+			members = append(members, st.FileDigest(f))
 		}
 	}
 	return members
