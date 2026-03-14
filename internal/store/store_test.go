@@ -294,6 +294,71 @@ func TestDeleteFileSymbolsCascade(t *testing.T) {
 	}
 }
 
+func TestDeleteFile(t *testing.T) {
+	st, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	fid, _ := st.UpsertFile("a.ts", "aaa")
+	st.InsertSymbols(fid, []graph.Symbol{
+		{FilePath: "a.ts", Name: "foo", Kind: "function", StartLine: 1, EndLine: 5},
+	})
+	bid, _ := st.UpsertFile("b.ts", "bbb")
+	st.UpsertEdge(fid, bid, "IMPORTS")
+
+	if err := st.DeleteFile("a.ts"); err != nil {
+		t.Fatalf("DeleteFile: %v", err)
+	}
+
+	id, _ := st.FileID("a.ts")
+	if id != 0 {
+		t.Fatal("file a.ts should be deleted")
+	}
+	syms, _ := st.SymbolsForFile("a.ts")
+	if len(syms) != 0 {
+		t.Fatal("symbols should be cascade-deleted")
+	}
+}
+
+func TestAllEdges(t *testing.T) {
+	st, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	fid, _ := st.UpsertFile("a.ts", "aaa")
+	bid, _ := st.UpsertFile("b.ts", "bbb")
+	st.UpsertEdge(fid, bid, "IMPORTS")
+	st.UpsertEdgeWithConfidence(fid, bid, "CALLS", 0.9)
+
+	edges, err := st.AllEdges()
+	if err != nil {
+		t.Fatalf("AllEdges: %v", err)
+	}
+	if len(edges) != 2 {
+		t.Fatalf("expected 2 edges, got %d", len(edges))
+	}
+
+	hasImport, hasCalls := false, false
+	for _, e := range edges {
+		if e.SourcePath == "a.ts" && e.TargetPath == "b.ts" && e.Type == "IMPORTS" {
+			hasImport = true
+		}
+		if e.SourcePath == "a.ts" && e.TargetPath == "b.ts" && e.Type == "CALLS" && e.Confidence == 0.9 {
+			hasCalls = true
+		}
+	}
+	if !hasImport {
+		t.Fatal("missing IMPORTS edge")
+	}
+	if !hasCalls {
+		t.Fatal("missing CALLS edge with confidence 0.9")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Embedding tests
 // ---------------------------------------------------------------------------

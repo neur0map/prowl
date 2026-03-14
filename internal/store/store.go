@@ -364,6 +364,36 @@ func (s *Store) Stats() (files, symbols, edges int, err error) {
 	return
 }
 
+// DeleteFile removes a file by path. CASCADE constraints handle symbols, edges, embeddings, and community_members.
+func (s *Store) DeleteFile(path string) error {
+	_, err := s.db.Exec("DELETE FROM files WHERE path = ?", path)
+	return err
+}
+
+// AllEdges returns every edge with source/target paths resolved from file IDs.
+func (s *Store) AllEdges() ([]graph.Edge, error) {
+	rows, err := s.db.Query(`
+		SELECT f.path, t.path, e.type, e.confidence
+		FROM edges e
+		JOIN files f ON f.id = e.source_file_id
+		JOIN files t ON t.id = e.target_file_id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var edges []graph.Edge
+	for rows.Next() {
+		var e graph.Edge
+		if err := rows.Scan(&e.SourcePath, &e.TargetPath, &e.Type, &e.Confidence); err != nil {
+			return nil, err
+		}
+		edges = append(edges, e)
+	}
+	return edges, rows.Err()
+}
+
 // ---------------------------------------------------------------------------
 // Embedding storage
 // ---------------------------------------------------------------------------
