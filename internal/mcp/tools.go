@@ -94,6 +94,7 @@ func (s *Server) handleFileContext(w io.Writer, id interface{}, params json.RawM
 		return
 	}
 
+	s.recordAccess(args.Path)
 	data, _ := json.Marshal(fc)
 	s.writeResult(w, id, map[string]interface{}{
 		"content": []map[string]interface{}{

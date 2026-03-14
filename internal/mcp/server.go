@@ -5,23 +5,53 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/neur0map/prowl/internal/embed"
 	"github.com/neur0map/prowl/internal/store"
 )
+
+type accessInfo struct {
+	count    int
+	lastSeen time.Time
+}
 
 // Server handles MCP protocol communication over stdio.
 type Server struct {
 	store      *store.Store
 	embedder   *embed.Embedder
 	contextDir string
+	heat       map[string]accessInfo
 }
 
 // New creates an MCP server.
 func New(st *store.Store, embedder *embed.Embedder, contextDir string) *Server {
-	return &Server{store: st, embedder: embedder, contextDir: contextDir}
+	return &Server{store: st, embedder: embedder, contextDir: contextDir, heat: make(map[string]accessInfo)}
+}
+
+// recordAccess tracks that a file was accessed via an MCP tool.
+func (s *Server) recordAccess(path string) {
+	info := s.heat[path]
+	info.count++
+	info.lastSeen = time.Now()
+	s.heat[path] = info
+}
+
+// heatScore returns the heat score for a file (0.0 to ~1.0).
+// Formula: sigmoid(ln(1 + count)) * exp(-age / halfLife)
+// Half-life is 1 hour.
+func (s *Server) heatScore(path string) float64 {
+	info, ok := s.heat[path]
+	if !ok {
+		return 0.0
+	}
+	sigmoid := 1.0 / (1.0 + math.Exp(-math.Log1p(float64(info.count))))
+	age := time.Since(info.lastSeen).Seconds()
+	decay := math.Exp(-age / (3600.0 * math.Ln2))
+	return sigmoid * decay
 }
 
 // Run starts the JSON-RPC stdio loop using stdin/stdout. Blocks until stdin closes.

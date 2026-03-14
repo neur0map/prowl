@@ -167,6 +167,31 @@ func TestMCPNotificationNoResponse(t *testing.T) {
 	}
 }
 
+func TestHeatTracking(t *testing.T) {
+	s := New(nil, nil, "")
+
+	// Unknown file should have zero heat
+	score := s.heatScore("unknown.go")
+	if score != 0.0 {
+		t.Errorf("heat for unknown file = %f, want 0.0", score)
+	}
+
+	// Record access
+	s.recordAccess("src/auth.go")
+	score = s.heatScore("src/auth.go")
+	if score <= 0.0 {
+		t.Errorf("heat after access should be > 0, got %f", score)
+	}
+
+	// Multiple accesses should increase heat
+	s.recordAccess("src/auth.go")
+	s.recordAccess("src/auth.go")
+	score2 := s.heatScore("src/auth.go")
+	if score2 <= score {
+		t.Errorf("heat should increase with more accesses: %f <= %f", score2, score)
+	}
+}
+
 func TestMCPParseError(t *testing.T) {
 	s := New(nil, nil, "")
 	in := strings.NewReader("not json\n")

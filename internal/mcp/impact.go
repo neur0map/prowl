@@ -39,6 +39,8 @@ func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessag
 		return
 	}
 
+	s.recordAccess(args.Path)
+
 	// Step 1: Find direct dependents (files with edges pointing TO target)
 	callers, _ := s.store.CallersOf(args.Path)
 
