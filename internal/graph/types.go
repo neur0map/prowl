@@ -23,3 +23,16 @@ type Edge struct {
 	TargetPath string // imported file
 	Type       string // IMPORTS (CALLS, EXTENDS, IMPLEMENTS in M2)
 }
+
+// CallRef represents a function/method call site found in source code.
+type CallRef struct {
+	CalleeName string // the called function/method name
+	Line       int    // line number of the call
+}
+
+// HeritageRef represents an extends or implements relationship.
+type HeritageRef struct {
+	ChildName  string // the class/type being defined
+	ParentName string // the extended class or implemented interface
+	Type       string // "extends" or "implements"
+}

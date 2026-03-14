@@ -57,3 +57,30 @@
 ;; Import statements
 (import_statement
   source: (string) @import.source) @import
+
+;; === Call captures (Phase 4) ===
+
+;; Plain function calls
+(call_expression
+  function: (identifier) @call.name) @call
+
+;; Member expression calls (obj.method())
+(call_expression
+  function: (member_expression
+    property: (property_identifier) @call.name)) @call
+
+;; === Heritage captures (Phase 5) ===
+
+;; Class extends
+(class_declaration
+  name: (type_identifier) @heritage.class
+  (class_heritage
+    (extends_clause
+      value: (identifier) @heritage.extends))) @heritage
+
+;; Class implements
+(class_declaration
+  name: (type_identifier) @heritage.class
+  (class_heritage
+    (implements_clause
+      (type_identifier) @heritage.implements))) @heritage.impl

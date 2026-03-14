@@ -16,8 +16,10 @@ var queryFS embed.FS
 
 // ParseResult holds the extracted symbols and raw import specifiers for one file.
 type ParseResult struct {
-	Symbols []graph.Symbol
-	Imports []string // raw specifier strings (e.g. "./db", "fmt")
+	Symbols  []graph.Symbol
+	Imports  []string            // raw specifier strings (e.g. "./db", "fmt")
+	Calls    []graph.CallRef     // function/method calls found
+	Heritage []graph.HeritageRef // extends/implements relationships
 }
 
 // captureToKind maps tree-sitter capture names to symbol kinds.
@@ -101,6 +103,47 @@ func ParseFile(filePath string, source []byte) (*ParseResult, error) {
 		for _, c := range match.Captures {
 			name := q.CaptureNameForId(c.Index)
 			caps[name] = c.Node
+		}
+
+		// Handle call captures
+		if _, isCall := caps["call"]; isCall {
+			if nameNode, ok := caps["call.name"]; ok {
+				calleeName := nameNode.Content(source)
+				// Skip runtime/builtin names
+				if !isRuntimeName(calleeName) {
+					result.Calls = append(result.Calls, graph.CallRef{
+						CalleeName: calleeName,
+						Line:       int(nameNode.StartPoint().Row) + 1,
+					})
+				}
+			}
+			continue
+		}
+
+		// Handle heritage captures
+		if _, isHeritage := caps["heritage"]; isHeritage {
+			classNode := caps["heritage.class"]
+			extendsNode := caps["heritage.extends"]
+			if classNode != nil && extendsNode != nil {
+				result.Heritage = append(result.Heritage, graph.HeritageRef{
+					ChildName:  classNode.Content(source),
+					ParentName: extendsNode.Content(source),
+					Type:       "extends",
+				})
+			}
+			continue
+		}
+		if _, isImpl := caps["heritage.impl"]; isImpl {
+			classNode := caps["heritage.class"]
+			implNode := caps["heritage.implements"]
+			if classNode != nil && implNode != nil {
+				result.Heritage = append(result.Heritage, graph.HeritageRef{
+					ChildName:  classNode.Content(source),
+					ParentName: implNode.Content(source),
+					Type:       "implements",
+				})
+			}
+			continue
 		}
 
 		// Handle import captures
@@ -193,6 +236,41 @@ func isExported(nameNode *sitter.Node, name string, lang Lang, source []byte) bo
 	default:
 		return false
 	}
+}
+
+// isRuntimeName returns true for built-in/runtime function names that should not produce CALLS edges.
+var runtimeNames = map[string]bool{
+	// Console
+	"log": true, "warn": true, "error": true, "info": true, "debug": true,
+	"trace": true, "dir": true, "table": true, "assert": true,
+	// Timers
+	"setTimeout": true, "setInterval": true, "clearTimeout": true, "clearInterval": true,
+	"requestAnimationFrame": true,
+	// JSON/Object
+	"stringify": true, "parse": true, "keys": true, "values": true, "entries": true,
+	"assign": true, "freeze": true, "create": true, "defineProperty": true,
+	// Array methods
+	"push": true, "pop": true, "shift": true, "unshift": true, "splice": true,
+	"slice": true, "map": true, "filter": true, "reduce": true, "forEach": true,
+	"find": true, "findIndex": true, "some": true, "every": true, "includes": true,
+	"sort": true, "reverse": true, "concat": true, "join": true, "flat": true, "flatMap": true,
+	// Promise
+	"then": true, "catch": true, "finally": true, "resolve": true, "reject": true, "all": true,
+	// Type checks
+	"typeof": true, "instanceof": true,
+	// Go builtins
+	"make": true, "len": true, "cap": true, "append": true, "copy": true, "delete": true,
+	"close": true, "panic": true, "recover": true, "print": true, "println": true,
+	"new": true, "string": true, "int": true, "float64": true, "bool": true,
+	// Python builtins
+	"range": true, "enumerate": true, "zip": true, "type": true, "super": true,
+	"isinstance": true, "issubclass": true, "getattr": true, "setattr": true, "hasattr": true,
+	// Common utility
+	"require": true, "import": true, "console": true, "fmt": true,
+}
+
+func isRuntimeName(name string) bool {
+	return runtimeNames[name]
 }
 
 // extractSignature pulls the definition text, taking only up to the opening brace.

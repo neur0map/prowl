@@ -16,3 +16,14 @@
 ;; Imports
 (import_declaration (import_spec path: (interpreted_string_literal) @import.source)) @import
 (import_declaration (import_spec_list (import_spec path: (interpreted_string_literal) @import.source))) @import
+
+;; === Call captures (Phase 4) ===
+
+;; Plain function calls
+(call_expression
+  function: (identifier) @call.name) @call
+
+;; Method/selector calls (obj.Method())
+(call_expression
+  function: (selector_expression
+    field: (field_identifier) @call.name)) @call
