@@ -5,6 +5,7 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/golang"
+	"github.com/smacker/go-tree-sitter/rust"
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
 )
 
@@ -14,6 +15,7 @@ type Lang string
 const (
 	LangTypeScript Lang = "typescript"
 	LangGo         Lang = "go"
+	LangRust       Lang = "rust"
 )
 
 // DetectLanguage returns the language for a file path, or "" if unsupported.
@@ -24,6 +26,8 @@ func DetectLanguage(path string) Lang {
 		return LangTypeScript
 	case strings.HasSuffix(lower, ".go"):
 		return LangGo
+	case strings.HasSuffix(lower, ".rs"):
+		return LangRust
 	default:
 		return ""
 	}
@@ -36,6 +40,8 @@ func GetLanguage(lang Lang) *sitter.Language {
 		return typescript.GetLanguage()
 	case LangGo:
 		return golang.GetLanguage()
+	case LangRust:
+		return rust.GetLanguage()
 	default:
 		return nil
 	}

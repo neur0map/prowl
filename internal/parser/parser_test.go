@@ -256,5 +256,141 @@ func FindUser(email string) *User {
 	}
 }
 
+func TestParseRustSymbols(t *testing.T) {
+	src := `
+use std::collections::HashMap;
+
+pub fn serve(port: u16) -> Result<(), Box<dyn Error>> {
+    println!("listening on {}", port);
+    Ok(())
+}
+
+fn helper() -> i32 {
+    42
+}
+
+pub struct Config {
+    pub host: String,
+    pub port: u16,
+}
+
+pub enum Status {
+    Active,
+    Inactive,
+}
+
+pub trait Handler {
+    fn handle(&self, req: Request) -> Response;
+}
+
+pub const MAX_RETRIES: u32 = 3;
+
+type Callback = Box<dyn Fn(i32) -> i32>;
+`
+	result, err := ParseFile("src/server.rs", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Symbols) < 5 {
+		t.Fatalf("expected at least 5 symbols, got %d: %v", len(result.Symbols), result.Symbols)
+	}
+
+	checks := map[string]struct {
+		kind     string
+		exported bool
+	}{
+		"serve":       {"function", true},
+		"helper":      {"function", false},
+		"Config":      {"struct", true},
+		"Status":      {"enum", true},
+		"Handler":     {"interface", true},
+		"MAX_RETRIES": {"const", true},
+		"Callback":    {"type", false},
+	}
+
+	for _, s := range result.Symbols {
+		if check, ok := checks[s.Name]; ok {
+			if s.Kind != check.kind {
+				t.Errorf("%s: expected kind %q, got %q", s.Name, check.kind, s.Kind)
+			}
+			if s.IsExported != check.exported {
+				t.Errorf("%s: expected exported=%v, got %v", s.Name, check.exported, s.IsExported)
+			}
+			delete(checks, s.Name)
+		}
+	}
+	for name := range checks {
+		t.Errorf("missing symbol: %s", name)
+	}
+}
+
+func TestParseRustCalls(t *testing.T) {
+	src := `
+fn main() {
+    let config = Config::new();
+    let result = process_data(&config);
+    result.validate();
+}
+
+fn process_data(config: &Config) -> Result<Data, Error> {
+    Ok(Data::default())
+}
+`
+	result, err := ParseFile("src/main.rs", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundProcessData := false
+	foundValidate := false
+	for _, c := range result.Calls {
+		if c.CalleeName == "process_data" {
+			foundProcessData = true
+		}
+		if c.CalleeName == "validate" {
+			foundValidate = true
+		}
+	}
+	if !foundProcessData {
+		t.Errorf("missing call: process_data. Got: %v", result.Calls)
+	}
+	if !foundValidate {
+		t.Errorf("missing call: validate. Got: %v", result.Calls)
+	}
+}
+
+func TestParseRustHeritage(t *testing.T) {
+	src := `
+pub trait Drawable {
+    fn draw(&self);
+}
+
+pub struct Circle {
+    pub radius: f64,
+}
+
+impl Drawable for Circle {
+    fn draw(&self) {
+        println!("drawing circle");
+    }
+}
+`
+	result, err := ParseFile("src/shapes.rs", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundImpl := false
+	for _, h := range result.Heritage {
+		if h.ChildName == "Circle" && h.ParentName == "Drawable" && h.Type == "implements" {
+			foundImpl = true
+		}
+	}
+	if !foundImpl {
+		t.Errorf("missing heritage: Circle implements Drawable. Got: %v", result.Heritage)
+	}
+}
+
 // Ensure graph package is used (prevents "imported and not used" errors)
 var _ graph.Symbol

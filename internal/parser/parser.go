@@ -233,6 +233,26 @@ func isExported(nameNode *sitter.Node, name string, lang Lang, source []byte) bo
 			node = node.Parent()
 		}
 		return false
+	case LangRust:
+		// Walk up to find a parent with a visibility_modifier child containing "pub"
+		node := nameNode.Parent()
+		for node != nil {
+			for i := 0; i < int(node.ChildCount()); i++ {
+				child := node.Child(i)
+				if child.Type() == "visibility_modifier" {
+					return true
+				}
+			}
+			// Stop at the nearest declaration boundary
+			nt := node.Type()
+			if nt == "function_item" || nt == "struct_item" || nt == "enum_item" ||
+				nt == "trait_item" || nt == "impl_item" || nt == "type_item" ||
+				nt == "const_item" || nt == "static_item" || nt == "mod_item" {
+				break
+			}
+			node = node.Parent()
+		}
+		return false
 	default:
 		return false
 	}
@@ -265,6 +285,25 @@ var runtimeNames = map[string]bool{
 	// Python builtins
 	"range": true, "enumerate": true, "zip": true, "type": true, "super": true,
 	"isinstance": true, "issubclass": true, "getattr": true, "setattr": true, "hasattr": true,
+	// Rust builtins/macros (call name without !)
+	"vec":     true,
+	"format":  true,
+	"write":   true,
+	"writeln": true,
+	"todo":    true,
+	"unimplemented": true,
+	"unreachable":   true,
+	"unwrap":  true,
+	"expect":  true,
+	"clone":   true,
+	"into":    true,
+	"from":    true,
+	"as_ref":  true,
+	"as_mut":  true,
+	"iter":    true,
+	"collect": true,
+	"ok_or":   true,
+	"map_err": true,
 	// Common utility
 	"require": true, "import": true, "console": true, "fmt": true,
 }

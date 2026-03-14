@@ -325,8 +325,10 @@ func resolveImport(fromFile, specifier string, known map[string]bool) string {
 		joined + ".ts", joined + ".tsx",
 		joined + ".js", joined + ".jsx",
 		joined + ".go",
+		joined + ".rs",
 		joined + "/index.ts", joined + "/index.tsx",
 		joined + "/index.js", joined + "/index.jsx",
+		joined + "/mod.rs",
 	}
 
 	for _, c := range candidates {
