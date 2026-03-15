@@ -86,6 +86,14 @@ func NewWizardModel(dir string) WizardModel {
 	coders := detectCoders()
 	coderSelected := make([]bool, len(coders))
 
+	// Pre-select found coders for (re-)installation so the config
+	// always points to the current binary, even on upgrades.
+	for i, c := range coders {
+		if c.found {
+			coderSelected[i] = true
+		}
+	}
+
 	return WizardModel{
 		step:           stepConfirmDir,
 		dir:            dir,
@@ -167,7 +175,7 @@ func (m WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case " ":
 			if m.step == stepMCPSetup {
 				if m.coderCursor < len(m.coders) {
-					if m.coders[m.coderCursor].found && !m.coders[m.coderCursor].installed {
+					if m.coders[m.coderCursor].found {
 						m.coderSelected[m.coderCursor] = !m.coderSelected[m.coderCursor]
 					}
 				} else if m.coderCursor == len(m.coders) {
@@ -262,7 +270,7 @@ func (m *WizardModel) installMCP() {
 	}
 
 	for i, c := range m.coders {
-		if !c.found || c.installed || !m.coderSelected[i] {
+		if !c.found || !m.coderSelected[i] {
 			continue
 		}
 		switch c.name {
@@ -456,10 +464,6 @@ func (m WizardModel) viewMCPSetup(w int) string {
 			if !c.found {
 				continue
 			}
-			if c.installed {
-				b.WriteString("  " + SuccessStyle.Render("✓ "+c.name) + " " + MutedStyle.Render("(already configured)") + "\n")
-				continue
-			}
 			cursor := "  "
 			if i == m.coderCursor {
 				cursor = "▸ "
@@ -472,7 +476,11 @@ func (m WizardModel) viewMCPSetup(w int) string {
 			if i == m.coderCursor {
 				style = SelectedStyle
 			}
-			b.WriteString(cursor + style.Render(check+" "+c.name) + "\n")
+			label := c.name
+			if c.installed {
+				label += " " + MutedStyle.Render("(update)")
+			}
+			b.WriteString(cursor + style.Render(check+" "+label) + "\n")
 		}
 		b.WriteString("\n" + MutedStyle.Render("Space to toggle, Enter to continue") + "\n")
 	} else {
