@@ -581,6 +581,7 @@ Prowl pre-indexes your codebase into a structured graph — symbols, call edges,
 | About to edit a file | ` + "`prowl_impact`" + ` | Know what breaks before you break it |
 | Don't know the file path | ` + "`prowl_semantic_search`" + ` | Search by meaning, not keywords |
 | Compare against another repo | ` + "`prowl_clone`" + ` | Clone, index, and query a GitHub repo |
+| Find unused or dead code | ` + "`prowl_deadcode`" + ` | Orphan and leaf files with zero dependents |
 
 ## Tool Reference
 
@@ -682,6 +683,22 @@ prowl_scope({ task: "auth flow", project: "comparison" })
 ` + "```" + `
 
 Use ` + "`prowl_clone_status`" + ` to check if a comparison repo is loaded. Use ` + "`prowl_clone_close`" + ` to free resources.
+
+### prowl_deadcode — Find dead code
+
+Detect orphan files (zero connections) and leaf files (call out but nothing depends on them).
+
+` + "```" + `
+prowl_deadcode()
+prowl_deadcode({ include_tests: true })
+` + "```" + `
+
+Returns:
+- ` + "`orphans`" + ` — files with no calls, no callers, no imports, no upstream (completely isolated)
+- ` + "`leaves`" + ` — files that call/import other files but nothing depends on them (no callers, no upstream)
+- Each file includes export count and community membership
+
+Test files are excluded by default. Set ` + "`include_tests: true`" + ` to include them.
 
 ## Workflow
 

@@ -315,6 +315,21 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 					"properties": map[string]interface{}{},
 				},
 			},
+			{
+				"name":        "prowl_deadcode",
+				"description": "Find dead code: orphan files with zero connections and leaf files nothing depends on. Returns files grouped by category with export counts and community membership.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"include_tests": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Include test files in results (default: false)",
+							"default":     false,
+						},
+						"project": projectProp,
+					},
+				},
+			},
 		},
 	})
 }
@@ -346,6 +361,8 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 		s.handleCloneStatus(w, req.ID)
 	case "prowl_clone_close":
 		s.handleCloneClose(w, req.ID)
+	case "prowl_deadcode":
+		s.handleDeadcode(w, req.ID, params.Arguments)
 	default:
 		s.writeError(w, req.ID, -32602, "Unknown tool: "+params.Name)
 	}
