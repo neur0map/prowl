@@ -31,12 +31,18 @@ type processOverview struct {
 	Steps []string `json:"steps"`
 }
 
-func (s *Server) handleOverview(w io.Writer, id interface{}) {
-	files, symbols, edges, _ := s.store.Stats()
-	embeddings, _ := s.store.EmbeddingCount()
+func (s *Server) handleOverview(w io.Writer, id interface{}, params json.RawMessage) {
+	st, ctxDir, err := s.storeFor(params)
+	if err != nil {
+		s.writeError(w, id, -32602, err.Error())
+		return
+	}
+
+	files, symbols, edges, _ := st.Stats()
+	embeddings, _ := st.EmbeddingCount()
 
 	// Language breakdown from file extensions
-	allFiles, _ := s.store.AllFiles()
+	allFiles, _ := st.AllFiles()
 	langCounts := map[string]int{}
 	for _, f := range allFiles {
 		ext := strings.TrimPrefix(filepath.Ext(f), ".")
@@ -47,18 +53,18 @@ func (s *Server) handleOverview(w io.Writer, id interface{}) {
 	}
 
 	// Communities from store
-	storeComms, _ := s.store.AllCommunities()
+	storeComms, _ := st.AllCommunities()
 	var comms []communityOverview
 	for _, c := range storeComms {
 		comms = append(comms, communityOverview{
 			Name:    c.Name,
 			ID:      c.ID,
-			Members: communityMembersByName(s.store, c.Name, allFiles),
+			Members: communityMembersByName(st, c.Name, allFiles),
 		})
 	}
 
 	// Processes from _meta/processes.txt
-	procs := readProcesses(s.contextDir)
+	procs := readProcesses(ctxDir)
 
 	resp := overviewResponse{
 		Files:       files,
@@ -79,6 +85,12 @@ func (s *Server) handleOverview(w io.Writer, id interface{}) {
 }
 
 func (s *Server) handleFileContext(w io.Writer, id interface{}, params json.RawMessage) {
+	_, ctxDir, err := s.storeFor(params)
+	if err != nil {
+		s.writeError(w, id, -32602, err.Error())
+		return
+	}
+
 	var args struct {
 		Path string `json:"path"`
 	}
@@ -88,7 +100,7 @@ func (s *Server) handleFileContext(w io.Writer, id interface{}, params json.RawM
 		return
 	}
 
-	fc, err := readFileContext(s.contextDir, args.Path)
+	fc, err := readFileContext(ctxDir, args.Path)
 	if err != nil {
 		s.writeError(w, id, -32602, "File not indexed: "+args.Path)
 		return

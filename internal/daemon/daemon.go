@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -36,6 +37,7 @@ type Daemon struct {
 	idle       *idleTracker
 	stop       chan struct{}
 	mu         sync.Mutex
+	LogWriter  io.Writer
 }
 
 // New creates a daemon for the given project directory.
@@ -68,6 +70,7 @@ func New(projectDir string, debounce time.Duration) (*Daemon, error) {
 		ig:         ig,
 		memGraph:   graph.New(),
 		stop:       make(chan struct{}),
+		LogWriter:  os.Stdout,
 	}
 	d.embedder = newLazyEmbedder(modelDir, 10*time.Minute)
 	d.idle = newIdleTracker(30*time.Second, func() {
@@ -253,7 +256,7 @@ func (d *Daemon) runGlobalPhases() {
 		}
 	}
 
-	fmt.Println("[daemon] global phases complete — communities and processes updated")
+	fmt.Fprintln(d.LogWriter, "[daemon] global phases complete — communities and processes updated")
 }
 
 func (d *Daemon) processFile(relPath string) {
@@ -397,7 +400,7 @@ func (d *Daemon) processFile(relPath string) {
 	// Mark dirty for global phases
 	d.idle.MarkDirty()
 
-	fmt.Printf("[daemon] updated %s (%d symbols, %d imports, %d calls)\n",
+	fmt.Fprintf(d.LogWriter, "[daemon] updated %s (%d symbols, %d imports, %d calls)\n",
 		relPath, len(result.Symbols), len(newImports), len(callEdges))
 }
 
@@ -459,7 +462,7 @@ func (d *Daemon) deleteFile(relPath string) {
 	// Mark dirty for global recomputation
 	d.idle.MarkDirty()
 
-	fmt.Printf("[daemon] deleted %s\n", relPath)
+	fmt.Fprintf(d.LogWriter, "[daemon] deleted %s\n", relPath)
 }
 
 // reembedFile re-embeds a file if its signature text has changed.

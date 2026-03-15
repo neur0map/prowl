@@ -19,12 +19,24 @@ type accessInfo struct {
 	lastSeen time.Time
 }
 
+// projectProp is the shared JSON schema for the optional "project" parameter.
+var projectProp = map[string]interface{}{
+	"type":        "string",
+	"description": "Which project to query: \"primary\" (default) or \"comparison\" (cloned repo)",
+	"enum":        []string{"primary", "comparison"},
+}
+
 // Server handles MCP protocol communication over stdio.
 type Server struct {
 	store      *store.Store
 	embedder   *embed.Embedder
 	contextDir string
 	heat       map[string]accessInfo
+
+	// Comparison repo (single slot, set by prowl_clone).
+	compareStore      *store.Store
+	compareContextDir string
+	compareRepo       string // "owner/repo" label
 }
 
 // New creates an MCP server.
@@ -52,6 +64,38 @@ func (s *Server) heatScore(path string) float64 {
 	age := time.Since(info.lastSeen).Seconds()
 	decay := math.Exp(-age / (3600.0 * math.Ln2))
 	return sigmoid * decay
+}
+
+// Close releases resources held by the server (e.g. comparison store).
+func (s *Server) Close() {
+	if s.compareStore != nil {
+		s.compareStore.Close()
+		s.compareStore = nil
+		s.compareRepo = ""
+		s.compareContextDir = ""
+	}
+}
+
+// storeFor inspects the "project" field in raw JSON arguments and returns
+// the appropriate store and context directory. Returns the primary store by
+// default, or the comparison store when project=="comparison".
+func (s *Server) storeFor(params json.RawMessage) (*store.Store, string, error) {
+	var p struct {
+		Project string `json:"project"`
+	}
+	if len(params) > 0 {
+		json.Unmarshal(params, &p)
+	}
+	if p.Project == "" || p.Project == "primary" {
+		return s.store, s.contextDir, nil
+	}
+	if p.Project == "comparison" {
+		if s.compareStore == nil {
+			return nil, "", fmt.Errorf("no comparison repo loaded — call prowl_clone first")
+		}
+		return s.compareStore, s.compareContextDir, nil
+	}
+	return nil, "", fmt.Errorf("unknown project value: %s (use \"primary\" or \"comparison\")", p.Project)
 }
 
 // Run starts the JSON-RPC stdio loop using stdin/stdout. Blocks until stdin closes.
@@ -152,8 +196,10 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 				"name":        "prowl_overview",
 				"description": "Get a structured summary of the entire codebase. Agent's first call on any project. Returns file/symbol/edge counts, language breakdown, community clusters, and key processes.",
 				"inputSchema": map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
+					"type": "object",
+					"properties": map[string]interface{}{
+						"project": projectProp,
+					},
 				},
 			},
 			{
@@ -166,6 +212,7 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 							"type":        "string",
 							"description": "Project-relative file path (e.g. src/auth.ts)",
 						},
+						"project": projectProp,
 					},
 					"required": []string{"path"},
 				},
@@ -185,6 +232,7 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 							"description": "Maximum number of files to return (default: 10)",
 							"default":     10,
 						},
+						"project": projectProp,
 					},
 					"required": []string{"task"},
 				},
@@ -203,6 +251,7 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 							"type":        "string",
 							"description": "Optional symbol name to narrow the analysis (e.g. function name)",
 						},
+						"project": projectProp,
 					},
 					"required": []string{"path"},
 				},
@@ -222,8 +271,47 @@ func (s *Server) handleToolsList(w io.Writer, req jsonRPCRequest) {
 							"description": "Maximum number of results (default: 5)",
 							"default":     5,
 						},
+						"project": projectProp,
 					},
 					"required": []string{"query"},
+				},
+			},
+			{
+				"name":        "prowl_clone",
+				"description": "Clone a GitHub repo as a comparison target. Downloads as tarball (no .git), indexes with the full pipeline, and makes it queryable via project:\"comparison\" on all other tools.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"repo": map[string]interface{}{
+							"type":        "string",
+							"description": "GitHub repo: owner/repo, full URL, or URL with /tree/branch",
+						},
+						"ref": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional git ref (branch, tag, or commit SHA). Defaults to HEAD.",
+						},
+						"token": map[string]interface{}{
+							"type":        "string",
+							"description": "Optional GitHub token for private repos",
+						},
+					},
+					"required": []string{"repo"},
+				},
+			},
+			{
+				"name":        "prowl_clone_status",
+				"description": "Check if a comparison repo is loaded and get its stats.",
+				"inputSchema": map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				},
+			},
+			{
+				"name":        "prowl_clone_close",
+				"description": "Close the comparison repo and free its resources.",
+				"inputSchema": map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
 				},
 			},
 		},
@@ -242,7 +330,7 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 
 	switch params.Name {
 	case "prowl_overview":
-		s.handleOverview(w, req.ID)
+		s.handleOverview(w, req.ID, params.Arguments)
 	case "prowl_file_context":
 		s.handleFileContext(w, req.ID, params.Arguments)
 	case "prowl_scope":
@@ -251,12 +339,24 @@ func (s *Server) handleToolsCall(w io.Writer, req jsonRPCRequest) {
 		s.handleImpact(w, req.ID, params.Arguments)
 	case "prowl_semantic_search":
 		s.handleSemanticSearch(w, req.ID, params.Arguments)
+	case "prowl_clone":
+		s.handleClone(w, req.ID, params.Arguments)
+	case "prowl_clone_status":
+		s.handleCloneStatus(w, req.ID)
+	case "prowl_clone_close":
+		s.handleCloneClose(w, req.ID)
 	default:
 		s.writeError(w, req.ID, -32602, "Unknown tool: "+params.Name)
 	}
 }
 
 func (s *Server) handleSemanticSearch(w io.Writer, id interface{}, params json.RawMessage) {
+	st, _, err := s.storeFor(params)
+	if err != nil {
+		s.writeError(w, id, -32602, err.Error())
+		return
+	}
+
 	var args struct {
 		Query string `json:"query"`
 		Limit int    `json:"limit"`
@@ -281,7 +381,7 @@ func (s *Server) handleSemanticSearch(w io.Writer, id interface{}, params json.R
 		return
 	}
 
-	results, err := s.store.SearchSimilar(vecs[0], args.Limit)
+	results, err := st.SearchSimilar(vecs[0], args.Limit)
 	if err != nil {
 		s.writeError(w, id, -32603, "Search error: "+err.Error())
 		return

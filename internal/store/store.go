@@ -365,6 +365,35 @@ func (s *Store) Stats() (files, symbols, edges int, err error) {
 	return
 }
 
+// LastIndexedTime returns the most recent last_indexed timestamp across all files.
+func (s *Store) LastIndexedTime() (time.Time, error) {
+	var ts sql.NullInt64
+	s.db.QueryRow("SELECT MAX(last_indexed) FROM files").Scan(&ts)
+	if !ts.Valid {
+		return time.Time{}, nil
+	}
+	return time.Unix(ts.Int64, 0), nil
+}
+
+// LanguageBreakdown returns file counts grouped by extension.
+func (s *Store) LanguageBreakdown() (map[string]int, error) {
+	rows, err := s.db.Query("SELECT path FROM files ORDER BY path")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[string]int)
+	for rows.Next() {
+		var p string
+		rows.Scan(&p)
+		ext := filepath.Ext(p)
+		if ext != "" {
+			counts[ext] = counts[ext] + 1
+		}
+	}
+	return counts, rows.Err()
+}
+
 // EmbeddingCount returns the number of files with embeddings.
 func (s *Store) EmbeddingCount() (int, error) {
 	var count int

@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -19,8 +20,26 @@ import (
 	"github.com/neur0map/prowl/internal/store"
 )
 
+// Options configures the indexing pipeline.
+type Options struct {
+	ProgressWriter io.Writer
+}
+
+// Option is a functional option for the indexing pipeline.
+type Option func(*Options)
+
+// WithProgressWriter sets the writer for progress messages.
+func WithProgressWriter(w io.Writer) Option {
+	return func(o *Options) { o.ProgressWriter = w }
+}
+
 // Index runs the full indexing pipeline on a project directory.
-func Index(projectDir string) error {
+func Index(projectDir string, opts ...Option) error {
+	o := &Options{ProgressWriter: os.Stdout}
+	for _, fn := range opts {
+		fn(o)
+	}
+	w := o.ProgressWriter
 	absDir, err := filepath.Abs(projectDir)
 	if err != nil {
 		return err
@@ -43,7 +62,7 @@ func Index(projectDir string) error {
 	g := graph.New()
 
 	// Phase 1: Walk the file tree
-	fmt.Println("Phase 1: Scanning file tree...")
+	fmt.Fprintln(w, "Phase 1: Scanning file tree...")
 	var sourceFiles []struct {
 		relPath string
 		content []byte
@@ -91,10 +110,10 @@ func Index(projectDir string) error {
 		return nil
 	})
 
-	fmt.Printf("  Found %d source files\n", len(sourceFiles))
+	fmt.Fprintf(w, "  Found %d source files\n", len(sourceFiles))
 
 	// Phase 2: Parse symbols (cache results for phase 3)
-	fmt.Println("Phase 2: Extracting symbols...")
+	fmt.Fprintln(w, "Phase 2: Extracting symbols...")
 	type parseEntry struct {
 		relPath string
 		result  *parser.ParseResult
@@ -124,7 +143,7 @@ func Index(projectDir string) error {
 	}
 
 	// Phase 3: Resolve imports (using cached parse results)
-	fmt.Println("Phase 3: Resolving imports...")
+	fmt.Fprintln(w, "Phase 3: Resolving imports...")
 	for _, pe := range parsed {
 		for _, rawImport := range pe.result.Imports {
 			resolved := resolveImport(pe.relPath, rawImport, knownPaths)
@@ -139,7 +158,7 @@ func Index(projectDir string) error {
 	}
 
 	// Phase 4: Call tracing
-	fmt.Println("Phase 4: Resolving calls...")
+	fmt.Fprintln(w, "Phase 4: Resolving calls...")
 	callsByFile := map[string][]graph.CallRef{}
 	heritageByFile := map[string][]graph.HeritageRef{}
 	for _, pe := range parsed {
@@ -164,7 +183,7 @@ func Index(projectDir string) error {
 	// Heritage edges are included in the resolve.ResolveCalls output above.
 
 	// Phase 6: Community detection
-	fmt.Println("Phase 6: Detecting communities...")
+	fmt.Fprintln(w, "Phase 6: Detecting communities...")
 	communities := community.DetectCommunities(g)
 	for _, c := range communities {
 		for _, member := range c.Members {
@@ -175,7 +194,7 @@ func Index(projectDir string) error {
 	}
 
 	// Phase 7: Process detection
-	fmt.Println("Phase 7: Detecting processes...")
+	fmt.Fprintln(w, "Phase 7: Detecting processes...")
 	communityMap := map[string]int{}
 	for _, c := range communities {
 		for _, member := range c.Members {
@@ -185,7 +204,7 @@ func Index(projectDir string) error {
 	processes := process.DetectProcesses(g, communityMap)
 
 	// Phase 8: Embed signatures (optional — requires model download on first run)
-	fmt.Println("Phase 8: Embedding signatures...")
+	fmt.Fprintln(w, "Phase 8: Embedding signatures...")
 	homeDir, _ := os.UserHomeDir()
 	modelDir := filepath.Join(homeDir, ".prowl", "models")
 	embedder, embedErr := embed.New(modelDir)
@@ -196,7 +215,7 @@ func Index(projectDir string) error {
 	}
 	var embedData []embedEntry
 	if embedErr != nil {
-		fmt.Printf("  Skipping embeddings: %v\n", embedErr)
+		fmt.Fprintf(w, "  Skipping embeddings: %v\n", embedErr)
 	} else {
 		defer embedder.Close()
 		var filePaths []string
@@ -219,18 +238,18 @@ func Index(projectDir string) error {
 		}
 		vectors, err := embedder.Encode(sigTexts)
 		if err != nil {
-			fmt.Printf("  Embedding failed: %v\n", err)
+			fmt.Fprintf(w, "  Embedding failed: %v\n", err)
 		} else {
 			for i, fp := range filePaths {
 				hash := fmt.Sprintf("%x", xxhash.Sum64String(sigTexts[i]))
 				embedData = append(embedData, embedEntry{path: fp, vector: vectors[i], hash: hash})
 			}
-			fmt.Printf("  Embedded %d files\n", len(embedData))
+			fmt.Fprintf(w, "  Embedded %d files\n", len(embedData))
 		}
 	}
 
 	// Persist to SQLite
-	fmt.Println("Persisting to SQLite...")
+	fmt.Fprintln(w, "Persisting to SQLite...")
 	for _, f := range g.Files() {
 		fid, err := st.UpsertFile(f.Path, f.Hash)
 		if err != nil {
@@ -297,13 +316,13 @@ func Index(projectDir string) error {
 	}
 
 	// Write filesystem output
-	fmt.Println("Writing .prowl/context/...")
+	fmt.Fprintln(w, "Writing .prowl/context/...")
 	if err := output.WriteContext(contextDir, g, outCommunities, outProcesses); err != nil {
 		return fmt.Errorf("write context: %w", err)
 	}
 
 	fCount, sCount, eCount := g.Stats()
-	fmt.Printf("Done! %d files, %d symbols, %d edges\n", fCount, sCount, eCount)
+	fmt.Fprintf(w, "Done! %d files, %d symbols, %d edges\n", fCount, sCount, eCount)
 	return nil
 }
 

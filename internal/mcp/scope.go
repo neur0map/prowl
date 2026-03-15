@@ -29,6 +29,12 @@ type scopeFile struct {
 }
 
 func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage) {
+	st, ctxDir, err := s.storeFor(params)
+	if err != nil {
+		s.writeError(w, id, -32602, err.Error())
+		return
+	}
+
 	var args struct {
 		Task  string `json:"task"`
 		Limit int    `json:"limit"`
@@ -58,7 +64,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 	if args.Limit < searchLimit {
 		searchLimit = args.Limit
 	}
-	results, err := s.store.SearchSimilar(vecs[0], searchLimit)
+	results, err := st.SearchSimilar(vecs[0], searchLimit)
 	if err != nil {
 		s.writeError(w, id, -32603, "Search error: "+err.Error())
 		return
@@ -88,7 +94,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 	// Step 3: 1-hop expansion for each search hit
 	for _, hitPath := range hitPaths {
 		// Outgoing calls
-		calls, _ := s.store.CallsOf(hitPath)
+		calls, _ := st.CallsOf(hitPath)
 		for _, target := range calls {
 			if _, ok := seen[target]; !ok {
 				seen[target] = &fileEntry{
@@ -100,7 +106,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 		}
 
 		// Outgoing imports
-		imports, _ := s.store.ImportsOf(hitPath)
+		imports, _ := st.ImportsOf(hitPath)
 		for _, target := range imports {
 			if _, ok := seen[target]; !ok {
 				seen[target] = &fileEntry{
@@ -112,7 +118,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 		}
 
 		// Incoming callers
-		callers, _ := s.store.CallersOf(hitPath)
+		callers, _ := st.CallersOf(hitPath)
 		for _, source := range callers {
 			if _, ok := seen[source]; !ok {
 				seen[source] = &fileEntry{
@@ -124,7 +130,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 		}
 
 		// Incoming imports (upstream)
-		upstream, _ := s.store.UpstreamOf(hitPath)
+		upstream, _ := st.UpstreamOf(hitPath)
 		for _, source := range upstream {
 			if _, ok := seen[source]; !ok {
 				seen[source] = &fileEntry{
@@ -139,14 +145,14 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 	// Step 3.5: Compute community bonus for expanded files
 	hitCommunities := map[string]bool{}
 	for _, hitPath := range hitPaths {
-		comm, _ := s.store.CommunityOf(hitPath)
+		comm, _ := st.CommunityOf(hitPath)
 		if comm != "" {
 			hitCommunities[comm] = true
 		}
 	}
 	for _, e := range seen {
 		if e.reason != "search_hit" {
-			comm, _ := s.store.CommunityOf(e.path)
+			comm, _ := st.CommunityOf(e.path)
 			if comm != "" && hitCommunities[comm] {
 				e.communityBonus = 1
 			}
@@ -192,7 +198,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 	for _, e := range entries {
 		resultPaths = append(resultPaths, e.path)
 	}
-	depthMap := computeDepth(s.store, resultPaths)
+	depthMap := computeDepth(st, resultPaths)
 
 	// Step 6: Assemble response with context
 	var files []scopeFile
@@ -204,7 +210,7 @@ func (s *Server) handleScope(w io.Writer, id interface{}, params json.RawMessage
 			Depth:  depthMap[e.path],
 		}
 
-		fc, err := readFileContext(s.contextDir, e.path)
+		fc, err := readFileContext(ctxDir, e.path)
 		if err == nil {
 			sf.Community = fc.Community
 			sf.Exports = fc.Exports

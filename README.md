@@ -10,9 +10,128 @@ Prowl parses your codebase into a structured graph — symbols, call edges, comm
 [![Go](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io)
 
-[Quick Start](#quick-start) · [Why Prowl](#the-challenges) · [5 Tools](#the-5-tools) · [How It Works](#how-it-works)
+[Install](#install) · [Quick Start](#quick-start) · [Why Prowl](#the-challenges) · [5 Tools](#the-5-tools) · [How It Works](#how-it-works)
 
 </div>
+
+---
+
+## Install
+
+### Prerequisites
+
+- **Go 1.21+** — [install Go](https://go.dev/dl/)
+
+### Build from source
+
+```bash
+go install github.com/neur0map/prowl/cmd/prowl@latest
+```
+
+Or clone and build:
+
+```bash
+git clone https://github.com/neur0map/prowl.git
+cd prowl
+go build -o ~/go/bin/prowl ./cmd/prowl/
+```
+
+### Add Go to your PATH
+
+The `prowl` binary is installed to `~/go/bin/`. Make sure it's in your PATH.
+
+**Temporary** (current shell only):
+
+```bash
+export PATH="$HOME/go/bin:$PATH"
+```
+
+**Permanent** (add to your shell profile):
+
+```bash
+# zsh (macOS default)
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# bash
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Verify:
+
+```bash
+prowl --help
+```
+
+---
+
+## Quick Start
+
+### Setup wizard (new project)
+
+```bash
+cd your-project
+prowl
+```
+
+If no `.prowl/` directory exists, prowl launches a setup wizard that walks you through:
+
+1. **Confirm directory** — verify the project path
+2. **Ignore patterns** — add extra ignores beyond defaults (node_modules, .git, vendor, etc.)
+3. **Embedding model** — download the semantic search model (~90MB, once) or skip
+4. **MCP integration** — auto-detects Claude Code and Codex, installs prowl as an MCP server with one keypress. Shows raw JSON config for Cursor and other IDEs.
+5. **Indexing** — runs the 8-phase pipeline with a progress bar
+
+### Dashboard (indexed project)
+
+```bash
+cd your-project
+prowl
+```
+
+If `.prowl/` exists, prowl opens a terminal dashboard with 3 tabs:
+
+- **Stats** — file/symbol/edge/embedding counts, language breakdown, community list, last indexed time
+- **Search** — semantic search across your codebase (type a query, get ranked results)
+- **Daemon** — live file watcher that keeps the index fresh as you edit. Auto-starts with the dashboard.
+
+**Keyboard:** `tab`/`1-3` switch tabs · `s` toggle daemon · `j/k` navigate · `q` quit
+
+### MCP server (for AI agents)
+
+```bash
+prowl mcp /path/to/project
+```
+
+This starts the MCP JSON-RPC server on stdin/stdout. You don't run this directly — it's invoked by AI coding tools via their MCP config.
+
+**Claude Code:**
+
+```bash
+claude mcp add -s user prowl -- prowl mcp /path/to/project
+```
+
+**Codex:**
+
+```bash
+codex mcp add prowl -- prowl mcp /path/to/project
+```
+
+**Cursor / other IDEs** — add to your MCP config:
+
+```json
+{
+  "mcpServers": {
+    "prowl": {
+      "command": "prowl",
+      "args": ["mcp", "/absolute/path/to/your-project"]
+    }
+  }
+}
+```
+
+> First run downloads the embedding model (~90MB, once, to `~/.prowl/models/`).
 
 ---
 
@@ -42,64 +161,55 @@ AI coding agents spend most of their token budget *finding* code, not *writing* 
 
 ---
 
-## Quick Start
+## Token Savings
 
-**Install:**
+The numbers below are based on measured file sizes (avg ~1,200-2,500 tokens per source file at ~4 chars/token), constructed prowl response payloads, and published research on agent exploration patterns.
 
-```bash
-go install github.com/neur0map/prowl/cmd/prowl@latest
-```
+### prowl_scope vs. raw exploration
 
-**Index a project:**
+| Metric | Without Prowl | With Prowl |
+|:-------|:-------------|:-----------|
+| Tokens for 10 files | ~19,000 (reading raw content) | ~1,300 (scope response with full context) |
+| Tool calls | 5-15 (grep, read, grep, read...) | 1 |
+| Irrelevant reads | 30-50% of files turn out unused* | 0 (graph-ranked results) |
+| Compression ratio | — | **~14x** vs raw reads |
 
-```bash
-prowl index ./your-project
-```
+\* [Developer tracking data](https://dev.to/egorfedorov/i-tracked-where-my-claude-code-tokens-actually-go-37-were-wasted-2gll) — out of every 10 files an agent reads, only 6-7 actually matter for the task.
 
-**Verify:**
+### prowl_overview vs. manual orientation
 
-```bash
-prowl status ./your-project
-# Files: 68, Symbols: 389, Edges: 17
-```
+| Metric | Without Prowl | With Prowl |
+|:-------|:-------------|:-----------|
+| Tokens to understand project structure | ~15,000-30,000 (ls, grep, read key files) | ~950 (overview response) |
+| Tool calls | 5-10 | 1 |
+| Compression ratio | — | **~16-32x** |
 
-**Connect to Claude Code** — add to `~/.claude.json`:
+### What published research says
 
-```json
-{
-  "mcpServers": {
-    "prowl": {
-      "command": "prowl",
-      "args": ["mcp", "/absolute/path/to/your-project"]
-    }
-  }
-}
-```
+Graph-guided code exploration is a studied approach. The closest published benchmark:
 
-Restart Claude Code. Run `/mcp` — you should see `prowl` with 5 tools.
+- **[LocAgent (ACL 2025)](https://arxiv.org/html/2503.09089v1)** — graph-guided LLM agent for code localization on SWE-bench. Graph tools reduced cost by **86%** ($0.66 → $0.09 per issue) while improving file-level localization accuracy to **92.7%**. Removing the graph traversal tool dropped accuracy by 4.4%.
 
-> First run downloads the embedding model (~70MB, once, to `~/.prowl/models/`).
-
----
-
-## Before & After
+### Before & after
 
 ```
-Without Prowl:
+Without Prowl (typical agent exploration):
   Agent thinks: "Where is the auth logic?"
-    → grep "auth"                 (300 tokens)
-    → read 8 matching files       (12,000 tokens)
-    → grep "login"                (200 tokens)
-    → read 5 more files           (8,000 tokens)
-    → trace imports manually      (3,000 tokens)
-    → finally has enough context
-  Total: ~25,000 tokens · 15 tool calls · 40 seconds
+    → grep "auth"                 (~300 tokens, results to scan)
+    → read 8 matching files       (~12,000 tokens, most irrelevant)
+    → grep "login"                (~200 tokens)
+    → read 5 more files           (~8,000 tokens)
+    → trace imports manually      (~3,000 tokens)
+  Total: ~24,000 tokens · 10+ tool calls
 
 With Prowl:
   Agent calls: prowl_scope({ task: "fix the auth login flow" })
-    → 5 files, ranked, with full context
-  Total: ~1,500 tokens · 1 tool call · instant
+    → 10 files, ranked by relevance, sorted by dependency depth
+    → each file includes: exports, signatures, calls, callers, community
+  Total: ~1,300 tokens · 1 tool call
 ```
+
+> **Note:** The before/after example uses estimated token counts based on typical file sizes. Actual savings depend on codebase size, file lengths, and how many exploration rounds the agent needs. The 14x compression ratio is measured from real response payloads vs. raw file content.
 
 ---
 
@@ -279,6 +389,20 @@ Everything runs locally. No external services, no API keys, no network calls aft
 
 ---
 
+## Live Updates
+
+The daemon watches your project for file changes and incrementally updates the index. It auto-starts when you open the dashboard, or you can toggle it with `s` on the Daemon tab.
+
+When a file is saved:
+- Re-parses symbols, re-resolves calls and imports
+- Updates SQLite and re-embeds if signatures changed
+- Rewrites affected `.prowl/context/` files
+- Cascades updates to callers and upstream files
+
+After 30 seconds of idle, it re-runs community detection and process detection across the entire graph.
+
+---
+
 ## Supported Languages
 
 | Language | Extensions |
@@ -346,7 +470,7 @@ src/auth.ts: auth | 3 exports, 5 calls, 2 callers
 
 Format: `path: parent_dir | N exports, N calls, N callers`
 
-This costs ~15 tokens per file. An agent scanning 100 files in overview spends ~1,500 tokens to see the full project structure — versus ~50,000+ tokens to read every file. The digest tells the agent *whether* to drill in, not *how*.
+This costs ~15 tokens per file. An agent scanning 100 files in overview spends ~1,500 tokens to see the full project structure — versus reading every file raw. The digest tells the agent *whether* to drill in, not *how*.
 
 </details>
 
@@ -355,7 +479,7 @@ This costs ~15 tokens per file. An agent scanning 100 files in overview spends ~
 ## Requirements
 
 - Go 1.21+
-- ~70MB disk for the embedding model (downloaded once to `~/.prowl/models/`)
+- ~90MB disk for the embedding model (downloaded once to `~/.prowl/models/`)
 
 ## License
 

@@ -72,8 +72,8 @@ func TestMCPToolsList(t *testing.T) {
 		t.Fatal("no tools returned")
 	}
 
-	if len(tools) != 5 {
-		t.Errorf("expected 5 tools, got %d", len(tools))
+	if len(tools) != 8 {
+		t.Errorf("expected 8 tools, got %d", len(tools))
 	}
 
 	expectedTools := map[string]bool{
@@ -82,6 +82,9 @@ func TestMCPToolsList(t *testing.T) {
 		"prowl_scope":           false,
 		"prowl_impact":          false,
 		"prowl_semantic_search": false,
+		"prowl_clone":           false,
+		"prowl_clone_status":    false,
+		"prowl_clone_close":     false,
 	}
 
 	for _, raw := range tools {

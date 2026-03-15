@@ -29,6 +29,12 @@ type transitiveDependent struct {
 }
 
 func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessage) {
+	st, ctxDir, err := s.storeFor(params)
+	if err != nil {
+		s.writeError(w, id, -32602, err.Error())
+		return
+	}
+
 	var args struct {
 		Path   string `json:"path"`
 		Symbol string `json:"symbol"`
@@ -42,12 +48,12 @@ func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessag
 	s.recordAccess(args.Path)
 
 	// Step 1: Find direct dependents (files with edges pointing TO target)
-	callers, _ := s.store.CallersOf(args.Path)
+	callers, _ := st.CallersOf(args.Path)
 
 	// Symbol filtering: if symbol is provided, only include callers if the
 	// target file actually contains that symbol (heuristic — edges are file-level).
 	if args.Symbol != "" {
-		syms, _ := s.store.SymbolsForFile(args.Path)
+		syms, _ := st.SymbolsForFile(args.Path)
 		hasSymbol := false
 		for _, sym := range syms {
 			if sym.Name == args.Symbol {
@@ -60,7 +66,7 @@ func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessag
 		}
 	}
 
-	upstream, _ := s.store.UpstreamOf(args.Path)
+	upstream, _ := st.UpstreamOf(args.Path)
 
 	// Build direct dependents with edge types
 	directMap := map[string]map[string]bool{}
@@ -88,7 +94,7 @@ func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessag
 			Path:      path,
 			EdgeTypes: edgeTypes,
 		}
-		if fc, err := readFileContext(s.contextDir, path); err == nil {
+		if fc, err := readFileContext(ctxDir, path); err == nil {
 			dep.Exports = fc.Exports
 			dep.Signatures = fc.Signatures
 		}
@@ -98,7 +104,7 @@ func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessag
 	// Step 2: Find transitive dependents
 	transitiveMap := map[string]string{} // path -> via
 	for directPath := range directMap {
-		transCallers, _ := s.store.CallersOf(directPath)
+		transCallers, _ := st.CallersOf(directPath)
 		for _, tc := range transCallers {
 			if _, isDirect := directMap[tc]; !isDirect && tc != args.Path {
 				if _, seen := transitiveMap[tc]; !seen {
@@ -106,7 +112,7 @@ func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessag
 				}
 			}
 		}
-		transUpstream, _ := s.store.UpstreamOf(directPath)
+		transUpstream, _ := st.UpstreamOf(directPath)
 		for _, tu := range transUpstream {
 			if _, isDirect := directMap[tu]; !isDirect && tu != args.Path {
 				if _, seen := transitiveMap[tu]; !seen {
@@ -122,26 +128,26 @@ func (s *Server) handleImpact(w io.Writer, id interface{}, params json.RawMessag
 			Path: path,
 			Via:  via,
 		}
-		if fc, err := readFileContext(s.contextDir, path); err == nil {
+		if fc, err := readFileContext(ctxDir, path); err == nil {
 			td.Exports = fc.Exports
 		}
 		transitives = append(transitives, td)
 	}
 
 	// Step 3: Classify communities
-	targetComm, _ := s.store.CommunityOf(args.Path)
+	targetComm, _ := st.CommunityOf(args.Path)
 	commSet := map[string]bool{}
 	if targetComm != "" {
 		commSet[targetComm] = true
 	}
 	for path := range directMap {
-		c, _ := s.store.CommunityOf(path)
+		c, _ := st.CommunityOf(path)
 		if c != "" {
 			commSet[c] = true
 		}
 	}
 	for path := range transitiveMap {
-		c, _ := s.store.CommunityOf(path)
+		c, _ := st.CommunityOf(path)
 		if c != "" {
 			commSet[c] = true
 		}
