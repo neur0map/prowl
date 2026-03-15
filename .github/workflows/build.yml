@@ -31,8 +31,6 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact: prowl-linux-amd64
-          - os: macos-13
-            artifact: prowl-darwin-amd64
           - os: macos-14
             artifact: prowl-darwin-arm64
     runs-on: ${{ matrix.os }}
