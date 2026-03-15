@@ -6,7 +6,7 @@
 
 Prowl parses your codebase into a structured graph — symbols, call edges, communities, embeddings — and serves it over [MCP](https://modelcontextprotocol.io). One tool call replaces the entire exploration phase.
 
-[![License](https://img.shields.io/badge/license-BSL--1.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io)
 
@@ -483,4 +483,4 @@ This costs ~15 tokens per file. An agent scanning 100 files in overview spends ~
 
 ## License
 
-[Boost Software License 1.0](LICENSE)
+[Apache License 2.0](LICENSE)
