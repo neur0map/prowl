@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: "1.25"
 
       - name: Run tests
         run: go test ./...
@@ -30,41 +30,21 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
             artifact: prowl-linux-amd64
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-            artifact: prowl-linux-arm64
-          - os: macos-14
-            goos: darwin
-            goarch: amd64
+          - os: macos-13
             artifact: prowl-darwin-amd64
           - os: macos-14
-            goos: darwin
-            goarch: arm64
             artifact: prowl-darwin-arm64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            artifact: prowl-windows-amd64.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: "1.25"
 
       - name: Build binary
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
-        run: |
-          OUTPUT=${{ matrix.artifact }}
-          go build -ldflags="-s -w" -o "$OUTPUT" ./cmd/prowl/
+        run: go build -ldflags="-s -w" -o ${{ matrix.artifact }} ./cmd/prowl/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -7,7 +7,7 @@
 Prowl parses your codebase into a structured graph — symbols, call edges, communities, embeddings — and serves it over [MCP](https://modelcontextprotocol.io). One tool call replaces the entire exploration phase.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://go.dev)
+[![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io)
 
 [Install](#install) · [Quick Start](#quick-start) · [Why Prowl](#the-challenges) · [5 Tools](#the-5-tools) · [How It Works](#how-it-works)
@@ -20,7 +20,7 @@ Prowl parses your codebase into a structured graph — symbols, call edges, comm
 
 ### Prerequisites
 
-- **Go 1.21+** — [install Go](https://go.dev/dl/)
+- **Go 1.25+** — [install Go](https://go.dev/dl/)
 
 ### Build from source
 
@@ -478,7 +478,7 @@ This costs ~15 tokens per file. An agent scanning 100 files in overview spends ~
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.25+
 - ~90MB disk for the embedding model (downloaded once to `~/.prowl/models/`)
 
 ## License
