@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 
@@ -15,7 +16,16 @@ import (
 )
 
 // Version is set at build time via -ldflags.
+// Falls back to the module version from go install.
 var Version = "dev"
+
+func init() {
+	if Version == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			Version = info.Main.Version
+		}
+	}
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "prowl [path]",
