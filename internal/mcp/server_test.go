@@ -27,7 +27,7 @@ func call(t *testing.T, s *Server, request string) jsonRPCResponse {
 }
 
 func TestMCPInitialize(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`)
 
 	if resp.Error != nil {
@@ -55,7 +55,7 @@ func TestMCPInitialize(t *testing.T) {
 }
 
 func TestMCPToolsList(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
 
 	if resp.Error != nil {
@@ -105,7 +105,7 @@ func TestMCPToolsList(t *testing.T) {
 }
 
 func TestMCPToolsCallMissingQuery(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"prowl_semantic_search","arguments":{}}}`)
 
 	if resp.Error == nil {
@@ -120,7 +120,7 @@ func TestMCPToolsCallMissingQuery(t *testing.T) {
 }
 
 func TestMCPToolsCallNilEmbedder(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"prowl_semantic_search","arguments":{"query":"auth logic"}}}`)
 
 	if resp.Error == nil {
@@ -135,7 +135,7 @@ func TestMCPToolsCallNilEmbedder(t *testing.T) {
 }
 
 func TestMCPToolsCallUnknownTool(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"unknown_tool","arguments":{}}}`)
 
 	if resp.Error == nil {
@@ -147,7 +147,7 @@ func TestMCPToolsCallUnknownTool(t *testing.T) {
 }
 
 func TestMCPMethodNotFound(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":6,"method":"nonexistent"}`)
 
 	if resp.Error == nil {
@@ -159,7 +159,7 @@ func TestMCPMethodNotFound(t *testing.T) {
 }
 
 func TestMCPNotificationNoResponse(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	in := strings.NewReader(`{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n")
 	var out bytes.Buffer
 	if err := s.RunWith(in, &out); err != nil {
@@ -171,7 +171,7 @@ func TestMCPNotificationNoResponse(t *testing.T) {
 }
 
 func TestHeatTracking(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 
 	// Unknown file should have zero heat
 	score := s.heatScore("unknown.go")
@@ -196,7 +196,7 @@ func TestHeatTracking(t *testing.T) {
 }
 
 func TestMCPParseError(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	in := strings.NewReader("not json\n")
 	var out bytes.Buffer
 	if err := s.RunWith(in, &out); err != nil {

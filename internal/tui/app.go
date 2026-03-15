@@ -26,6 +26,7 @@ type AppModel struct {
 	wizard    WizardModel
 	dashboard DashboardModel
 	dir       string
+	version   string
 	width     int
 	height    int
 	program   *tea.Program
@@ -48,7 +49,7 @@ func RunWithWizard(dir string) error {
 }
 
 // RunDashboard launches the TUI directly into the dashboard.
-func RunDashboard(dir string) error {
+func RunDashboard(dir string, version string) error {
 	absDir, _ := filepath.Abs(dir)
 	dbPath := filepath.Join(absDir, ".prowl", "prowl.db")
 
@@ -61,12 +62,13 @@ func RunDashboard(dir string) error {
 	modelDir := filepath.Join(homeDir, ".prowl", "models")
 	embedder, _ := embed.New(modelDir) // nil is OK, search will be disabled
 
-	dash := NewDashboardModel(absDir, st, embedder)
+	dash := NewDashboardModel(absDir, st, embedder, version)
 
 	m := AppModel{
 		mode:      modeDashboard,
 		dashboard: dash,
 		dir:       absDir,
+		version:   version,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -156,7 +158,7 @@ func (m AppModel) transitionToDashboard() (tea.Model, tea.Cmd) {
 	modelDir := filepath.Join(homeDir, ".prowl", "models")
 	embedder, _ := embed.New(modelDir)
 
-	m.dashboard = NewDashboardModel(absDir, st, embedder)
+	m.dashboard = NewDashboardModel(absDir, st, embedder, m.version)
 	m.mode = modeDashboard
 	return m, m.dashboard.Init()
 }

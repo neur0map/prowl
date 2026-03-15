@@ -46,7 +46,7 @@ func TestProwlImpact(t *testing.T) {
 	st := setupImpactStore(t)
 	defer st.Close()
 
-	s := New(st, nil, t.TempDir())
+	s := New(st, nil, t.TempDir(), "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_impact","arguments":{"path":"src/lib.ts"}}}`)
 
 	if resp.Error != nil {
@@ -82,7 +82,7 @@ func TestProwlImpact(t *testing.T) {
 }
 
 func TestProwlImpactMissingPath(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_impact","arguments":{}}}`)
 
 	if resp.Error == nil {

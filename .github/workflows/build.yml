@@ -42,7 +42,13 @@ jobs:
           go-version: "1.25"
 
       - name: Build binary
-        run: go build -ldflags="-s -w" -o ${{ matrix.artifact }} ./cmd/prowl/
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          if [[ "$VERSION" == "$GITHUB_REF_NAME" ]]; then
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          go build -ldflags="-s -w -X main.Version=$VERSION" \
+            -o ${{ matrix.artifact }} ./cmd/prowl/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

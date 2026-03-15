@@ -12,6 +12,7 @@ import (
 	"github.com/neur0map/prowl/internal/daemon"
 	"github.com/neur0map/prowl/internal/embed"
 	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/updater"
 )
 
 type tabID int
@@ -29,10 +30,14 @@ var tabNames = []string{"Stats", "Search", "Daemon"}
 // daemonLogMsg carries a log line tick.
 type daemonLogMsg struct{}
 
+// updateCheckMsg carries the result of an async update check.
+type updateCheckMsg struct{ release *updater.Release }
+
 // DashboardModel is the main 4-tab dashboard.
 type DashboardModel struct {
 	activeTab tabID
 	dir       string
+	version   string
 	store     *store.Store
 	embedder  *embed.Embedder
 	daemon    *daemon.Daemon
@@ -40,6 +45,9 @@ type DashboardModel struct {
 	width     int
 	height    int
 	quitting  bool
+
+	// Update banner
+	updateAvailable *updater.Release
 
 	// Tab models
 	search SearchModel
@@ -103,12 +111,13 @@ func (w *ringBufferWriter) Write(p []byte) (n int, err error) {
 }
 
 // NewDashboardModel creates a dashboard for an indexed project.
-func NewDashboardModel(dir string, st *store.Store, emb *embed.Embedder) DashboardModel {
+func NewDashboardModel(dir string, st *store.Store, emb *embed.Embedder, version string) DashboardModel {
 	logBuf := newRingBuffer(50)
 	logW := newRingBufferWriter(logBuf)
 
 	m := DashboardModel{
 		dir:      dir,
+		version:  version,
 		store:    st,
 		embedder: emb,
 		search:   NewSearchModel(st, emb),
@@ -150,7 +159,15 @@ func (m DashboardModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.search.Init(),
 		m.tickDaemonLog(),
+		m.checkForUpdate(),
 	)
+}
+
+func (m DashboardModel) checkForUpdate() tea.Cmd {
+	version := m.version
+	return func() tea.Msg {
+		return updateCheckMsg{release: updater.CheckLatest(version)}
+	}
 }
 
 func (m DashboardModel) tickDaemonLog() tea.Cmd {
@@ -234,6 +251,10 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case daemonLogMsg:
 		return m, m.tickDaemonLog()
 
+	case updateCheckMsg:
+		m.updateAvailable = msg.release
+		return m, nil
+
 	case searchResultMsg:
 		var cmd tea.Cmd
 		m.search, cmd = m.search.Update(msg)
@@ -293,7 +314,15 @@ func (m DashboardModel) View() string {
 		Foreground(Purple).
 		Render("prowl")
 	dirLabel := MutedStyle.Render(" " + m.dir)
-	b.WriteString("  " + header + dirLabel + "\n\n")
+	b.WriteString("  " + header + dirLabel + "\n")
+
+	// Update banner
+	if m.updateAvailable != nil {
+		banner := lipgloss.NewStyle().Foreground(Amber).Render(
+			fmt.Sprintf("  Update available: v%s → run prowl update", m.updateAvailable.Version))
+		b.WriteString(banner + "\n")
+	}
+	b.WriteString("\n")
 
 	// Tab bar
 	var tabs []string

@@ -15,7 +15,7 @@ func TestStoreForPrimary(t *testing.T) {
 	}
 	defer primary.Close()
 
-	s := New(primary, nil, "/ctx/primary")
+	s := New(primary, nil, "/ctx/primary", "dev")
 
 	// Default (empty project) should return primary store
 	st, ctxDir, err := s.storeFor(json.RawMessage(`{}`))
@@ -52,7 +52,7 @@ func TestStoreForComparison(t *testing.T) {
 	}
 	defer comparison.Close()
 
-	s := New(primary, nil, "/ctx/primary")
+	s := New(primary, nil, "/ctx/primary", "dev")
 	s.compareStore = comparison
 	s.compareContextDir = "/ctx/comparison"
 	s.compareRepo = "owner/repo"
@@ -76,7 +76,7 @@ func TestStoreForNoComparison(t *testing.T) {
 	}
 	defer primary.Close()
 
-	s := New(primary, nil, "/ctx/primary")
+	s := New(primary, nil, "/ctx/primary", "dev")
 
 	_, _, err = s.storeFor(json.RawMessage(`{"project":"comparison"}`))
 	if err == nil {
@@ -88,7 +88,7 @@ func TestStoreForNoComparison(t *testing.T) {
 }
 
 func TestCloneStatusEmpty(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_clone_status","arguments":{}}}`)
 
 	if resp.Error != nil {
@@ -116,7 +116,7 @@ func TestCloneClose(t *testing.T) {
 	}
 	// Don't defer close — handleCloneClose will close it
 
-	s := New(primary, nil, "")
+	s := New(primary, nil, "", "dev")
 	s.compareStore = comparison
 	s.compareContextDir = "/ctx/comparison"
 	s.compareRepo = "owner/repo"
@@ -143,7 +143,7 @@ func TestCloneClose(t *testing.T) {
 }
 
 func TestCloneCloseIdempotent(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_clone_close","arguments":{}}}`)
 

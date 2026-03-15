@@ -65,7 +65,7 @@ func TestProwlOverview(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 	contextDir := setupTestContext(t)
-	s := New(st, nil, contextDir)
+	s := New(st, nil, contextDir, "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_overview","arguments":{}}}`)
 	if resp.Error != nil {
 		t.Fatalf("unexpected error: %+v", resp.Error)
@@ -110,7 +110,7 @@ func TestProwlFileContext(t *testing.T) {
 	defer st.Close()
 	contextDir := setupTestContext(t)
 
-	s := New(st, nil, contextDir)
+	s := New(st, nil, contextDir, "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_file_context","arguments":{"path":"src/auth.ts"}}}`)
 
 	if resp.Error != nil {
@@ -144,7 +144,7 @@ func TestProwlFileContextMissing(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 
-	s := New(st, nil, t.TempDir())
+	s := New(st, nil, t.TempDir(), "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_file_context","arguments":{"path":"nonexistent.ts"}}}`)
 
 	if resp.Error == nil {
@@ -153,7 +153,7 @@ func TestProwlFileContextMissing(t *testing.T) {
 }
 
 func TestProwlFileContextMissingPath(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_file_context","arguments":{}}}`)
 
 	if resp.Error == nil {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestScopeCommunityBoost(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 
 	// Simulate fileEntry ranking: search hits first, then expanded files
 	// ranked by communityBonus + hops, with heat as tiebreaker.
@@ -71,7 +71,7 @@ func TestProwlScopeWithoutEmbedder(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 
-	s := New(st, nil, t.TempDir())
+	s := New(st, nil, t.TempDir(), "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_scope","arguments":{"task":"fix auth"}}}`)
 
 	if resp.Error == nil {
@@ -83,7 +83,7 @@ func TestProwlScopeWithoutEmbedder(t *testing.T) {
 }
 
 func TestProwlScopeMissingTask(t *testing.T) {
-	s := New(nil, nil, "")
+	s := New(nil, nil, "", "dev")
 	resp := call(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"prowl_scope","arguments":{}}}`)
 
 	if resp.Error == nil {

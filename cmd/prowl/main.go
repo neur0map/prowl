@@ -11,7 +11,11 @@ import (
 	"github.com/neur0map/prowl/internal/mcp"
 	"github.com/neur0map/prowl/internal/store"
 	"github.com/neur0map/prowl/internal/tui"
+	"github.com/neur0map/prowl/internal/updater"
 )
+
+// Version is set at build time via -ldflags.
+var Version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:   "prowl [path]",
@@ -32,7 +36,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Index exists — open dashboard
-		return tui.RunDashboard(dir)
+		return tui.RunDashboard(dir, Version)
 	},
 }
 
@@ -69,14 +73,32 @@ var mcpCmd = &cobra.Command{
 		}
 		defer embedder.Close()
 
-		server := mcp.New(st, embedder, contextDir)
+		server := mcp.New(st, embedder, contextDir, Version)
 		defer server.Close()
 		return server.Run()
 	},
 }
 
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the prowl version",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("prowl %s\n", Version)
+	},
+}
+
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update prowl to the latest release",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return updater.Update(Version)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(mcpCmd)
+	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(updateCmd)
 }
 
 func main() {

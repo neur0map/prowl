@@ -31,6 +31,7 @@ type Server struct {
 	store      *store.Store
 	embedder   *embed.Embedder
 	contextDir string
+	version    string
 	heat       map[string]accessInfo
 
 	// Comparison repo (single slot, set by prowl_clone).
@@ -40,8 +41,8 @@ type Server struct {
 }
 
 // New creates an MCP server.
-func New(st *store.Store, embedder *embed.Embedder, contextDir string) *Server {
-	return &Server{store: st, embedder: embedder, contextDir: contextDir, heat: make(map[string]accessInfo)}
+func New(st *store.Store, embedder *embed.Embedder, contextDir string, version string) *Server {
+	return &Server{store: st, embedder: embedder, contextDir: contextDir, version: version, heat: make(map[string]accessInfo)}
 }
 
 // recordAccess tracks that a file was accessed via an MCP tool.
@@ -184,7 +185,7 @@ func (s *Server) handleInitialize(w io.Writer, req jsonRPCRequest) {
 		},
 		"serverInfo": map[string]interface{}{
 			"name":    "prowl",
-			"version": "0.1.0",
+			"version": s.version,
 		},
 	})
 }
