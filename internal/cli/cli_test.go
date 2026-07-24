@@ -58,7 +58,7 @@ func TestRunInit(t *testing.T) {
 	}
 	// AGENTS.md has the instruction block.
 	agents, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))
-	if !strings.Contains(string(agents), agentsMarker) {
+	if !strings.Contains(string(agents), "<!-- prowl-agent -->") {
 		t.Fatalf("AGENTS.md missing marker: %q", agents)
 	}
 	// .gitignore ignores .prowl/.

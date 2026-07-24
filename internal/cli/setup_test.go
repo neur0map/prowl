@@ -181,7 +181,11 @@ func TestInitNoInputWritesOnlySelectedIntegration(t *testing.T) {
 func TestRemoveIntegrationsDeletesProwlOnlyAgentsFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "AGENTS.md")
-	if err := ensureAgentsBlock(path); err != nil {
+	plan, err := BuildSetupPlan(root, []string{IntegrationAgents})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplySetupPlan(plan); err != nil {
 		t.Fatal(err)
 	}
 	if err := RemoveIntegrations(root, []string{IntegrationAgents}); err != nil {

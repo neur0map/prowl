@@ -5,19 +5,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"github.com/prowl-agent/prowl-agent/internal/setup"
 )
 
 func TestEnsureAgentsBlockRefreshesInPlace(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "AGENTS.md")
 	// A user's own notes, with a stale prowl block sandwiched between them.
-	stale := agentsMarker + "\nold guidance: use prowl-agent serve only\n" + agentsEndMarker
+	stale := setup.AgentsMarker + "\nold guidance: use prowl-agent serve only\n" + setup.AgentsEndMarker
 	original := "# My project\n\nSome house rules.\n\n" + stale + "\n\n## Other section\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ensureAgentsBlock(path); err != nil {
+	if err := setup.EnsureAgentsBlock(path); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
@@ -35,10 +36,10 @@ func TestEnsureAgentsBlockRefreshesInPlace(t *testing.T) {
 		t.Errorf("user content not preserved:\n%s", s)
 	}
 	// Exactly one block (no duplication).
-	if n := strings.Count(s, agentsMarker); n != 1 {
+	if n := strings.Count(s, setup.AgentsMarker); n != 1 {
 		t.Errorf("expected exactly one block marker, got %d:\n%s", n, s)
 	}
-	if n := strings.Count(s, agentsEndMarker); n != 1 {
+	if n := strings.Count(s, setup.AgentsEndMarker); n != 1 {
 		t.Errorf("expected exactly one end marker, got %d:\n%s", n, s)
 	}
 }
@@ -49,11 +50,11 @@ func TestEnsureAgentsBlockAppendsWhenAbsent(t *testing.T) {
 	if err := os.WriteFile(path, []byte("# Existing\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureAgentsBlock(path); err != nil {
+	if err := setup.EnsureAgentsBlock(path); err != nil {
 		t.Fatal(err)
 	}
 	s, _ := os.ReadFile(path)
-	if !strings.Contains(string(s), "# Existing") || !strings.Contains(string(s), agentsMarker) {
+	if !strings.Contains(string(s), "# Existing") || !strings.Contains(string(s), setup.AgentsMarker) {
 		t.Errorf("expected existing content plus appended block:\n%s", s)
 	}
 }
@@ -64,11 +65,11 @@ func TestEnsureAgentsBlockMissingEndMarkerKeepsUserText(t *testing.T) {
 	// A malformed block: the opening marker survives but the closing one was
 	// removed, with the user's own text below it. The refresh must not delete to
 	// end of file.
-	original := "# My project\n" + agentsMarker + "\nstale prowl body\n\n## Important user rules\nKeep these.\n"
+	original := "# My project\n" + setup.AgentsMarker + "\nstale prowl body\n\n## Important user rules\nKeep these.\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureAgentsBlock(path); err != nil {
+	if err := setup.EnsureAgentsBlock(path); err != nil {
 		t.Fatal(err)
 	}
 	s, _ := os.ReadFile(path)
@@ -81,10 +82,10 @@ func TestEnsureAgentsBlockMissingEndMarkerKeepsUserText(t *testing.T) {
 		t.Errorf("user heading before marker lost:\n%s", got)
 	}
 	// A well-formed block now exists (both markers, exactly once each).
-	if n := strings.Count(got, agentsMarker); n != 1 {
+	if n := strings.Count(got, setup.AgentsMarker); n != 1 {
 		t.Errorf("expected one opening marker, got %d:\n%s", n, got)
 	}
-	if n := strings.Count(got, agentsEndMarker); n != 1 {
+	if n := strings.Count(got, setup.AgentsEndMarker); n != 1 {
 		t.Errorf("expected one closing marker, got %d:\n%s", n, got)
 	}
 }
@@ -97,7 +98,7 @@ func TestEnsureAgentsBlockNeverOverwritesUserFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureAgentsBlock(path); err != nil {
+	if err := setup.EnsureAgentsBlock(path); err != nil {
 		t.Fatal(err)
 	}
 	s, _ := os.ReadFile(path)
@@ -106,7 +107,7 @@ func TestEnsureAgentsBlockNeverOverwritesUserFile(t *testing.T) {
 	if !strings.HasPrefix(got, original) {
 		t.Errorf("user file content was modified, not just appended to:\n%s", got)
 	}
-	if !strings.Contains(got, agentsMarker) {
+	if !strings.Contains(got, setup.AgentsMarker) {
 		t.Errorf("prowl block was not appended:\n%s", got)
 	}
 }
