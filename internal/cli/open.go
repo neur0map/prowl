@@ -18,6 +18,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/prowl-agent/prowl-agent/internal/application"
+	"github.com/prowl-agent/prowl-agent/internal/events"
+	"github.com/prowl-agent/prowl-agent/internal/jobs"
 	"github.com/prowl-agent/prowl-agent/internal/workbench"
 	workbenchweb "github.com/prowl-agent/prowl-agent/web"
 )
@@ -168,3 +170,32 @@ func serveWorkbenchHTTP(ctx context.Context, listener net.Listener, handler http
 	}
 	return err
 }
+
+func newProjectJobsService(project *application.Project) (*jobs.Service, error) {
+	store, err := jobs.Open(context.Background(), project.Workspace.Root)
+	if err != nil {
+		return nil, err
+	}
+	outbox := events.NewProjectJobsOutbox(store)
+	broker, err := events.NewBroker(outbox, events.BrokerOptions{})
+	if err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	service := jobs.NewService(store, broker, func(ctx context.Context, _ jobs.Job, progress func(string, int) error) error {
+		if err := progress("refreshing", 1); err != nil {
+			return err
+		}
+		_, err := project.Refresh(ctx)
+		if err != nil {
+			return err
+		}
+		return progress("complete", 100)
+	})
+	if err := project.AttachJobsService(service); err != nil {
+		_ = service.Close()
+		return nil, err
+	}
+	return service, nil
+}
+

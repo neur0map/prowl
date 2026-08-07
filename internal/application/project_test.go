@@ -110,7 +110,7 @@ func TestStartupFreshnessOpensCurrentProjectWithInRootSourceSymlink(t *testing.T
 	defer project.Close()
 }
 
-func TestStartupFreshnessRequiresRefreshWithoutPublishingOrReturningProject(t *testing.T) {
+func TestStartupRefreshJobReturnsStaleProjectAsPending(t *testing.T) {
 	root := newProjectFixture(t, config.Default())
 	seed, err := OpenProject(context.Background(), root, Options{})
 	if err != nil {
@@ -122,8 +122,12 @@ func TestStartupFreshnessRequiresRefreshWithoutPublishingOrReturningProject(t *t
 	writeSource(t, root, "package sample\n\nfunc StaleAtStartup() {}\n")
 
 	project, err := OpenWorkbenchProject(context.Background(), root, Options{}, StartupLimits{Timeout: time.Second, CandidatePaths: 2000})
-	if project != nil || !errors.Is(err, ErrStartupRefreshRequired) {
-		t.Fatalf("project=%+v error=%v want startup refresh required", project, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer project.Close()
+	if !project.StartupRefreshPending() {
+		t.Fatal("stale project did not report pending startup refresh")
 	}
 }
 

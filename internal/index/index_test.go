@@ -580,3 +580,26 @@ func TestValidateSnapshotAcceptsGeneratedAgentsMarker(t *testing.T) {
 		t.Fatalf("generated marker snapshot: %v", err)
 	}
 }
+
+func TestIndexWithProgressReportsBoundedSnapshots(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	database := openStore(t)
+	defer database.Close()
+	var snapshots []Progress
+	if _, err := IndexWithOptionsProgressContext(context.Background(), database, root, Options{}, func(progress Progress) {
+		snapshots = append(snapshots, progress)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshots) == 0 || snapshots[len(snapshots)-1].Percent != 100 {
+		t.Fatalf("snapshots=%+v", snapshots)
+	}
+	for _, snapshot := range snapshots {
+		if snapshot.Percent < 0 || snapshot.Percent > 100 || len(snapshot.Phase) == 0 {
+			t.Fatalf("invalid progress=%+v", snapshot)
+		}
+	}
+}

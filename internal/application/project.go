@@ -19,6 +19,7 @@ import (
 	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
 	"github.com/prowl-agent/prowl-agent/internal/index"
 	"github.com/prowl-agent/prowl-agent/internal/knowledge"
+	"github.com/prowl-agent/prowl-agent/internal/jobs"
 	"github.com/prowl-agent/prowl-agent/internal/knowledge/okfv01"
 	"github.com/prowl-agent/prowl-agent/internal/query"
 	"github.com/prowl-agent/prowl-agent/internal/store"
@@ -46,17 +47,6 @@ func DefaultStartupLimits() StartupLimits {
 	return StartupLimits{Timeout: 250 * time.Millisecond, CandidatePaths: 2000}
 }
 
-var ErrStartupRefreshRequired = errors.New("startup_refresh_required")
-
-// StartupRefreshRequiredError reports that bounded startup cannot safely serve
-// the current generation without a later refresh job.
-type StartupRefreshRequiredError struct{ Cause error }
-
-func (err *StartupRefreshRequiredError) Error() string { return ErrStartupRefreshRequired.Error() }
-func (err *StartupRefreshRequiredError) Unwrap() error { return err.Cause }
-func (err *StartupRefreshRequiredError) Is(target error) bool {
-	return target == ErrStartupRefreshRequired
-}
 
 // RefreshResult describes one deterministic refresh. EmbeddingError is a
 // best-effort AI warning; structural indexing failures are returned as errors.
@@ -81,6 +71,8 @@ type Project struct {
 	// InitialRefresh is non-zero when OpenProject repaired or refreshed stale
 	// project state during assembly.
 	InitialRefresh RefreshResult
+	startupRefreshPending bool
+	jobService            *jobs.Service
 
 	refreshGate chan struct{}
 	closeOnce   sync.Once
@@ -115,7 +107,7 @@ func OpenProject(ctx context.Context, start string, opts Options) (*Project, err
 }
 
 // OpenWorkbenchProject assembles services and performs one bounded freshness
-// probe. It never refreshes synchronously or returns a stale project.
+// probe. A usable but stale project is returned for the CLI to enqueue durably.
 func OpenWorkbenchProject(parent context.Context, start string, opts Options, limits StartupLimits) (*Project, error) {
 	if limits.Timeout <= 0 || limits.Timeout > 10*time.Second || limits.CandidatePaths <= 0 || limits.CandidatePaths > 1_000_000 {
 		return nil, errors.New("invalid workbench startup limits")
@@ -124,24 +116,40 @@ func OpenWorkbenchProject(parent context.Context, start string, opts Options, li
 	defer cancel()
 	project, err := assembleProject(ctx, start, opts, workspace.ResolveContext, config.LoadContext, store.OpenContext)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, &StartupRefreshRequiredError{Cause: err}
-		}
 		return nil, err
 	}
 	current, probeErr := project.startupFresh(ctx, limits.CandidatePaths)
 	if probeErr != nil {
-		closeErr := project.Close()
 		var candidateLimit index.CandidateLimitError
 		if errors.Is(probeErr, context.DeadlineExceeded) || errors.As(probeErr, &candidateLimit) {
-			return nil, errors.Join(&StartupRefreshRequiredError{Cause: probeErr}, closeErr)
+			project.startupRefreshPending = true
+			return project, nil
 		}
-		return nil, errors.Join(probeErr, closeErr)
+		return nil, errors.Join(probeErr, project.Close())
 	}
 	if !current {
-		return nil, errors.Join(&StartupRefreshRequiredError{Cause: errors.New("project data is stale")}, project.Close())
+		project.startupRefreshPending = true
 	}
 	return project, nil
+}
+
+// StartupRefreshPending reports whether bounded workbench startup deferred a
+// required index refresh to the durable jobs service.
+func (p *Project) StartupRefreshPending() bool {
+	return p != nil && p.startupRefreshPending
+}
+
+// AttachJobsService makes Project.Close stop the sole attached service before
+// closing the index store.
+func (p *Project) AttachJobsService(service *jobs.Service) error {
+	if p == nil || service == nil || p.closed.Load() {
+		return errors.New("invalid project jobs service")
+	}
+	if p.jobService != nil {
+		return errors.New("project jobs service already attached")
+	}
+	p.jobService = service
+	return nil
 }
 
 func assembleProject(
@@ -210,6 +218,7 @@ func assembleProject(
 		refreshGate:  make(chan struct{}, 1),
 	}
 	if err := database.SetMetaContext(ctx, "ai_enabled", strconv.FormatBool(cfg.AI.Enabled)); err != nil {
+
 		return fail(fmt.Errorf("record AI state: %w", err))
 	}
 	if err := ctx.Err(); err != nil {
@@ -435,4 +444,9 @@ func generationReadGuard(path string) store.ReadGuard {
 		}
 		return func() { _ = fileLock.Unlock() }, nil
 	}
+}
+
+// StartupRefreshPending reports whether workbench startup deferred a refresh.
+func (p *Project) StartupRefreshPending() bool {
+	return p != nil && p.startupRefreshPending
 }

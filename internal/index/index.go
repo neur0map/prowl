@@ -42,6 +42,16 @@ type Options struct {
 	Languages []string
 }
 
+// Progress is a bounded, aggregate indexing snapshot. Reporters must not retain
+// per-file state; progress is emitted only at traversal and file boundaries.
+type Progress struct {
+	Phase   string
+	Percent int
+}
+
+// ProgressReporter receives optional bounded progress snapshots.
+type ProgressReporter func(Progress)
+
 // Index incrementally synchronizes the store with the project rooted at root.
 // Only files whose content hash changed are reparsed; removed files are deleted;
 // the global resolution passes always run afterward.
@@ -58,6 +68,23 @@ func IndexWithOptions(s *store.Store, root string, opt Options) (Summary, error)
 // IndexWithOptionsContext incrementally synchronizes the store while honoring
 // cancellation between traversal, file parsing, and graph resolution phases.
 func IndexWithOptionsContext(ctx context.Context, s *store.Store, root string, opt Options) (Summary, error) {
+	return indexWithOptionsContext(ctx, s, root, opt, nil)
+}
+
+// IndexWithOptionsProgressContext is IndexWithOptionsContext with optional
+// aggregate progress reporting.
+func IndexWithOptionsProgressContext(ctx context.Context, s *store.Store, root string, opt Options, report ProgressReporter) (Summary, error) {
+	if report != nil {
+		report(Progress{Phase: "starting", Percent: 0})
+	}
+	summary, err := indexWithOptionsContext(ctx, s, root, opt, report)
+	if err == nil && report != nil {
+		report(Progress{Phase: "complete", Percent: 100})
+	}
+	return summary, err
+}
+
+func indexWithOptionsContext(ctx context.Context, s *store.Store, root string, opt Options, report ProgressReporter) (Summary, error) {
 	var sum Summary
 	if err := ctx.Err(); err != nil {
 		return sum, err
