@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -15,20 +16,27 @@ func openReadOnlyNonblocking(root *os.Root, name string) (*os.File, error) {
 	return root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 }
 
+// pathComponents splits a Unix relative path on '/' only. A backslash is an
+// ordinary filename byte on Unix and must not act as a separator.
+func pathComponents(name string) ([]string, error) {
+	if strings.HasPrefix(name, "/") {
+		return nil, fmt.Errorf("%w: absolute name %q", os.ErrInvalid, name)
+	}
+	return strings.Split(name, "/"), nil
+}
+
 // walkParents opens each parent directory descriptor relative to the previous
 // one, rejecting a symbolic link at every intermediate component and verifying
 // that the opened directory's identity matches the one that was checked. The
-// caller owns the returned descriptor and must close it. The root descriptor is
-// obtained from root itself so the walk is anchored to a trusted handle rather
-// than a re-resolved path.
+// caller owns the returned descriptor and must close it via release. The root
+// descriptor is obtained from root itself so the walk is anchored to a trusted
+// handle rather than a re-resolved path.
 func walkParents(root *os.Root, comps []string, name string) (int, func(), error) {
 	rootDir, err := root.Open(".")
 	if err != nil {
 		return -1, nil, err
 	}
 	dirFd := int(rootDir.Fd())
-	// closers releases every descriptor we opened, newest first, including the
-	// anchoring root handle.
 	closers := []func(){func() { rootDir.Close() }}
 	release := func() {
 		for i := len(closers) - 1; i >= 0; i-- {
@@ -60,9 +68,6 @@ func walkParents(root *os.Root, comps []string, name string) (int, func(), error
 		}
 		fd := nfd
 		closers = append(closers, func() { unix.Close(fd) })
-		// The component was verified as a directory before the open; confirm the
-		// descriptor we actually hold is the same object. A mismatch is a
-		// concurrent swap, never a target to follow.
 		var opened unix.Stat_t
 		if err := unix.Fstat(fd, &opened); err != nil {
 			release()
@@ -118,19 +123,14 @@ func openRegularNoFollow(root *os.Root, comps []string, name string) (*os.File, 
 	return os.NewFile(uintptr(fd), filepath.Join(root.Name(), name)), nil
 }
 
-func readlinkNoFollow(root *os.Root, comps []string, name string) (string, error) {
-	dirFd, release, err := walkParents(root, comps, name)
-	if err != nil {
-		return "", err
-	}
-	defer release()
-
-	last := comps[len(comps)-1]
-	// Grow the buffer until the target fits: Readlinkat truncates silently when
-	// the destination is too small, signalled by a full buffer.
+// readlinkatGrow reads a symlink target relative to dirFd, growing the buffer
+// until the target fits. Readlinkat truncates silently when the destination is
+// too small, signalled by a full buffer. An empty linkName reads the symlink
+// referred to by dirFd itself (used with an O_PATH|O_NOFOLLOW descriptor).
+func readlinkatGrow(dirFd int, linkName, name string) (string, error) {
 	for size := 256; size <= 64<<10; size *= 2 {
 		buf := make([]byte, size)
-		n, err := unix.Readlinkat(dirFd, last, buf)
+		n, err := unix.Readlinkat(dirFd, linkName, buf)
 		if err != nil {
 			return "", &os.PathError{Op: "readlinkat", Path: name, Err: err}
 		}

@@ -186,3 +186,110 @@ func TestOpenRegularNoFollowIntermediateSwapRace(t *testing.T) {
 		_ = os.Rename(stashed, realDir)
 	}
 }
+
+// TestOpenRegularNoFollowBackslashIsOrdinaryFilename proves a backslash is an
+// ordinary filename byte on Unix, not a path separator: a file literally named
+// "a\b" must be reached by the single component "a\b" and must be distinct from
+// the nested path "a/b".
+func TestOpenRegularNoFollowBackslashIsOrdinaryFilename(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("backslash is a separator on Windows")
+	}
+	rootDir := t.TempDir()
+	const litName = "a\\b" // one component whose name contains a backslash
+	if err := os.WriteFile(filepath.Join(rootDir, litName), []byte("literal-backslash"), 0o600); err != nil {
+		t.Skipf("cannot create backslash filename: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(rootDir, "a"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rootDir, "a", "b"), []byte("nested-slash"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	read := func(name string) string {
+		t.Helper()
+		f, err := OpenRegularNoFollow(root, name)
+		if err != nil {
+			t.Fatalf("open %q: %v", name, err)
+		}
+		defer f.Close()
+		buf := make([]byte, 64)
+		n, _ := f.Read(buf)
+		return string(buf[:n])
+	}
+	if got := read("a\\b"); got != "literal-backslash" {
+		t.Fatalf(`OpenRegularNoFollow("a\\b") read %q, want the literal-backslash file`, got)
+	}
+	if got := read("a/b"); got != "nested-slash" {
+		t.Fatalf(`OpenRegularNoFollow("a/b") read %q, want the nested file`, got)
+	}
+}
+
+// TestReadlinkNoFollowFinalSymlinkSwapRace hammers a final symlink that an
+// attacker swaps between two distinct targets and a regular file. The
+// descriptor/identity-tied read must only ever return one of the legitimate
+// symlink targets or a typed error; it must never return truncated garbage nor
+// the regular file's content (readlink never opens the target).
+func TestReadlinkNoFollowFinalSymlinkSwapRace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("swap race exercises POSIX rename semantics")
+	}
+	rootDir := t.TempDir()
+	const targetA = "target-alpha"
+	const targetB = "target-bravo-longer-value"
+	link := filepath.Join(rootDir, "lnk")
+	stash := filepath.Join(rootDir, "lnk.stash")
+	reg := filepath.Join(rootDir, "lnk.reg")
+	if err := os.Symlink(targetA, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	if err := os.WriteFile(reg, []byte("REGULAR-FILE-CONTENT"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	var stop atomic.Bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		toggle := false
+		for !stop.Load() {
+			_ = os.Remove(link)
+			if toggle {
+				_ = os.Symlink(targetB, link)
+			} else {
+				// briefly present as a regular file via a hard link
+				_ = os.Link(reg, link)
+			}
+			toggle = !toggle
+			_ = os.Remove(link)
+			_ = os.Symlink(targetA, link)
+		}
+	}()
+
+	for range 20000 {
+		got, err := ReadlinkNoFollow(root, "lnk")
+		if err != nil {
+			continue
+		}
+		if got != targetA && got != targetB {
+			stop.Store(true)
+			wg.Wait()
+			t.Fatalf("readlink returned unexpected value %q (not a legitimate target)", got)
+		}
+	}
+	stop.Store(true)
+	wg.Wait()
+	_ = os.Remove(stash)
+}

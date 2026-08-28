@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 )
 
 // ErrNonRegular reports that a bounded input resolved to a special file.
@@ -58,16 +57,18 @@ func ReadlinkNoFollow(root *os.Root, name string) (string, error) {
 }
 
 // splitComponents validates name as a relative, traversal-free path and splits
-// it into ordinary path components. Both slash and backslash separate
-// components so callers may pass native or slash paths.
+// it into ordinary path components. Separator, absolute, and volume rules are
+// platform-specific (a backslash is an ordinary byte on Unix), so the split is
+// delegated to pathComponents; parent traversal and empty parts are rejected
+// uniformly here.
 func splitComponents(name string) ([]string, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: empty name", os.ErrInvalid)
 	}
-	if os.IsPathSeparator(name[0]) || name[0] == '/' {
-		return nil, fmt.Errorf("%w: absolute name %q", os.ErrInvalid, name)
+	raw, err := pathComponents(name)
+	if err != nil {
+		return nil, err
 	}
-	raw := strings.FieldsFunc(name, func(r rune) bool { return r == '/' || r == '\\' })
 	comps := make([]string, 0, len(raw))
 	for _, comp := range raw {
 		switch comp {

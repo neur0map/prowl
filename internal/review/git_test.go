@@ -1,3 +1,5 @@
+//go:build unix
+
 package review
 
 import (
@@ -9,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -18,25 +21,42 @@ import (
 
 // ---- helpers -------------------------------------------------------------
 
-func gitBin(t *testing.T) string {
+func gitBin(t *testing.T) {
 	t.Helper()
-	bin, err := exec.LookPath("git")
-	if err != nil {
+	if _, err := exec.LookPath("git"); err != nil {
 		t.Skipf("git not available: %v", err)
 	}
-	return bin
 }
 
 func rawGit(t *testing.T, root string, args ...string) {
 	t.Helper()
+	if out, err := rawGitEnv(root, nil, args...); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func rawGitEnv(root string, extraEnv []string, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 	cmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
 	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
+	cmd.Env = append(cmd.Env, extraEnv...)
+	return cmd.CombinedOutput()
+}
+
+func initRepo(t *testing.T) (root, markers string) {
+	t.Helper()
+	gitBin(t)
+	root = t.TempDir()
+	markers = t.TempDir()
+	rawGit(t, root, "init", "-q")
+	if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("l1\nl2\nl3\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
+	rawGit(t, root, "add", "payload.txt")
+	rawGit(t, root, "commit", "-qm", "seed")
+	return root, markers
 }
 
 func markerPresent(dir, name string) bool {
@@ -52,6 +72,15 @@ func clearMarkers(t *testing.T, dir string) {
 	}
 }
 
+func markerNames(dir string) []string {
+	entries, _ := os.ReadDir(dir)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
 func writeExec(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
@@ -59,19 +88,19 @@ func writeExec(t *testing.T, path, body string) {
 	}
 }
 
-// fakeGit writes a POSIX shell stand-in for git that spawns a SIGTERM-ignoring
-// background child (recording its PID synchronously), performs the requested
-// misbehaviour, then lingers. The child shares the process group so a correct
-// group kill must terminate it too. The filter enumeration probe exits early so
-// the harness's pre-flight config read is a no-op.
-func fakeGit(t *testing.T, mode, childPIDPath string) string {
+// fakeGitProc writes a POSIX shell stand-in that spawns a SIGTERM-ignoring
+// background child (recording its PID synchronously via $!), performs the
+// requested stdout/stderr/hang misbehaviour, then lingers. The filter/driver
+// enumeration probe (--get-regexp) exits with the no-match status so pre-flight
+// discovery is a benign no-op.
+func fakeGitProc(t *testing.T, mode, childPIDPath string) string {
 	t.Helper()
 	var action string
 	switch mode {
 	case "stdout":
-		action = "i=0\nwhile [ $i -lt 2000 ]; do printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n'; i=$((i+1)); done\n"
+		action = "i=0\nwhile [ $i -lt 4000 ]; do printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n'; i=$((i+1)); done\n"
 	case "stderr":
-		action = "i=0\nwhile [ $i -lt 2000 ]; do printf 'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\\n' 1>&2; i=$((i+1)); done\n"
+		action = "i=0\nwhile [ $i -lt 4000 ]; do printf 'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\\n' 1>&2; i=$((i+1)); done\n"
 	case "hang":
 		action = ""
 	default:
@@ -84,6 +113,29 @@ func fakeGit(t *testing.T, mode, childPIDPath string) string {
 		action +
 		"sleep 30\n"
 	path := filepath.Join(t.TempDir(), "fakegit.sh")
+	writeExec(t, path, body)
+	return path
+}
+
+// fakeGitConfig makes the filter/driver enumeration probe misbehave so discovery
+// failure paths can be exercised. Any non-enumeration call exits 0.
+func fakeGitConfig(t *testing.T, mode string) string {
+	t.Helper()
+	var probe string
+	switch mode {
+	case "overflow":
+		probe = "dd if=/dev/zero bs=1024 count=1200 2>/dev/null | tr '\\0' 'A'\nexit 0\n"
+	case "hang":
+		probe = "sleep 30\n"
+	case "error":
+		probe = "echo boom 1>&2\nexit 2\n"
+	default:
+		t.Fatalf("unknown config mode %q", mode)
+	}
+	body := "#!/bin/sh\n" +
+		"for a in \"$@\"; do case \"$a\" in --get-regexp)\n" + probe + ";; esac; done\n" +
+		"exit 0\n"
+	path := filepath.Join(t.TempDir(), "fakegit_config.sh")
 	writeExec(t, path, body)
 	return path
 }
@@ -102,9 +154,8 @@ func readPID(t *testing.T, path string) int {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if data, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(data)) > 0 {
-			pid, perr := strconv.Atoi(string(bytes.TrimSpace(data)))
-			if perr == nil {
+		if data, err := os.ReadFile(path); err == nil {
+			if pid, perr := strconv.Atoi(string(bytes.TrimSpace(data))); perr == nil {
 				return pid
 			}
 		}
@@ -128,7 +179,7 @@ func requireProcessDead(t *testing.T, pid int) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("process %d in the group was not killed", pid)
+	t.Fatalf("process %d in the tree was not killed", pid)
 }
 
 type fakeRunner struct {
@@ -140,54 +191,55 @@ func (f fakeRunner) Output(_ context.Context, _ string, _ int64, _ ...string) ([
 	return f.out, f.err
 }
 
-func (f fakeRunner) Pipe(_ context.Context, _ string, _ io.Reader, _ io.Writer, _ ...string) error {
+func (f fakeRunner) Pipe(_ context.Context, _ string, _ int64, _ io.Reader, _ io.Writer, _ ...string) error {
 	return f.err
 }
 
-// ---- environment sanitization -------------------------------------------
-
-func TestExecGitSanitizesInheritedEnvironment(t *testing.T) {
-	hostile := map[string]string{
-		"GIT_CONFIG_COUNT":                 "1",
-		"GIT_CONFIG_KEY_0":                 "core.fsmonitor",
-		"GIT_CONFIG_VALUE_0":               "/bin/evil",
-		"GIT_CONFIG_PARAMETERS":            "'core.pager=evil'",
-		"GIT_DIR":                          "/tmp/evil.git",
-		"GIT_WORK_TREE":                    "/tmp/evil",
-		"GIT_INDEX_FILE":                   "/tmp/evil.index",
-		"GIT_OBJECT_DIRECTORY":             "/tmp/evilobj",
-		"GIT_ALTERNATE_OBJECT_DIRECTORIES": "/tmp/alt",
-		"GIT_ASKPASS":                      "/bin/evil",
-		"SSH_ASKPASS":                      "/bin/evil",
-		"GIT_SSH":                          "/bin/evil",
-		"GIT_SSH_COMMAND":                  "/bin/evil",
-		"GIT_PROXY_COMMAND":                "/bin/evil",
-		"GIT_ALLOW_PROTOCOL":               "ext",
-		"GIT_PROTOCOL_FROM_USER":           "1",
-		"GIT_EXTERNAL_DIFF":                "/bin/evil",
-	}
-	for k, v := range hostile {
-		t.Setenv(k, v)
-	}
-	env := scrubGitEnv(os.Environ())
-
-	seen := map[string]string{}
+func envMap(env []string) map[string]string {
+	m := map[string]string{}
 	for _, kv := range env {
 		name, value, _ := strings.Cut(kv, "=")
-		seen[name] = value
+		m[name] = value
 	}
-	for k := range hostile {
+	return m
+}
+
+// ---- finding 3: environment allowlist ------------------------------------
+
+func TestExecGitSanitizesInheritedEnvironment(t *testing.T) {
+	hostile := []string{
+		"GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "GIT_CONFIG_PARAMETERS",
+		"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+		"GIT_ASKPASS", "SSH_ASKPASS", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_PROXY_COMMAND",
+		"GIT_ALLOW_PROTOCOL", "GIT_PROTOCOL_FROM_USER", "GIT_EXTERNAL_DIFF",
+		"GIT_TRACE", "GIT_TRACE2", "GIT_TRACE_PACKET", "GIT_TRACE2_EVENT",
+		"http_proxy", "https_proxy", "all_proxy", "no_proxy",
+		"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+		"PROWL_TEST_UNKNOWN",
+	}
+	for _, k := range hostile {
+		t.Setenv(k, "hostile-"+k)
+	}
+	// Positive controls: allowlisted names must survive.
+	t.Setenv("PATH", os.Getenv("PATH"))
+	t.Setenv("HOME", "/home/reviewer")
+	t.Setenv("LC_ALL", "C")
+
+	seen := envMap(scrubGitEnv(os.Environ()))
+
+	for _, k := range hostile {
 		if _, ok := seen[k]; ok {
-			t.Errorf("hostile variable %s survived sanitization", k)
+			t.Errorf("hostile/unknown variable %s survived the allowlist", k)
 		}
 	}
-	for name, prefix := range map[string]string{"GIT_CONFIG_KEY_0": "GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_0": "GIT_CONFIG_VALUE_"} {
-		_ = name
-		for k := range seen {
-			if strings.HasPrefix(k, prefix) {
-				t.Errorf("prefixed hostile variable %s survived", k)
-			}
-		}
+	if seen["HOME"] != "/home/reviewer" {
+		t.Errorf("allowlisted HOME dropped: %q", seen["HOME"])
+	}
+	if seen["PATH"] == "" {
+		t.Errorf("allowlisted PATH dropped")
+	}
+	if seen["LC_ALL"] != "C" {
+		t.Errorf("allowlisted LC_ALL dropped: %q", seen["LC_ALL"])
 	}
 	want := map[string]string{
 		"GIT_CONFIG_NOSYSTEM": "1",
@@ -200,123 +252,251 @@ func TestExecGitSanitizesInheritedEnvironment(t *testing.T) {
 	}
 	for k, v := range want {
 		if seen[k] != v {
-			t.Errorf("sanitized env %s=%q, want %q", k, seen[k], v)
+			t.Errorf("pinned env %s=%q, want %q", k, seen[k], v)
 		}
 	}
 }
 
-// ---- hostile helper/config neutralization --------------------------------
+// ---- finding 9: per-surface hostile neutralization -----------------------
 
-func setupHostileRepo(t *testing.T) (root, markers, hooks string) {
+func TestExecGitNeutralizesHostileSurfaces(t *testing.T) {
+	ctx := context.Background()
+	g := func(t *testing.T) ExecGit {
+		return ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+	}
+	m := func(markers, name string) string { return filepath.Join(markers, name) }
+
+	t.Run("cleanFilter", func(t *testing.T) {
+		root, markers := initRepo(t)
+		rawGit(t, root, "config", "filter.evil.clean", "touch '"+m(markers, "clean")+"'; cat")
+		rawGit(t, root, "config", "filter.evil.required", "true")
+		if err := os.WriteFile(filepath.Join(root, ".gitattributes"), []byte("payload.txt filter=evil\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("l1\nCHANGED\nl3\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		clearMarkers(t, markers)
+		_, _ = rawGitEnv(root, nil, "diff")
+		if !markerPresent(markers, "clean") {
+			t.Fatal("control: hostile clean filter did not fire; assertion would be vacuous")
+		}
+		clearMarkers(t, markers)
+		if _, err := g(t).RawStatus(ctx, root, 1<<20, "HEAD"); err != nil {
+			t.Fatalf("RawStatus: %v", err)
+		}
+		if markerPresent(markers, "clean") {
+			t.Fatal("sanitized RawStatus ran the clean filter")
+		}
+	})
+
+	t.Run("externalDiff", func(t *testing.T) {
+		root, markers := initRepo(t)
+		rawGit(t, root, "config", "diff.external", "touch '"+m(markers, "external")+"'")
+		if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("l1\nCHANGED\nl3\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		clearMarkers(t, markers)
+		_, _ = rawGitEnv(root, nil, "diff", "HEAD")
+		if !markerPresent(markers, "external") {
+			t.Fatal("control: global external diff did not fire; assertion would be vacuous")
+		}
+		clearMarkers(t, markers)
+		if _, err := g(t).Diff(ctx, root, 1<<20, "HEAD", "--", "payload.txt"); err != nil {
+			t.Fatalf("Diff: %v", err)
+		}
+		if markerPresent(markers, "external") {
+			t.Fatal("sanitized Diff ran the external diff command")
+		}
+	})
+
+	t.Run("diffDriverCommand", func(t *testing.T) {
+		root, markers := initRepo(t)
+		rawGit(t, root, "config", "diff.evil.command", "touch '"+m(markers, "extdrv")+"'")
+		if err := os.WriteFile(filepath.Join(root, ".gitattributes"), []byte("payload.txt diff=evil\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("l1\nCHANGED\nl3\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		clearMarkers(t, markers)
+		_, _ = rawGitEnv(root, nil, "diff", "HEAD")
+		if !markerPresent(markers, "extdrv") {
+			t.Fatal("control: per-driver external diff did not fire; assertion would be vacuous")
+		}
+		clearMarkers(t, markers)
+		if _, err := g(t).Diff(ctx, root, 1<<20, "HEAD", "--", "payload.txt"); err != nil {
+			t.Fatalf("Diff: %v", err)
+		}
+		if markerPresent(markers, "extdrv") {
+			t.Fatal("sanitized Diff ran the per-driver external diff")
+		}
+	})
+
+	t.Run("textconv", func(t *testing.T) {
+		root, markers := initRepo(t)
+		rawGit(t, root, "config", "diff.evil.textconv", "touch '"+m(markers, "textconv")+"'; cat")
+		if err := os.WriteFile(filepath.Join(root, ".gitattributes"), []byte("bin.dat diff=evil\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "bin.dat"), []byte("bin\x00A\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		rawGit(t, root, "add", "bin.dat", ".gitattributes")
+		rawGit(t, root, "commit", "-qm", "bin1")
+		if err := os.WriteFile(filepath.Join(root, "bin.dat"), []byte("bin\x00B\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		rawGit(t, root, "add", "bin.dat")
+		rawGit(t, root, "commit", "-qm", "bin2")
+		clearMarkers(t, markers)
+		_, _ = rawGitEnv(root, nil, "show", "HEAD")
+		if !markerPresent(markers, "textconv") {
+			t.Fatal("control: textconv did not fire; assertion would be vacuous")
+		}
+		clearMarkers(t, markers)
+		if _, err := g(t).Diff(ctx, root, 1<<20, "HEAD~1", "HEAD", "--", "bin.dat"); err != nil {
+			t.Fatalf("Diff: %v", err)
+		}
+		if markerPresent(markers, "textconv") {
+			t.Fatal("sanitized Diff ran textconv")
+		}
+	})
+
+	t.Run("fsmonitor", func(t *testing.T) {
+		root, markers := initRepo(t)
+		rawGit(t, root, "config", "core.fsmonitor", "touch '"+m(markers, "fsmonitor")+"'; false")
+		if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("l1\nCHANGED\nl3\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		clearMarkers(t, markers)
+		_, _ = rawGitEnv(root, nil, "status")
+		if !markerPresent(markers, "fsmonitor") {
+			t.Fatal("control: fsmonitor did not fire; assertion would be vacuous")
+		}
+		clearMarkers(t, markers)
+		if _, err := g(t).Output(ctx, root, 1<<20, "status", "--porcelain"); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+		if markerPresent(markers, "fsmonitor") {
+			t.Fatal("sanitized status ran the fsmonitor command")
+		}
+	})
+
+	t.Run("hook", func(t *testing.T) {
+		root, markers := initRepo(t)
+		hooks := t.TempDir()
+		writeExec(t, filepath.Join(hooks, "post-index-change"), "#!/bin/sh\ntouch '"+m(markers, "hook")+"'\nexit 0\n")
+		rawGit(t, root, "config", "core.hooksPath", hooks)
+		if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("l1\nCHANGED\nl3\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		clearMarkers(t, markers)
+		_, _ = rawGitEnv(root, nil, "status")
+		if !markerPresent(markers, "hook") {
+			t.Fatal("control: post-index-change hook did not fire; assertion would be vacuous")
+		}
+		clearMarkers(t, markers)
+		if _, err := g(t).Output(ctx, root, 1<<20, "status", "--porcelain"); err != nil {
+			t.Fatalf("status: %v", err)
+		}
+		if markerPresent(markers, "hook") {
+			t.Fatal("sanitized status ran a repository hook")
+		}
+	})
+
+	t.Run("pagerPinsForceCat", func(t *testing.T) {
+		// A live pager only runs against a TTY, unavailable here; assert the
+		// defense directly: config pins core.pager=cat and the environment
+		// forces GIT_PAGER/PAGER to cat even when a hostile pager is inherited.
+		if !slices.Contains(ExecGit{}.baseConfig(nil, nil), "core.pager=cat") {
+			t.Fatal("baseConfig does not pin core.pager=cat")
+		}
+		t.Setenv("GIT_PAGER", "touch /tmp/should-not-run; cat")
+		t.Setenv("PAGER", "touch /tmp/should-not-run; cat")
+		seen := envMap(scrubGitEnv(os.Environ()))
+		if seen["GIT_PAGER"] != "cat" || seen["PAGER"] != "cat" {
+			t.Fatalf("pager env not pinned to cat: GIT_PAGER=%q PAGER=%q", seen["GIT_PAGER"], seen["PAGER"])
+		}
+	})
+
+	t.Run("credentialHelperEmptied", func(t *testing.T) {
+		if !slices.Contains(ExecGit{}.baseConfig(nil, nil), "credential.helper=") {
+			t.Fatal("baseConfig does not empty credential.helper")
+		}
+	})
+
+	t.Run("extTransportLazyFetchDenied", func(t *testing.T) {
+		partial, markers, blob := setupPartialClone(t)
+		// Control: allowing ext transport lets a lazy fetch invoke the helper.
+		clearMarkers(t, markers)
+		ctrl := exec.Command("git", "-C", partial, "-c", "protocol.ext.allow=always", "cat-file", "-p", blob)
+		ctrl.Env = os.Environ()
+		_, _ = ctrl.CombinedOutput()
+		if !markerPresent(markers, "ext") {
+			t.Fatal("control: lazy fetch via ext transport did not fire; assertion would be vacuous")
+		}
+		// Sanitized: GIT_NO_LAZY_FETCH + protocol denies means no fetch at all.
+		clearMarkers(t, markers)
+		_, _ = g(t).Output(ctx, partial, 1<<20, "cat-file", "-p", blob)
+		if markerPresent(markers, "ext") {
+			t.Fatalf("sanitized read triggered a promisor/ext lazy fetch (markers: %v)", markerNames(markers))
+		}
+	})
+}
+
+func setupPartialClone(t *testing.T) (partial, markers, blob string) {
 	t.Helper()
 	gitBin(t)
-	root = t.TempDir()
+	base := t.TempDir()
 	markers = t.TempDir()
-	hooks = t.TempDir()
-
-	rawGit(t, root, "init", "-q")
-	m := func(name string) string { return filepath.Join(markers, name) }
-
-	// Commit a clean baseline BEFORE any hostile attribute or filter exists so
-	// building the fixture never invokes the very machinery under test.
-	if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("alpha\nbeta\ngamma\n"), 0o600); err != nil {
+	origin := filepath.Join(base, "origin")
+	if err := os.MkdirAll(origin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rawGit(t, root, "add", "payload.txt")
-	rawGit(t, root, "commit", "-qm", "seed")
-
-	// Hostile repository-local config across every neutralized surface. A dumb
-	// touch "process" filter with required=true makes an unsanitized clean
-	// fatal, so our -c overrides must both empty it and force required=false.
-	set := func(k, v string) { rawGit(t, root, "config", "--local", k, v) }
-	set("filter.evil.clean", "touch '"+m("clean")+"'; cat")
-	set("filter.evil.smudge", "touch '"+m("smudge")+"'; cat")
-	set("filter.evil.process", "touch '"+m("process")+"'")
-	set("filter.evil.required", "true")
-	set("diff.external", "touch '"+m("external")+"'")
-	set("diff.evil.command", "touch '"+m("extdrv")+"'")
-	set("diff.evil.textconv", "touch '"+m("textconv")+"'; cat")
-	set("core.fsmonitor", "touch '"+m("fsmonitor")+"'")
-	set("core.pager", "touch '"+m("pager")+"'; cat")
-	set("core.hooksPath", hooks)
-	set("credential.helper", "!touch '"+m("credential")+"'; true")
-	set("diff.algorithm", "minimal")
-	set("diff.indentHeuristic", "true")
-	set("diff.interHunkContext", "99")
-	set("diff.renameLimit", "1")
-	rawGit(t, root, "config", "--local", "remote.evil.url", "ext::sh -c touch% '"+m("ext")+"'")
-
-	// Hostile hooks a read-only refresh might fire.
-	for _, hook := range []string{"post-index-change", "reference-transaction", "fsmonitor-watchman"} {
-		writeExec(t, filepath.Join(hooks, hook), "#!/bin/sh\ntouch '"+m("hook_"+hook)+"'\nexit 0\n")
-	}
-
-	// Route every path through the evil filter and diff driver. The attributes
-	// file stays untracked so it is honored without re-cleaning tracked content.
-	if err := os.WriteFile(filepath.Join(root, ".gitattributes"), []byte("* filter=evil diff=evil\n"), 0o600); err != nil {
+	rawGit(t, origin, "init", "-q")
+	rawGit(t, origin, "config", "uploadpack.allowFilter", "true")
+	if err := os.WriteFile(filepath.Join(origin, "big.txt"), []byte(strings.Repeat("BIGCONTENT-line\n", 200)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// Dirty the worktree so status/diff must clean the tracked file.
-	if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("alpha\nBETA\ngamma\n"), 0o600); err != nil {
-		t.Fatal(err)
+	rawGit(t, origin, "add", "big.txt")
+	rawGit(t, origin, "commit", "-qm", "seed")
+
+	partial = filepath.Join(base, "partial")
+	rawGit(t, base, "clone", "-q", "--no-local", "--filter=blob:none", "--no-checkout", "file://"+origin, partial)
+
+	out, err := rawGitEnv(partial, []string{"GIT_NO_LAZY_FETCH=1"}, "rev-list", "--objects", "--all", "--missing=print")
+	if err != nil {
+		t.Fatalf("rev-list missing: %v\n%s", err, out)
 	}
-	return root, markers, hooks
-}
-
-func TestExecGitNeutralizesHostileHelpers(t *testing.T) {
-	root, markers, _ := setupHostileRepo(t)
-	ctx := context.Background()
-
-	// Control: an unsanitized git run must actually fire a hostile helper, or
-	// the neutralization assertions below would be vacuous. A configured process
-	// filter supersedes clean/smudge, so assert that *some* marker fired.
-	clearMarkers(t, markers)
-	ctrl := exec.Command("git", "-C", root, "diff")
-	ctrl.Env = os.Environ()
-	_, _ = ctrl.CombinedOutput()
-	if entries, _ := os.ReadDir(markers); len(entries) == 0 {
-		t.Fatalf("control: no hostile helper fired; neutralization test would be vacuous")
-	}
-
-	g := ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
-	assertClean := func(label string) {
-		entries, _ := os.ReadDir(markers)
-		if len(entries) != 0 {
-			names := make([]string, 0, len(entries))
-			for _, e := range entries {
-				names = append(names, e.Name())
-			}
-			t.Fatalf("%s: hostile markers fired: %v", label, names)
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "?") {
+			blob = strings.TrimSpace(line[1:])
+			break
 		}
 	}
-
-	clearMarkers(t, markers)
-	if _, err := g.Output(ctx, root, 1<<20, "diff", "--raw", "-z", "HEAD"); err != nil {
-		t.Fatalf("raw status: %v", err)
+	if blob == "" {
+		t.Skip("partial clone did not leave a missing blob (transport ignored the filter)")
 	}
-	assertClean("raw status")
-
-	clearMarkers(t, markers)
-	if _, err := g.Output(ctx, root, 1<<20, "cat-file", "-p", "HEAD:payload.txt"); err != nil {
-		t.Fatalf("object read: %v", err)
-	}
-	assertClean("object read")
-
-	clearMarkers(t, markers)
-	if _, err := g.Output(ctx, root, 1<<20, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "HEAD", "--", "payload.txt"); err != nil {
-		t.Fatalf("content diff: %v", err)
-	}
-	assertClean("content diff")
+	helper := filepath.Join(t.TempDir(), "exthelper.sh")
+	writeExec(t, helper, "#!/bin/sh\ntouch '"+filepath.Join(markers, "ext")+"'\nexit 1\n")
+	rawGit(t, partial, "config", "remote.origin.url", "ext::"+helper)
+	return partial, markers, blob
 }
 
+// ---- finding 4: canonical diff pinning -----------------------------------
+
 func TestExecGitPinsDiffOptionsAgainstRepoConfig(t *testing.T) {
-	root, _, _ := setupHostileRepo(t)
-	clean := t.TempDir()
 	gitBin(t)
 	ctx := context.Background()
+	hostile := t.TempDir()
+	clean := t.TempDir()
+	rawGit(t, hostile, "init", "-q")
+	rawGit(t, hostile, "config", "diff.algorithm", "minimal")
+	rawGit(t, hostile, "config", "diff.indentHeuristic", "true")
+	rawGit(t, hostile, "config", "diff.interHunkContext", "99")
+	rawGit(t, hostile, "config", "diff.renameLimit", "1")
 
-	// Two changes far enough apart to be distinct hunks at 3 lines of context
-	// but merged into one hunk if interHunkContext is inflated to 99.
 	var base, head bytes.Buffer
 	for i := 1; i <= 30; i++ {
 		line := fmt.Sprintf("line-%02d\n", i)
@@ -341,7 +521,7 @@ func TestExecGitPinsDiffOptionsAgainstRepoConfig(t *testing.T) {
 	}
 
 	g := ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
-	fromHostile, err := g.DiffNoIndex(ctx, root, 1<<20, baseFile, headFile)
+	fromHostile, err := g.DiffNoIndex(ctx, hostile, 1<<20, baseFile, headFile)
 	if err != nil {
 		t.Fatalf("hostile diff: %v", err)
 	}
@@ -350,12 +530,9 @@ func TestExecGitPinsDiffOptionsAgainstRepoConfig(t *testing.T) {
 		t.Fatalf("clean diff: %v", err)
 	}
 	if !bytes.Equal(fromHostile, fromClean) {
-		t.Fatalf("canonical diff differed by repository config:\n--hostile--\n%s\n--clean--\n%s", fromHostile, fromClean)
+		t.Fatalf("canonical diff differed by repo config:\n--hostile--\n%s\n--clean--\n%s", fromHostile, fromClean)
 	}
 
-	// Control: without pinning, the hostile interHunkContext=99 collapses the
-	// two changes into a single hunk, so raw git output diverges. This proves
-	// the pin is load-bearing rather than incidental.
 	rawDiff := func(cwd string) []byte {
 		cmd := exec.Command("git", "diff", "--no-index", "--text", baseFile, headFile)
 		cmd.Dir = cwd
@@ -363,18 +540,40 @@ func TestExecGitPinsDiffOptionsAgainstRepoConfig(t *testing.T) {
 		out, _ := cmd.Output()
 		return out
 	}
-	if bytes.Equal(rawDiff(root), rawDiff(clean)) {
-		t.Fatalf("control: unpinned diff did not diverge; pin comparison would be vacuous")
+	if bytes.Equal(rawDiff(hostile), rawDiff(clean)) {
+		t.Fatal("control: unpinned diff did not diverge; pin comparison would be vacuous")
 	}
 }
 
-// ---- process-group termination -------------------------------------------
+// ---- finding 2: driver discovery must not fail open ----------------------
+
+func TestExecGitRefusesOnDriverDiscoveryFailure(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name    string
+		mode    string
+		timeout time.Duration
+	}{
+		{"overflow", "overflow", 30 * time.Second},
+		{"timeout", "hang", 300 * time.Millisecond},
+		{"error", "error", 30 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := ExecGit{Binary: fakeGitConfig(t, tc.mode), Timeout: tc.timeout, MaxStderr: 1 << 20}
+			if _, err := g.Output(ctx, t.TempDir(), 1<<20, "cat-file", "-p", "HEAD"); !errors.Is(err, ErrDriverDiscovery) {
+				t.Fatalf("Output err=%v, want ErrDriverDiscovery", err)
+			}
+		})
+	}
+}
+
+// ---- finding 1 & 5: process-tree termination and bounds ------------------
 
 func TestExecGitOutputOverflowKillsProcessGroup(t *testing.T) {
 	childPID := filepath.Join(t.TempDir(), "child.pid")
-	g := ExecGit{Binary: fakeGit(t, "stdout", childPID), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
-	_, err := g.Output(context.Background(), t.TempDir(), 64, "spew")
-	if !errors.Is(err, ErrGitOutputOverflow) {
+	g := ExecGit{Binary: fakeGitProc(t, "stdout", childPID), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+	if _, err := g.Output(context.Background(), t.TempDir(), 64, "spew"); !errors.Is(err, ErrGitOutputOverflow) {
 		t.Fatalf("err=%v, want ErrGitOutputOverflow", err)
 	}
 	requireProcessDead(t, readPID(t, childPID))
@@ -382,19 +581,26 @@ func TestExecGitOutputOverflowKillsProcessGroup(t *testing.T) {
 
 func TestExecGitStderrOverflowKillsProcessGroup(t *testing.T) {
 	childPID := filepath.Join(t.TempDir(), "child.pid")
-	g := ExecGit{Binary: fakeGit(t, "stderr", childPID), Timeout: 30 * time.Second, MaxStderr: 64}
-	_, err := g.Output(context.Background(), t.TempDir(), 1<<20, "noisy")
-	if !errors.Is(err, ErrGitStderrOverflow) {
+	g := ExecGit{Binary: fakeGitProc(t, "stderr", childPID), Timeout: 30 * time.Second, MaxStderr: 64}
+	if _, err := g.Output(context.Background(), t.TempDir(), 1<<20, "noisy"); !errors.Is(err, ErrGitStderrOverflow) {
 		t.Fatalf("err=%v, want ErrGitStderrOverflow", err)
+	}
+	requireProcessDead(t, readPID(t, childPID))
+}
+
+func TestExecGitPipeOverflowKillsProcessGroup(t *testing.T) {
+	childPID := filepath.Join(t.TempDir(), "child.pid")
+	g := ExecGit{Binary: fakeGitProc(t, "stdout", childPID), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+	if err := g.Pipe(context.Background(), t.TempDir(), 64, nil, io.Discard, "spew"); !errors.Is(err, ErrGitOutputOverflow) {
+		t.Fatalf("err=%v, want ErrGitOutputOverflow", err)
 	}
 	requireProcessDead(t, readPID(t, childPID))
 }
 
 func TestExecGitTimeoutKillsProcessGroup(t *testing.T) {
 	childPID := filepath.Join(t.TempDir(), "child.pid")
-	g := ExecGit{Binary: fakeGit(t, "hang", childPID), Timeout: 300 * time.Millisecond, MaxStderr: 1 << 20}
-	_, err := g.Output(context.Background(), t.TempDir(), 1<<20, "hang")
-	if !errors.Is(err, context.DeadlineExceeded) {
+	g := ExecGit{Binary: fakeGitProc(t, "hang", childPID), Timeout: 300 * time.Millisecond, MaxStderr: 1 << 20}
+	if _, err := g.Output(context.Background(), t.TempDir(), 1<<20, "hang"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err=%v, want context.DeadlineExceeded", err)
 	}
 	requireProcessDead(t, readPID(t, childPID))
@@ -402,10 +608,9 @@ func TestExecGitTimeoutKillsProcessGroup(t *testing.T) {
 
 func TestExecGitCancellationKillsProcessGroup(t *testing.T) {
 	childPID := filepath.Join(t.TempDir(), "child.pid")
-	g := ExecGit{Binary: fakeGit(t, "hang", childPID), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+	g := ExecGit{Binary: fakeGitProc(t, "hang", childPID), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		// Give the child time to record its PID, then cancel.
 		for {
 			if _, err := os.Stat(childPID); err == nil {
 				break
@@ -414,14 +619,26 @@ func TestExecGitCancellationKillsProcessGroup(t *testing.T) {
 		}
 		cancel()
 	}()
-	_, err := g.Output(ctx, t.TempDir(), 1<<20, "hang")
-	if !errors.Is(err, context.Canceled) {
+	if _, err := g.Output(ctx, t.TempDir(), 1<<20, "hang"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err=%v, want context.Canceled", err)
 	}
 	requireProcessDead(t, readPID(t, childPID))
 }
 
-// ---- no-index exit handling ----------------------------------------------
+func TestExecGitRejectsNonPositiveLimits(t *testing.T) {
+	g := ExecGit{HooksDir: t.TempDir()}
+	ctx := context.Background()
+	for _, limit := range []int64{0, -1} {
+		if _, err := g.Output(ctx, t.TempDir(), limit, "status"); !errors.Is(err, ErrInvalidLimit) {
+			t.Errorf("Output limit=%d err=%v, want ErrInvalidLimit", limit, err)
+		}
+		if err := g.Pipe(ctx, t.TempDir(), limit, nil, io.Discard, "status"); !errors.Is(err, ErrInvalidLimit) {
+			t.Errorf("Pipe limit=%d err=%v, want ErrInvalidLimit", limit, err)
+		}
+	}
+}
+
+// ---- no-index exit handling & streaming ----------------------------------
 
 func TestExecGitDiffNoIndexTreatsExitOneAsDifference(t *testing.T) {
 	gitBin(t)
@@ -430,67 +647,54 @@ func TestExecGitDiffNoIndexTreatsExitOneAsDifference(t *testing.T) {
 	a := filepath.Join(dir, "a")
 	b := filepath.Join(dir, "b")
 	same := filepath.Join(dir, "same")
-	if err := os.WriteFile(a, []byte("one\ntwo\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(b, []byte("one\nTWO\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(same, []byte("one\ntwo\n"), 0o600); err != nil {
-		t.Fatal(err)
+	for _, f := range []struct {
+		path, content string
+	}{{a, "one\ntwo\n"}, {b, "one\nTWO\n"}, {same, "one\ntwo\n"}} {
+		if err := os.WriteFile(f.path, []byte(f.content), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	g := ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
 
 	out, err := g.DiffNoIndex(ctx, dir, 1<<20, a, b)
 	if err != nil {
-		t.Fatalf("differ: unexpected err %v", err)
+		t.Fatalf("differ: %v", err)
 	}
 	if !bytes.Contains(out, []byte("-two")) || !bytes.Contains(out, []byte("+TWO")) {
 		t.Fatalf("differ: diff payload missing:\n%s", out)
 	}
-
 	out, err = g.DiffNoIndex(ctx, dir, 1<<20, a, same)
 	if err != nil {
-		t.Fatalf("identical: unexpected err %v", err)
+		t.Fatalf("identical: %v", err)
 	}
 	if len(out) != 0 {
 		t.Fatalf("identical: want empty diff, got %q", out)
 	}
-
 	failing := ExecGit{Binary: fakeGitExit(t, 2), HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
 	if _, err := failing.DiffNoIndex(ctx, dir, 1<<20, a, b); err == nil {
-		t.Fatalf("exit 2 must surface as an error, not a difference")
+		t.Fatal("exit 2 must surface as an error, not a difference")
 	}
 }
-
-// ---- streaming pipe -------------------------------------------------------
 
 func TestExecGitPipeStreamsCatFileBatch(t *testing.T) {
 	gitBin(t)
 	ctx := context.Background()
-	root := t.TempDir()
-	rawGit(t, root, "init", "-q")
-	if err := os.WriteFile(filepath.Join(root, "f.txt"), []byte("hello\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	rawGit(t, root, "add", ".")
-	rawGit(t, root, "commit", "-qm", "seed")
-
+	root, _ := initRepo(t)
 	g := ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
 	var out bytes.Buffer
-	if err := g.Pipe(ctx, root, strings.NewReader("HEAD:f.txt\n"), &out, "cat-file", "--batch"); err != nil {
+	if err := g.Pipe(ctx, root, 1<<20, strings.NewReader("HEAD:payload.txt\n"), &out, "cat-file", "--batch"); err != nil {
 		t.Fatalf("pipe: %v", err)
 	}
 	objs, err := ParseCatFileBatch(out.Bytes())
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if len(objs) != 1 || objs[0].Missing || objs[0].Type != "blob" || !bytes.Equal(objs[0].Data, []byte("hello\n")) {
+	if len(objs) != 1 || objs[0].Missing || objs[0].Type != "blob" || !bytes.Equal(objs[0].Data, []byte("l1\nl2\nl3\n")) {
 		t.Fatalf("unexpected cat-file record: %+v", objs)
 	}
 }
 
-// ---- parser typed-error contracts ----------------------------------------
+// ---- finding 8: parser framing & overflow --------------------------------
 
 func TestExecGitParseRawStatus(t *testing.T) {
 	valid := []byte(":100644 100644 aaaa bbbb M\x00f1.txt\x00" +
@@ -499,85 +703,75 @@ func TestExecGitParseRawStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("valid parse: %v", err)
 	}
-	if len(changes) != 2 {
-		t.Fatalf("want 2 changes, got %d: %+v", len(changes), changes)
-	}
-	if changes[0].Status != "M" || changes[0].Path != "f1.txt" {
-		t.Fatalf("record 0 wrong: %+v", changes[0])
-	}
-	if changes[1].Status != "R100" || changes[1].OldPath != "old.txt" || changes[1].Path != "new.txt" {
-		t.Fatalf("record 1 wrong: %+v", changes[1])
+	if len(changes) != 2 || changes[0].Path != "f1.txt" || changes[1].Status != "R100" ||
+		changes[1].OldPath != "old.txt" || changes[1].Path != "new.txt" {
+		t.Fatalf("unexpected records: %+v", changes)
 	}
 
-	// Fed through a fake runner: a truncated record (missing its path) must be a
-	// typed error, never a partial slice.
-	r := fakeRunner{out: []byte(":100644 100644 aaaa bbbb M\x00")}
+	// Missing terminal NUL is malformed framing.
+	if got, err := ParseRawStatusZ([]byte(":100644 100644 a b M\x00f1.txt")); !errors.Is(err, ErrMalformedRawStatus) || got != nil {
+		t.Fatalf("missing terminal NUL err=%v got=%v", err, got)
+	}
+	// Truncated record fed through a fake runner.
+	r := fakeRunner{out: []byte(":100644 100644 a b M\x00")}
 	out, _ := r.Output(context.Background(), "", 1<<20, "diff", "--raw", "-z")
-	got, err := ParseRawStatusZ(out)
-	if !errors.Is(err, ErrMalformedRawStatus) {
-		t.Fatalf("err=%v, want ErrMalformedRawStatus", err)
+	if got, err := ParseRawStatusZ(out); !errors.Is(err, ErrMalformedRawStatus) || got != nil {
+		t.Fatalf("truncated err=%v got=%v", err, got)
 	}
-	if got != nil {
-		t.Fatalf("malformed parse returned partial records: %+v", got)
-	}
-
-	bad := fakeRunner{out: []byte("100644 100644 aaaa bbbb M\x00f1\x00")} // missing leading ':'
-	out, _ = bad.Output(context.Background(), "", 1<<20)
-	if _, err := ParseRawStatusZ(out); !errors.Is(err, ErrMalformedRawStatus) {
-		t.Fatalf("missing colon err=%v, want ErrMalformedRawStatus", err)
+	// Missing leading colon.
+	if _, err := ParseRawStatusZ([]byte("100644 100644 a b M\x00f1\x00")); !errors.Is(err, ErrMalformedRawStatus) {
+		t.Fatalf("missing colon err=%v", err)
 	}
 }
 
 func TestExecGitParseUnifiedDiff(t *testing.T) {
-	valid := []byte("diff --git a/f b/f\n" +
-		"index 111..222 100644\n" +
-		"--- a/f\n+++ b/f\n" +
-		"@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n")
+	valid := []byte("diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n")
 	ud, err := ParseUnifiedDiff(valid)
 	if err != nil {
 		t.Fatalf("valid parse: %v", err)
 	}
-	if ud.Additions != 1 || ud.Deletions != 1 {
-		t.Fatalf("want +1/-1, got +%d/-%d", ud.Additions, ud.Deletions)
-	}
-	if len(ud.Hunks) != 1 {
-		t.Fatalf("want 1 hunk, got %d", len(ud.Hunks))
+	if ud.Additions != 1 || ud.Deletions != 1 || len(ud.Hunks) != 1 {
+		t.Fatalf("unexpected result: +%d/-%d hunks=%d", ud.Additions, ud.Deletions, len(ud.Hunks))
 	}
 
-	r := fakeRunner{out: []byte("@@ this is not a hunk header @@\n+x\n")}
-	out, _ := r.Output(context.Background(), "", 1<<20)
-	if _, err := ParseUnifiedDiff(out); !errors.Is(err, ErrMalformedUnifiedDiff) {
-		t.Fatalf("err=%v, want ErrMalformedUnifiedDiff", err)
+	// Bad hunk header.
+	if _, err := ParseUnifiedDiff([]byte("@@ not a header @@\n+x\n")); !errors.Is(err, ErrMalformedUnifiedDiff) {
+		t.Fatalf("bad header err=%v", err)
+	}
+	// Declared range not satisfied (says 3 old lines, provides 1).
+	if _, err := ParseUnifiedDiff([]byte("@@ -1,3 +1,1 @@\n-only\n")); !errors.Is(err, ErrMalformedUnifiedDiff) {
+		t.Fatalf("range mismatch err=%v", err)
+	}
+	// Empty unprefixed payload line inside a hunk.
+	if _, err := ParseUnifiedDiff([]byte("@@ -1,2 +1,2 @@\n one\n\n two\n")); !errors.Is(err, ErrMalformedUnifiedDiff) {
+		t.Fatalf("empty payload err=%v", err)
 	}
 }
 
 func TestExecGitParseCatFileBatch(t *testing.T) {
-	valid := []byte("aaaa blob 6\nhello\n\n" + "bbbb missing\n")
-	objs, err := ParseCatFileBatch(valid)
+	objs, err := ParseCatFileBatch([]byte("aaaa blob 6\nhello\n\nbbbb missing\n"))
 	if err != nil {
 		t.Fatalf("valid parse: %v", err)
 	}
-	if len(objs) != 2 {
-		t.Fatalf("want 2 objects, got %d", len(objs))
-	}
-	if objs[0].Type != "blob" || objs[0].Size != 6 || !bytes.Equal(objs[0].Data, []byte("hello\n")) {
-		t.Fatalf("object 0 wrong: %+v", objs[0])
-	}
-	if !objs[1].Missing || objs[1].OID != "bbbb" {
-		t.Fatalf("object 1 wrong: %+v", objs[1])
+	if len(objs) != 2 || objs[0].Type != "blob" || objs[0].Size != 6 ||
+		!bytes.Equal(objs[0].Data, []byte("hello\n")) || !objs[1].Missing || objs[1].OID != "bbbb" {
+		t.Fatalf("unexpected records: %+v", objs)
 	}
 
 	// Non-numeric size.
-	r := fakeRunner{out: []byte("aaaa blob notanumber\nhello\n\n")}
-	out, _ := r.Output(context.Background(), "", 1<<20)
-	if got, err := ParseCatFileBatch(out); !errors.Is(err, ErrMalformedCatFile) || got != nil {
-		t.Fatalf("bad size err=%v got=%v, want ErrMalformedCatFile", err, got)
+	if got, err := ParseCatFileBatch([]byte("aaaa blob notanumber\nhello\n\n")); !errors.Is(err, ErrMalformedCatFile) || got != nil {
+		t.Fatalf("bad size err=%v got=%v", err, got)
 	}
-
-	// Content shorter than the declared size.
-	r = fakeRunner{out: []byte("aaaa blob 99\nhi\n")}
-	out, _ = r.Output(context.Background(), "", 1<<20)
-	if _, err := ParseCatFileBatch(out); !errors.Is(err, ErrMalformedCatFile) {
-		t.Fatalf("truncated err=%v, want ErrMalformedCatFile", err)
+	// Overflowing declared size must be rejected before any size+1 arithmetic.
+	if _, err := ParseCatFileBatch([]byte("aaaa blob 9223372036854775807\nhi\n")); !errors.Is(err, ErrMalformedCatFile) {
+		t.Fatalf("overflow size err=%v", err)
+	}
+	// Size larger than int64 range.
+	if _, err := ParseCatFileBatch([]byte("aaaa blob 99999999999999999999999999\nhi\n")); !errors.Is(err, ErrMalformedCatFile) {
+		t.Fatalf("huge size err=%v", err)
+	}
+	// Truncated payload.
+	if _, err := ParseCatFileBatch([]byte("aaaa blob 99\nhi\n")); !errors.Is(err, ErrMalformedCatFile) {
+		t.Fatalf("truncated err=%v", err)
 	}
 }

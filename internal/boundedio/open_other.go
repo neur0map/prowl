@@ -2,10 +2,23 @@
 
 package boundedio
 
-import "os"
+import (
+	"fmt"
+	"os"
+	"strings"
+)
 
 func openReadOnlyNonblocking(root *os.Root, name string) (*os.File, error) {
 	return root.Open(name)
+}
+
+// pathComponents splits on '/' only; these platforms have no verified no-follow
+// guarantee, so the split is only used for validation before failing closed.
+func pathComponents(name string) ([]string, error) {
+	if strings.HasPrefix(name, "/") {
+		return nil, fmt.Errorf("%w: absolute name %q", os.ErrInvalid, name)
+	}
+	return strings.Split(name, "/"), nil
 }
 
 // openRegularNoFollow fails closed: platforms without a verified no-follow

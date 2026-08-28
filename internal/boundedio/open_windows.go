@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -13,6 +14,26 @@ import (
 
 func openReadOnlyNonblocking(root *os.Root, name string) (*os.File, error) {
 	return root.Open(name)
+}
+
+// pathComponents splits a Windows relative path on both '/' and '\' and rejects
+// anything that could escape the root: absolute paths, drive/UNC volume
+// prefixes, and a ':' in any component (drive-relative or alternate data
+// stream).
+func pathComponents(name string) ([]string, error) {
+	if filepath.VolumeName(name) != "" {
+		return nil, fmt.Errorf("%w: %q has a volume or UNC prefix", os.ErrInvalid, name)
+	}
+	if name[0] == '/' || name[0] == '\\' {
+		return nil, fmt.Errorf("%w: absolute name %q", os.ErrInvalid, name)
+	}
+	raw := strings.FieldsFunc(name, func(r rune) bool { return r == '/' || r == '\\' })
+	for _, comp := range raw {
+		if strings.ContainsRune(comp, ':') {
+			return nil, fmt.Errorf("%w: %q has a drive or alternate-data-stream component", os.ErrInvalid, name)
+		}
+	}
+	return raw, nil
 }
 
 // ntOpenChild opens a single path component relative to a parent directory

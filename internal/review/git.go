@@ -14,18 +14,27 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
-// defaultMaxStderrBytes bounds captured stderr when ExecGit.MaxStderr is unset.
-const defaultMaxStderrBytes = 1 << 20
+const (
+	// defaultMaxStderrBytes bounds captured stderr when ExecGit.MaxStderr is unset.
+	defaultMaxStderrBytes = 1 << 20
+	// maxDriverListBytes bounds the filter/diff-driver discovery output.
+	maxDriverListBytes = 1 << 20
+)
 
 var (
 	// ErrGitOutputOverflow reports that a command's stdout exceeded its limit.
 	ErrGitOutputOverflow = errors.New("review: git stdout exceeded its byte limit")
 	// ErrGitStderrOverflow reports that a command's stderr exceeded its limit.
 	ErrGitStderrOverflow = errors.New("review: git stderr exceeded its byte limit")
+	// ErrInvalidLimit reports a non-positive output limit.
+	ErrInvalidLimit = errors.New("review: output byte limit must be positive")
+	// ErrDriverDiscovery reports that filter/diff-driver enumeration failed, so
+	// the runner refuses the main command rather than run with an unknown or
+	// partial set of hostile drivers.
+	ErrDriverDiscovery = errors.New("review: git filter/diff-driver discovery failed")
 	// ErrMalformedRawStatus reports unparseable NUL-delimited raw diff status.
 	ErrMalformedRawStatus = errors.New("review: malformed raw diff status")
 	// ErrMalformedUnifiedDiff reports an unparseable unified diff.
@@ -34,19 +43,20 @@ var (
 	ErrMalformedCatFile = errors.New("review: malformed cat-file batch output")
 )
 
-// GitRunner runs sanitized, bounded Git subprocesses. Output captures a
-// command's stdout up to a byte limit; Pipe streams stdin and stdout for
-// object protocols such as cat-file --batch. Both enforce the sanitized
-// execution policy, a fixed timeout, and process-group termination.
+// GitRunner runs sanitized, bounded Git subprocesses. Output captures stdout up
+// to a positive byte limit; Pipe streams stdin and stdout for object protocols
+// such as cat-file --batch, bounding stdout to a positive limit. Both enforce
+// the sanitized execution policy, a fixed timeout, and process-tree termination.
 type GitRunner interface {
 	Output(ctx context.Context, root string, limit int64, args ...string) ([]byte, error)
-	Pipe(ctx context.Context, root string, stdin io.Reader, stdout io.Writer, args ...string) error
+	Pipe(ctx context.Context, root string, limit int64, stdin io.Reader, stdout io.Writer, args ...string) error
 }
 
-// ExecGit is the process-backed GitRunner. Every invocation runs with a
-// scrubbed environment, an allowlisted -c configuration, no shell, an explicit
-// working directory, bounded output, and its own process group so a hung or
-// overflowing child (and any descendant it spawned) is killed and reaped.
+// ExecGit is the process-backed GitRunner. Every invocation runs with an
+// allowlisted environment, an allowlisted -c configuration, no shell, an
+// explicit working directory, bounded output, and platform process-tree
+// termination so a hung or overflowing child (and any descendant it spawned) is
+// killed and reaped.
 type ExecGit struct {
 	// Binary is the git executable; empty means "git" on PATH.
 	Binary string
@@ -60,6 +70,14 @@ type ExecGit struct {
 }
 
 var _ GitRunner = ExecGit{}
+
+// processController abstracts platform process-tree setup and termination.
+type processController interface {
+	prepare(cmd *exec.Cmd) error
+	started(cmd *exec.Cmd) error
+	kill()
+	release()
+}
 
 func (g ExecGit) binary() string {
 	if g.Binary != "" {
@@ -75,12 +93,20 @@ func (g ExecGit) maxStderr() int64 {
 	return defaultMaxStderrBytes
 }
 
-// Output runs git with the given arguments and returns stdout, failing with
-// ErrGitOutputOverflow if it exceeds limit and with an error carrying stderr if
-// git exits non-zero.
+// Output runs git and returns stdout, failing with ErrInvalidLimit for a
+// non-positive limit, ErrGitOutputOverflow past the limit, ErrDriverDiscovery if
+// hostile-driver enumeration fails, and an error carrying stderr on non-zero
+// exit.
 func (g ExecGit) Output(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
+	if limit <= 0 {
+		return nil, ErrInvalidLimit
+	}
+	config, err := g.safeConfig(ctx, root)
+	if err != nil {
+		return nil, err
+	}
 	stdout := &boundedBuffer{limit: limit}
-	code, stderr, err := g.run(ctx, root, g.baseConfigFor(ctx, root), nil, stdout, args...)
+	code, stderr, err := g.run(ctx, root, config, nil, stdout, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +116,18 @@ func (g ExecGit) Output(ctx context.Context, root string, limit int64, args ...s
 	return stdout.bytes(), nil
 }
 
-// Pipe runs git streaming stdin to the child and the child's stdout to stdout.
-func (g ExecGit) Pipe(ctx context.Context, root string, stdin io.Reader, stdout io.Writer, args ...string) error {
-	code, stderr, err := g.run(ctx, root, g.baseConfigFor(ctx, root), stdin, stdout, args...)
+// Pipe runs git streaming stdin to the child and the child's stdout to stdout,
+// bounding stdout to a positive limit.
+func (g ExecGit) Pipe(ctx context.Context, root string, limit int64, stdin io.Reader, stdout io.Writer, args ...string) error {
+	if limit <= 0 {
+		return ErrInvalidLimit
+	}
+	config, err := g.safeConfig(ctx, root)
+	if err != nil {
+		return err
+	}
+	sink := &boundedWriter{dest: stdout, limit: limit}
+	code, stderr, err := g.run(ctx, root, config, stdin, sink, args...)
 	if err != nil {
 		return err
 	}
@@ -102,33 +137,58 @@ func (g ExecGit) Pipe(ctx context.Context, root string, stdin io.Reader, stdout 
 	return nil
 }
 
+// RawStatus captures NUL-delimited raw diff status with textconv and external
+// diff neutralized centrally; callers need not supply safety flags.
+func (g ExecGit) RawStatus(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
+	return g.diffCapture(ctx, root, limit, false, append([]string{"diff", "--raw", "-z", "--no-textconv", "--no-ext-diff"}, args...)...)
+}
+
+// Diff captures a canonical worktree/tree patch. All diff-driver, textconv, and
+// output-affecting controls are injected here, so callers pass only the
+// revisions and pathspecs.
+func (g ExecGit) Diff(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
+	return g.diffCapture(ctx, root, limit, false, append([]string{"diff", "--no-color", "--no-ext-diff", "--no-textconv"}, args...)...)
+}
+
 // DiffNoIndex is the dedicated forced-text diff helper for two out-of-tree
-// files. Its output-affecting options are pinned so repository configuration
-// and attributes cannot perturb the canonical diff. git diff --no-index exits 0
-// when the inputs are identical and 1 when they differ; only a status above 1
-// is a genuine failure. This exit-1-as-success rule lives here alone.
+// files. git diff --no-index exits 0 when the inputs are identical and 1 when
+// they differ; only a status above 1 is a genuine failure. This exit-1-as-
+// success rule lives here alone.
 func (g ExecGit) DiffNoIndex(ctx context.Context, root string, limit int64, base, head string) ([]byte, error) {
-	config := append(g.baseConfigFor(ctx, root), diffPinConfig()...)
-	stdout := &boundedBuffer{limit: limit}
-	args := []string{
+	return g.diffCapture(ctx, root, limit, true,
 		"diff", "--no-index", "--text", "--no-color", "--no-ext-diff", "--no-textconv",
-		"--no-renames", "--unified=3", "--src-prefix=a/", "--dst-prefix=b/", "--", base, head,
+		"--no-renames", "--unified=3", "--src-prefix=a/", "--dst-prefix=b/", "--", base, head)
+}
+
+// diffCapture centralizes the sanitized diff path: allowlisted base config plus
+// pinned diff options, bounded capture, and exit handling. allowExit1 accepts
+// git diff --no-index's exit 1 (a difference).
+func (g ExecGit) diffCapture(ctx context.Context, root string, limit int64, allowExit1 bool, args ...string) ([]byte, error) {
+	if limit <= 0 {
+		return nil, ErrInvalidLimit
 	}
+	config, err := g.safeConfig(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	config = append(config, diffPinConfig()...)
+	stdout := &boundedBuffer{limit: limit}
 	code, stderr, err := g.run(ctx, root, config, nil, stdout, args...)
 	if err != nil {
 		return nil, err
 	}
-	if code > 1 {
-		return nil, fmt.Errorf("review: git diff --no-index exited with status %d: %s", code, strings.TrimSpace(string(stderr)))
+	if code != 0 && !(allowExit1 && code == 1) {
+		return nil, fmt.Errorf("review: git %s exited with status %d: %s", firstArg(args), code, strings.TrimSpace(string(stderr)))
 	}
 	return stdout.bytes(), nil
 }
 
-// run executes git once with full sanitization, bounded I/O, a private process
-// group, and context/overflow-driven SIGKILL of that group. It returns the exit
-// code, captured stderr, and a non-nil error only for overflow, cancellation,
-// or a failure to launch or reap.
-func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io.Reader, stdout io.Writer, args ...string) (int, []byte, error) {
+// run executes git once with full sanitization, bounded I/O, platform process-
+// tree control, and context/overflow-driven termination of that tree. It
+// returns the exit code, captured stderr, and a non-nil error only for a bad
+// limit, overflow, cancellation, discovery failure, or a failure to launch,
+// control, or reap.
+func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io.Reader, stdout overflowSink, args ...string) (int, []byte, error) {
 	if g.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, g.Timeout)
@@ -142,11 +202,6 @@ func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io
 	cmd := exec.Command(g.binary(), argv...)
 	cmd.Dir = root
 	cmd.Env = scrubGitEnv(os.Environ())
-	// A private process group lets us signal the child and every descendant it
-	// spawns as a unit.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	// After the process exits, bound how long Wait blocks on lingering I/O
-	// copiers rather than hanging forever on a stuck stream.
 	cmd.WaitDelay = 10 * time.Second
 
 	stderr := &boundedBuffer{limit: g.maxStderr()}
@@ -154,20 +209,30 @@ func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io
 	cmd.Stdout = stdout
 	cmd.Stdin = stdin
 
-	// SIGKILL cannot be caught or ignored, so a child trapping SIGTERM still
-	// dies; the negative PID targets the whole group.
-	kill := func() {
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
+	pc := newProcessController()
+	if err := pc.prepare(cmd); err != nil {
+		return 0, nil, err
 	}
-	stderr.onOverflow = kill
-	if bw, ok := stdout.(*boundedBuffer); ok {
-		bw.onOverflow = kill
-	}
+	kill := func() { pc.kill() }
+	stderr.setOnOverflow(kill)
+	stdout.setOnOverflow(kill)
 
 	if err := cmd.Start(); err != nil {
 		return 0, nil, err
+	}
+	if err := pc.started(cmd); err != nil {
+		// Process control could not be established; do not let the child run
+		// unmanaged. Best-effort kill the single process and reap it.
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		pc.release()
+		return 0, nil, err
+	}
+	defer pc.release()
+	// An overflow or cancellation may have fired during startup, before the
+	// controller was fully armed; ensure the tree is torn down in that case.
+	if stdout.overflowed() || stderr.overflowed() || ctx.Err() != nil {
+		kill()
 	}
 
 	done := make(chan struct{})
@@ -189,13 +254,13 @@ func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io
 		var exitErr *exec.ExitError
 		if errors.As(waitErr, &exitErr) {
 			exitCode = exitErr.ExitCode()
-		} else if !canceled.Load() && !stderr.overflowed() && !bufOverflowed(stdout) {
+		} else if !canceled.Load() && !stderr.overflowed() && !stdout.overflowed() {
 			return 0, stderr.bytes(), waitErr
 		}
 	}
 
 	switch {
-	case bufOverflowed(stdout):
+	case stdout.overflowed():
 		return exitCode, stderr.bytes(), ErrGitOutputOverflow
 	case stderr.overflowed():
 		return exitCode, stderr.bytes(), ErrGitStderrOverflow
@@ -215,53 +280,62 @@ func firstArg(args []string) string {
 
 // ---- environment and configuration sanitization --------------------------
 
-// scrubGitEnv removes every inherited variable that could redirect Git's
-// configuration, object store, transport, or helper resolution, then pins the
-// safe values Prowl requires. Removing the pinned names first ensures our
-// values win over any inherited copy.
-func scrubGitEnv(inherited []string) []string {
-	out := make([]string, 0, len(inherited)+8)
-	for _, kv := range inherited {
-		name, _, ok := strings.Cut(kv, "=")
-		if !ok || deniedGitEnvVar(name) {
-			continue
-		}
-		out = append(out, kv)
-	}
-	return append(out,
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_CONFIG_GLOBAL="+os.DevNull,
-		"GIT_TERMINAL_PROMPT=0",
-		"GIT_PAGER=cat",
-		"PAGER=cat",
-		"GIT_OPTIONAL_LOCKS=0",
-		"GIT_NO_LAZY_FETCH=1",
-	)
+// gitEnvPins are the environment values Prowl forces after the allowlist filter.
+var gitEnvPins = []string{
+	"GIT_CONFIG_NOSYSTEM=1",
+	"GIT_CONFIG_GLOBAL=" + os.DevNull,
+	"GIT_TERMINAL_PROMPT=0",
+	"GIT_PAGER=cat",
+	"PAGER=cat",
+	"GIT_OPTIONAL_LOCKS=0",
+	"GIT_NO_LAZY_FETCH=1",
 }
 
-func deniedGitEnvVar(name string) bool {
-	switch name {
-	case "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_GLOBAL",
-		"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-		"GIT_NAMESPACE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
-		"GIT_ASKPASS", "SSH_ASKPASS", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_SSH_VARIANT",
-		"GIT_PROXY_COMMAND", "GIT_ALLOW_PROTOCOL", "GIT_PROTOCOL_FROM_USER", "GIT_PROTOCOL",
-		"GIT_EXTERNAL_DIFF", "GIT_TEXTCONV",
-		"GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "GIT_PAGER", "PAGER",
-		"GIT_TERMINAL_PROMPT", "GIT_OPTIONAL_LOCKS", "GIT_NO_LAZY_FETCH":
+// baseEnvAllowlist is the minimal cross-platform set of inherited variables Git
+// may keep. Everything else (all GIT_*, askpass, SSH, proxy, and trace/trace2
+// families) is dropped; global config is neutralized by the pins regardless of
+// HOME.
+var baseEnvAllowlist = map[string]bool{
+	"PATH": true, "HOME": true, "LOGNAME": true, "USER": true, "SHELL": true,
+	"TMPDIR": true, "TERM": true, "TZ": true, "LANG": true, "LANGUAGE": true,
+}
+
+func envAllowed(name string) bool {
+	if baseEnvAllowlist[name] {
 		return true
 	}
-	return strings.HasPrefix(name, "GIT_CONFIG_KEY_") || strings.HasPrefix(name, "GIT_CONFIG_VALUE_")
+	if strings.HasPrefix(name, "LC_") {
+		return true
+	}
+	return platformEnvAllowed(name)
 }
 
-// baseConfigFor enumerates the repository's filter-driver names without running
-// them and returns the allowlisted -c overrides that neutralize every hostile
-// surface, including those filters.
-func (g ExecGit) baseConfigFor(ctx context.Context, root string) []string {
-	return g.baseConfig(g.enumerateFilters(ctx, root))
+// scrubGitEnv keeps only allowlisted inherited variables, then appends the
+// mandated pins. An allowlist (rather than a denylist) guarantees that unknown
+// GIT_*, transport, proxy, or trace variables cannot survive.
+func scrubGitEnv(inherited []string) []string {
+	out := make([]string, 0, len(baseEnvAllowlist)+len(gitEnvPins))
+	for _, kv := range inherited {
+		name, _, ok := strings.Cut(kv, "=")
+		if ok && envAllowed(name) {
+			out = append(out, kv)
+		}
+	}
+	return append(out, gitEnvPins...)
 }
 
-func (g ExecGit) baseConfig(filters []string) []string {
+// safeConfig enumerates the repository's filter and diff-driver names without
+// running them and returns the allowlisted -c overrides that neutralize every
+// hostile surface, including those drivers. A discovery failure is fatal.
+func (g ExecGit) safeConfig(ctx context.Context, root string) ([]string, error) {
+	filters, diffs, err := g.enumerateDrivers(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	return g.baseConfig(filters, diffs), nil
+}
+
+func (g ExecGit) baseConfig(filters, diffs []string) []string {
 	hooks := g.HooksDir
 	if hooks == "" {
 		hooks = os.DevNull
@@ -292,6 +366,13 @@ func (g ExecGit) baseConfig(filters []string) []string {
 			"-c", "filter."+name+".required=false",
 		)
 	}
+	for _, name := range diffs {
+		cfg = append(cfg,
+			"-c", "diff."+name+".command=",
+			"-c", "diff."+name+".textconv=",
+			"-c", "diff."+name+".cachetextconv=false",
+		)
+	}
 	return cfg
 }
 
@@ -311,19 +392,35 @@ func diffPinConfig() []string {
 	}
 }
 
-// enumerateFilters lists local filter-driver names by reading configuration
-// only; it never starts a filter. It intentionally omits filter overrides from
-// its own configuration to avoid recursion, and ignores the exit status because
-// git config --get-regexp exits non-zero when nothing matches.
-func (g ExecGit) enumerateFilters(ctx context.Context, root string) []string {
-	stdout := &boundedBuffer{limit: 4 << 20}
-	_, _, _ = g.run(ctx, root, g.baseConfig(nil), nil, stdout, "config", "-z", "--get-regexp", `^filter\.`)
-	return parseFilterNames(stdout.bytes())
+// enumerateDrivers lists local filter and diff-driver names by reading
+// configuration only; it never starts a driver. It accepts only exit 0 with
+// parsed names or the explicit no-match exit (1 with empty output); overflow,
+// timeout, or any other outcome is a fatal discovery error so the caller
+// refuses to run with an unknown driver set. Its own config omits driver
+// overrides to avoid recursion.
+func (g ExecGit) enumerateDrivers(ctx context.Context, root string) (filters, diffs []string, err error) {
+	stdout := &boundedBuffer{limit: maxDriverListBytes}
+	code, stderr, rerr := g.run(ctx, root, g.baseConfig(nil, nil), nil, stdout, "config", "-z", "--get-regexp", `^(filter|diff)\.`)
+	if rerr != nil {
+		return nil, nil, fmt.Errorf("%w: %w", ErrDriverDiscovery, rerr)
+	}
+	switch code {
+	case 0:
+		filters, diffs = parseDriverNames(stdout.bytes())
+		return filters, diffs, nil
+	case 1:
+		if len(bytes.TrimSpace(stdout.bytes())) != 0 {
+			return nil, nil, fmt.Errorf("%w: exit 1 with unexpected output", ErrDriverDiscovery)
+		}
+		return nil, nil, nil
+	default:
+		return nil, nil, fmt.Errorf("%w: config exited with status %d: %s", ErrDriverDiscovery, code, strings.TrimSpace(string(stderr)))
+	}
 }
 
-func parseFilterNames(out []byte) []string {
-	const prefix = "filter."
-	seen := map[string]bool{}
+func parseDriverNames(out []byte) (filters, diffs []string) {
+	fset := map[string]bool{}
+	dset := map[string]bool{}
 	for _, entry := range bytes.Split(out, []byte{0}) {
 		if len(entry) == 0 {
 			continue
@@ -333,29 +430,49 @@ func parseFilterNames(out []byte) []string {
 			key = entry[:nl]
 		}
 		s := string(key)
-		if !strings.HasPrefix(s, prefix) {
-			continue
+		switch {
+		case strings.HasPrefix(s, "filter."):
+			rest := s[len("filter."):]
+			if dot := strings.LastIndexByte(rest, '.'); dot > 0 {
+				fset[rest[:dot]] = true
+			}
+		case strings.HasPrefix(s, "diff."):
+			rest := s[len("diff."):]
+			if dot := strings.LastIndexByte(rest, '.'); dot > 0 {
+				switch rest[dot+1:] {
+				case "command", "textconv", "cachetextconv", "binary":
+					dset[rest[:dot]] = true
+				}
+			}
 		}
-		rest := s[len(prefix):]
-		dot := strings.LastIndexByte(rest, '.')
-		if dot <= 0 {
-			continue
-		}
-		seen[rest[:dot]] = true
 	}
-	names := make([]string, 0, len(seen))
-	for name := range seen {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
+	return sortedKeys(fset), sortedKeys(dset)
 }
 
-// ---- bounded output buffer -----------------------------------------------
+func sortedKeys(set map[string]bool) []string {
+	if len(set) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
-// boundedBuffer accumulates up to limit bytes and fires onOverflow exactly once
-// when a write would exceed it, then silently discards the rest so the source
-// never blocks. A non-positive limit is unbounded.
+// ---- bounded output sinks -------------------------------------------------
+
+// overflowSink is a writer that fires a one-shot kill when its byte budget is
+// exceeded and reports whether it overflowed.
+type overflowSink interface {
+	io.Writer
+	overflowed() bool
+	setOnOverflow(func())
+}
+
+// boundedBuffer captures up to limit bytes, firing onOverflow once when a write
+// would exceed it, then silently discarding the rest so the source never blocks.
 type boundedBuffer struct {
 	limit      int64
 	mu         sync.Mutex
@@ -363,6 +480,12 @@ type boundedBuffer struct {
 	n          int64
 	over       bool
 	onOverflow func()
+}
+
+func (b *boundedBuffer) setOnOverflow(f func()) {
+	b.mu.Lock()
+	b.onOverflow = f
+	b.mu.Unlock()
 }
 
 func (b *boundedBuffer) Write(p []byte) (int, error) {
@@ -401,11 +524,59 @@ func (b *boundedBuffer) bytes() []byte {
 	return b.buf.Bytes()
 }
 
-func bufOverflowed(w io.Writer) bool {
-	if bw, ok := w.(*boundedBuffer); ok {
-		return bw.overflowed()
+// boundedWriter streams to an underlying writer up to limit bytes, firing
+// onOverflow once when exceeded and then discarding so the source never blocks.
+type boundedWriter struct {
+	dest       io.Writer
+	limit      int64
+	mu         sync.Mutex
+	n          int64
+	over       bool
+	onOverflow func()
+}
+
+func (b *boundedWriter) setOnOverflow(f func()) {
+	b.mu.Lock()
+	b.onOverflow = f
+	b.mu.Unlock()
+}
+
+func (b *boundedWriter) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	if b.over {
+		b.mu.Unlock()
+		return len(p), nil
 	}
-	return false
+	fire := false
+	write := p
+	if b.limit > 0 && b.n+int64(len(p)) > b.limit {
+		room := b.limit - b.n
+		if room < 0 {
+			room = 0
+		}
+		write = p[:room]
+		b.over = true
+		fire = true
+	}
+	b.n += int64(len(write))
+	cb := b.onOverflow
+	b.mu.Unlock()
+
+	if len(write) > 0 {
+		if _, err := b.dest.Write(write); err != nil {
+			return len(p), err
+		}
+	}
+	if fire && cb != nil {
+		cb()
+	}
+	return len(p), nil
+}
+
+func (b *boundedWriter) overflowed() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.over
 }
 
 // ---- parsers --------------------------------------------------------------
@@ -422,13 +593,17 @@ type RawChange struct {
 	Path    string
 }
 
-// ParseRawStatusZ parses NUL-delimited raw diff status. It returns a typed
-// error and no records when any record is truncated or malformed.
+// ParseRawStatusZ parses NUL-delimited raw diff status. Well-formed input
+// terminates every path with NUL; a missing terminal NUL, a truncated record,
+// or a malformed field yields a typed error and no records.
 func ParseRawStatusZ(data []byte) ([]RawChange, error) {
-	tokens := strings.Split(string(data), "\x00")
-	if len(tokens) > 0 && tokens[len(tokens)-1] == "" {
-		tokens = tokens[:len(tokens)-1]
+	if len(data) == 0 {
+		return nil, nil
 	}
+	if data[len(data)-1] != 0 {
+		return nil, fmt.Errorf("%w: input not NUL-terminated", ErrMalformedRawStatus)
+	}
+	tokens := strings.Split(string(data[:len(data)-1]), "\x00")
 	var changes []RawChange
 	for i := 0; i < len(tokens); {
 		meta := tokens[i]
@@ -454,8 +629,8 @@ func ParseRawStatusZ(data []byte) ([]RawChange, error) {
 		} else {
 			change.Path = tokens[i+1]
 		}
-		if change.Path == "" {
-			return nil, fmt.Errorf("%w: record %q has empty path", ErrMalformedRawStatus, meta)
+		if change.Path == "" || (wantPaths == 2 && change.OldPath == "") {
+			return nil, fmt.Errorf("%w: record %q has an empty path", ErrMalformedRawStatus, meta)
 		}
 		changes = append(changes, change)
 		i += 1 + wantPaths
@@ -483,51 +658,85 @@ type UnifiedDiff struct {
 var hunkHeaderRE = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
 // ParseUnifiedDiff parses a unified diff, counting +/- payload lines while
-// excluding the +++/--- file headers. It returns a typed error and no result
-// when a hunk header or hunk line is malformed.
+// excluding the +++/--- file headers. Each hunk's payload must exactly account
+// for the declared old/new line ranges, and every payload line must carry a
+// ' ', '+', '-', or '\' prefix. Any mismatch or unprefixed/empty payload line
+// yields a typed error and no result.
 func ParseUnifiedDiff(data []byte) (UnifiedDiff, error) {
 	var ud UnifiedDiff
-	var cur *DiffHunk
 	lines := strings.Split(string(data), "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
+	oldRemaining, newRemaining := 0, 0
+	inHunk := false
 	for _, line := range lines {
 		if strings.HasPrefix(line, "@@") {
+			if inHunk && (oldRemaining != 0 || newRemaining != 0) {
+				return UnifiedDiff{}, fmt.Errorf("%w: hunk ended with %d old / %d new lines unaccounted", ErrMalformedUnifiedDiff, oldRemaining, newRemaining)
+			}
 			m := hunkHeaderRE.FindStringSubmatch(line)
 			if m == nil {
 				return UnifiedDiff{}, fmt.Errorf("%w: bad hunk header %q", ErrMalformedUnifiedDiff, line)
 			}
-			ud.Hunks = append(ud.Hunks, DiffHunk{
+			hunk := DiffHunk{
 				OldStart: atoiOr(m[1], 0),
 				OldLines: atoiOr(m[2], 1),
 				NewStart: atoiOr(m[3], 0),
 				NewLines: atoiOr(m[4], 1),
-			})
-			cur = &ud.Hunks[len(ud.Hunks)-1]
+			}
+			ud.Hunks = append(ud.Hunks, hunk)
+			oldRemaining, newRemaining = hunk.OldLines, hunk.NewLines
+			inHunk = true
 			continue
 		}
-		if cur == nil {
+		if !inHunk {
 			if isDiffPreambleLine(line) {
 				continue
 			}
 			return UnifiedDiff{}, fmt.Errorf("%w: unexpected line %q outside any hunk", ErrMalformedUnifiedDiff, line)
 		}
-		if line == "" {
-			continue
+		if oldRemaining == 0 && newRemaining == 0 {
+			// The declared ranges are satisfied; anything else is a new section.
+			if isDiffPreambleLine(line) {
+				inHunk = false
+				continue
+			}
+			return UnifiedDiff{}, fmt.Errorf("%w: payload line %q past declared hunk range", ErrMalformedUnifiedDiff, line)
 		}
+		if line == "" {
+			return UnifiedDiff{}, fmt.Errorf("%w: empty payload line inside hunk", ErrMalformedUnifiedDiff)
+		}
+		hunk := &ud.Hunks[len(ud.Hunks)-1]
 		switch line[0] {
 		case '+':
-			cur.Additions++
+			if newRemaining == 0 {
+				return UnifiedDiff{}, fmt.Errorf("%w: extra added line %q", ErrMalformedUnifiedDiff, line)
+			}
+			hunk.Additions++
 			ud.Additions++
+			newRemaining--
 		case '-':
-			cur.Deletions++
+			if oldRemaining == 0 {
+				return UnifiedDiff{}, fmt.Errorf("%w: extra deleted line %q", ErrMalformedUnifiedDiff, line)
+			}
+			hunk.Deletions++
 			ud.Deletions++
-		case ' ', '\\':
-			// context line or "\ No newline at end of file"
+			oldRemaining--
+		case ' ':
+			if oldRemaining == 0 || newRemaining == 0 {
+				return UnifiedDiff{}, fmt.Errorf("%w: extra context line %q", ErrMalformedUnifiedDiff, line)
+			}
+			oldRemaining--
+			newRemaining--
+		case '\\':
+			// "\ No newline at end of file": not a payload line.
 		default:
-			return UnifiedDiff{}, fmt.Errorf("%w: unexpected hunk line %q", ErrMalformedUnifiedDiff, line)
+			return UnifiedDiff{}, fmt.Errorf("%w: unprefixed hunk line %q", ErrMalformedUnifiedDiff, line)
 		}
+	}
+	if inHunk && (oldRemaining != 0 || newRemaining != 0) {
+		return UnifiedDiff{}, fmt.Errorf("%w: final hunk ended with %d old / %d new lines unaccounted", ErrMalformedUnifiedDiff, oldRemaining, newRemaining)
 	}
 	return ud, nil
 }
@@ -563,8 +772,9 @@ type CatFileObject struct {
 	Missing bool
 }
 
-// ParseCatFileBatch parses git cat-file --batch output. It returns a typed
-// error and no records when a header, size, or object payload is malformed.
+// ParseCatFileBatch parses git cat-file --batch output. A header, size (rejected
+// before any size+1 arithmetic to avoid overflow), or object payload that is
+// malformed or truncated yields a typed error and no records.
 func ParseCatFileBatch(data []byte) ([]CatFileObject, error) {
 	var objs []CatFileObject
 	for len(data) > 0 {
@@ -583,10 +793,12 @@ func ParseCatFileBatch(data []byte) ([]CatFileObject, error) {
 			if err != nil || size < 0 {
 				return nil, fmt.Errorf("%w: bad object size %q", ErrMalformedCatFile, fields[2])
 			}
-			if int64(len(data)) < size+1 {
+			// Compare before any size+1 so an attacker-supplied huge size cannot
+			// overflow or index out of range.
+			if size > int64(len(data)) {
 				return nil, fmt.Errorf("%w: object %s truncated, want %d payload bytes", ErrMalformedCatFile, fields[0], size)
 			}
-			if data[size] != '\n' {
+			if int64(len(data)) < size+1 || data[size] != '\n' {
 				return nil, fmt.Errorf("%w: object %s missing trailing newline", ErrMalformedCatFile, fields[0])
 			}
 			objs = append(objs, CatFileObject{
