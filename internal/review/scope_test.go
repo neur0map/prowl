@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -413,5 +414,69 @@ func TestResolveRejectsUnsupportedObjectFormat(t *testing.T) {
 	_, err := ResolveScope(context.Background(), runner, "/tmp", PlanRequest{})
 	if !errors.Is(err, ErrUnsupportedObjectFormat) {
 		t.Fatalf("err=%v, want ErrUnsupportedObjectFormat", err)
+	}
+}
+
+// rangeMergeBaseRunner scripts a range resolution: it answers the object-format
+// and both ref verifications with valid values, then delegates the merge-base
+// step to mergeBase, letting a test inject a specific merge-base outcome.
+func rangeMergeBaseRunner(t *testing.T, mergeBase func() ([]byte, error)) scriptRunner {
+	t.Helper()
+	const baseOID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const headOID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	return scriptRunner{t: t, output: func(args []string) ([]byte, error) {
+		switch {
+		case len(args) >= 2 && args[0] == "rev-parse" && args[1] == "--show-object-format":
+			return []byte("sha1\n"), nil
+		case len(args) >= 1 && args[0] == "rev-parse":
+			if strings.Contains(args[len(args)-1], "head") {
+				return []byte(headOID + "\n"), nil
+			}
+			return []byte(baseOID + "\n"), nil
+		case len(args) >= 1 && args[0] == "merge-base":
+			return mergeBase()
+		}
+		t.Fatalf("unexpected git call: %v", args)
+		return nil, nil
+	}}
+}
+
+func TestResolveRangeCancellationNotMislabeled(t *testing.T) {
+	runner := rangeMergeBaseRunner(t, func() ([]byte, error) { return nil, context.Canceled })
+
+	_, err := ResolveScope(context.Background(), runner, "", PlanRequest{Base: "baseref", Head: "headref"})
+	if errors.Is(err, ErrNoMergeBase) {
+		t.Fatalf("cancellation mislabeled as ErrNoMergeBase: %v", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v, want context.Canceled preserved in the chain", err)
+	}
+}
+
+func TestResolveRangeNon1MergeBaseFailurePreserved(t *testing.T) {
+	want := &GitExitError{Subcommand: "merge-base", Code: 128, Stderr: "fatal: bad revision"}
+	runner := rangeMergeBaseRunner(t, func() ([]byte, error) { return nil, want })
+
+	_, err := ResolveScope(context.Background(), runner, "", PlanRequest{Base: "baseref", Head: "headref"})
+	if errors.Is(err, ErrNoMergeBase) {
+		t.Fatalf("non-1 merge-base exit mislabeled as ErrNoMergeBase: %v", err)
+	}
+	var exit *GitExitError
+	if !errors.As(err, &exit) || exit.Code != 128 {
+		t.Fatalf("err=%v, want *GitExitError code 128 preserved in the chain", err)
+	}
+}
+
+func TestResolveRangeExit1MapsToNoMergeBase(t *testing.T) {
+	exitErr := &GitExitError{Subcommand: "merge-base", Code: 1, Stderr: ""}
+	runner := rangeMergeBaseRunner(t, func() ([]byte, error) { return nil, exitErr })
+
+	_, err := ResolveScope(context.Background(), runner, "", PlanRequest{Base: "baseref", Head: "headref"})
+	if !errors.Is(err, ErrNoMergeBase) {
+		t.Fatalf("exit status 1 must map to ErrNoMergeBase: %v", err)
+	}
+	var exit *GitExitError
+	if !errors.As(err, &exit) || exit.Code != 1 {
+		t.Fatalf("exit-1 chain not preserved: %v", err)
 	}
 }

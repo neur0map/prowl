@@ -224,10 +224,16 @@ func commitParents(ctx context.Context, runner GitRunner, root, commitOID string
 func uniqueMergeBase(ctx context.Context, runner GitRunner, root, baseOID, headOID string) (string, error) {
 	out, err := runner.Output(ctx, root, scopeOutputLimit, "merge-base", "--all", baseOID, headOID)
 	if err != nil {
-		// merge-base exits non-zero for unrelated histories (no merge base).
-		// The operands are already-verified object IDs, so this is the only
-		// expected failure.
-		return "", fmt.Errorf("%w: %v", ErrNoMergeBase, err)
+		// Only Git's exit status 1 means "unrelated histories, no merge base".
+		// Cancellation, deadline, output overflow, process-start failures, and
+		// any other exit status are distinct failures whose error chain must
+		// survive unwrapping, so they propagate unchanged rather than being
+		// mislabeled as a missing merge base.
+		var exit *GitExitError
+		if errors.As(err, &exit) && exit.Code == 1 {
+			return "", fmt.Errorf("%w between %s and %s: %w", ErrNoMergeBase, baseOID, headOID, err)
+		}
+		return "", err
 	}
 	bases := strings.Fields(strings.TrimSpace(string(out)))
 	switch len(bases) {

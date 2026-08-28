@@ -1066,3 +1066,46 @@ func TestExecGitNeutralizesDiffDriverBinary(t *testing.T) {
 		}
 	}
 }
+
+// TestExecGitOutputReturnsTypedExitStatus proves a clean non-zero exit surfaces
+// as a *GitExitError carrying the real Git status, and in particular that
+// merge-base on unrelated histories exits exactly 1 - the status scope
+// resolution relies on to mean "no merge base".
+func TestExecGitOutputReturnsTypedExitStatus(t *testing.T) {
+	gitBin(t)
+	root, _ := initRepo(t)
+	ctx := context.Background()
+	g := ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+
+	_, err := g.Output(ctx, root, 1<<20, "rev-parse", "--verify", "--end-of-options", "no-such-ref^{commit}")
+	var exit *GitExitError
+	if !errors.As(err, &exit) {
+		t.Fatalf("rev-parse err=%v, want *GitExitError", err)
+	}
+	if exit.Code == 0 {
+		t.Fatalf("GitExitError.Code=%d, want non-zero", exit.Code)
+	}
+
+	first := strings.TrimSpace(string(mustRawGit(t, root, "rev-parse", "HEAD")))
+	rawGit(t, root, "checkout", "-q", "--orphan", "unrelated")
+	if err := os.WriteFile(filepath.Join(root, "other.txt"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rawGit(t, root, "add", "other.txt")
+	rawGit(t, root, "commit", "-qm", "unrelated root")
+	second := strings.TrimSpace(string(mustRawGit(t, root, "rev-parse", "HEAD")))
+
+	_, err = g.Output(ctx, root, 1<<20, "merge-base", "--all", first, second)
+	if !errors.As(err, &exit) || exit.Code != 1 {
+		t.Fatalf("merge-base err=%v, want *GitExitError with code 1", err)
+	}
+}
+
+func mustRawGit(t *testing.T, root string, args ...string) []byte {
+	t.Helper()
+	out, err := rawGitEnv(root, nil, args...)
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return out
+}

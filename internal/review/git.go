@@ -51,6 +51,29 @@ var (
 	ErrMalformedCatFile = errors.New("review: malformed cat-file batch output")
 )
 
+// GitExitError reports that a Git subprocess ran to completion but exited with
+// a non-zero status. It carries the exit code so callers can distinguish a
+// meaningful status - such as merge-base's exit 1 for "no merge base" - from
+// any other failure, while still comparing with errors.As against the concrete
+// type. Overflow, cancellation, and launch failures never produce this error;
+// they surface as their own typed errors from run.
+type GitExitError struct {
+	Subcommand string
+	Code       int
+	Stderr     string
+}
+
+func (e *GitExitError) Error() string {
+	return fmt.Sprintf("review: git %s exited with status %d: %s", e.Subcommand, e.Code, e.Stderr)
+}
+
+// newGitExitError builds a GitExitError from a completed run's arguments, exit
+// code, and captured stderr. It is the single source of the non-zero-exit error
+// shared by Output, Pipe, and diffCapture.
+func newGitExitError(args []string, code int, stderr []byte) *GitExitError {
+	return &GitExitError{Subcommand: firstArg(args), Code: code, Stderr: strings.TrimSpace(string(stderr))}
+}
+
 // GitRunner runs sanitized, bounded Git subprocesses. Output captures stdout up
 // to a positive byte limit; Pipe streams stdin and stdout for object protocols
 // such as cat-file --batch, bounding stdout to a positive limit. Both enforce
@@ -121,7 +144,7 @@ func (g ExecGit) Output(ctx context.Context, root string, limit int64, args ...s
 		return nil, err
 	}
 	if code != 0 {
-		return nil, fmt.Errorf("review: git %s exited with status %d: %s", firstArg(args), code, strings.TrimSpace(string(stderr)))
+		return nil, newGitExitError(args, code, stderr)
 	}
 	return stdout.bytes(), nil
 }
@@ -145,7 +168,7 @@ func (g ExecGit) Pipe(ctx context.Context, root string, limit int64, stdin io.Re
 		return err
 	}
 	if code != 0 {
-		return fmt.Errorf("review: git %s exited with status %d: %s", firstArg(args), code, strings.TrimSpace(string(stderr)))
+		return newGitExitError(args, code, stderr)
 	}
 	return nil
 }
@@ -201,7 +224,7 @@ func (g ExecGit) diffCapture(ctx context.Context, root string, limit int64, allo
 		return nil, err
 	}
 	if code != 0 && !(allowExit1 && code == 1) {
-		return nil, fmt.Errorf("review: git %s exited with status %d: %s", firstArg(args), code, strings.TrimSpace(string(stderr)))
+		return nil, newGitExitError(args, code, stderr)
 	}
 	return stdout.bytes(), nil
 }
