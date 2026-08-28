@@ -410,24 +410,33 @@ func TestExecGitNeutralizesHostileSurfaces(t *testing.T) {
 
 	t.Run("credentialHelper", func(t *testing.T) {
 		root, markers := initRepo(t)
-		const desc = "protocol=https\nhost=example.com\n\n"
 		hostile := "!touch '" + m(markers, "cred") + "'; true"
-		// Control: a hostile credential helper fires when `git credential fill`
-		// runs, hermetically (no network peer needed).
+		rawGit(t, root, "config", "credential.helper", hostile)
+		// Control: with fields missing, `git credential fill` invokes the helper
+		// to fill them, firing the hostile marker hermetically (no network peer).
 		clearMarkers(t, markers)
-		ctrl := exec.Command("git", "-C", root, "-c", "credential.helper="+hostile, "credential", "fill")
-		ctrl.Stdin = strings.NewReader(desc)
+		ctrl := exec.Command("git", "-C", root, "credential", "fill")
+		ctrl.Stdin = strings.NewReader("protocol=https\nhost=example.com\n\n")
 		ctrl.Env = os.Environ()
 		_, _ = ctrl.CombinedOutput()
 		if !markerPresent(markers, "cred") {
 			t.Fatal("control: credential helper did not fire; assertion would be vacuous")
 		}
-		// Sanitized: the repository helper is emptied by our -c override, so it
-		// is never invoked.
-		rawGit(t, root, "config", "credential.helper", hostile)
+		// Sanitized: the repository helper is emptied by our -c override. With a
+		// complete credential on stdin, `git credential fill` needs no helper and
+		// must succeed through g.Pipe, echoing the fields back and firing nothing.
 		clearMarkers(t, markers)
+		full := "protocol=https\nhost=example.com\nusername=alice\npassword=secret\n\n"
 		var out bytes.Buffer
-		_ = g(t).Pipe(ctx, root, 1<<20, strings.NewReader(desc), &out, "credential", "fill")
+		if err := g(t).Pipe(ctx, root, 1<<20, strings.NewReader(full), &out, "credential", "fill"); err != nil {
+			t.Fatalf("sanitized credential fill: %v", err)
+		}
+		got := out.String()
+		for _, want := range []string{"protocol=https", "host=example.com", "username=alice", "password=secret"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("credential fill output missing %q:\n%s", want, got)
+			}
+		}
 		if markerPresent(markers, "cred") {
 			t.Fatal("sanitized credential fill invoked the repository credential helper")
 		}
@@ -658,6 +667,12 @@ func TestExecGitOutputRejectsPatchSubcommands(t *testing.T) {
 		{"format-patch", "-1"},
 		{"log", "-p"},
 		{"log", "--patch"},
+		// Global options must not hide the real subcommand.
+		{"--no-optional-locks", "diff", "HEAD"},
+		{"--paginate", "show"},
+		{"-c", "core.pager=cat", "diff"},
+		{"-C", ".", "diff-index", "HEAD"},
+		{"--literal-pathspecs", "log", "-p"},
 	} {
 		if _, err := g.Output(ctx, t.TempDir(), 1<<20, args...); !errors.Is(err, ErrPatchViaGenericRunner) {
 			t.Errorf("Output %v err=%v, want ErrPatchViaGenericRunner", args, err)
@@ -688,6 +703,14 @@ func TestExecGitDiffHelpersRejectOverridingOptions(t *testing.T) {
 		{"--diff-algorithm=minimal"},
 		{"--src-prefix=x/"},
 		{"--color"},
+		{"-p"},
+		{"-u"},
+		{"--patch"},
+		{"--binary"},
+		{"--full-index"},
+		{"--abbrev=8"},
+		{"--relative=sub"},
+		{"--output=/tmp/x"},
 	}
 	for _, args := range unsafe {
 		if _, err := g.Diff(ctx, t.TempDir(), 1<<20, args...); !errors.Is(err, ErrUnsafeDiffOption) {
@@ -895,6 +918,23 @@ func TestExecGitParseUnifiedDiff(t *testing.T) {
 	if _, err := ParseUnifiedDiff([]byte("@@ -1,2 +1,2 @@\n one\n\n two\n")); !errors.Is(err, ErrMalformedUnifiedDiff) {
 		t.Fatalf("empty payload err=%v", err)
 	}
+	// Semantic zeros: a start of 0 is valid only with a zero count.
+	if _, err := ParseUnifiedDiff([]byte("@@ -0,0 +1 @@\n+added\n")); err != nil {
+		t.Fatalf("@@ -0,0 +1 @@ should be valid, got %v", err)
+	}
+	if _, err := ParseUnifiedDiff([]byte("@@ -5,0 +6,2 @@\n+a\n+b\n")); err != nil {
+		t.Fatalf("insertion hunk should be valid, got %v", err)
+	}
+	if _, err := ParseUnifiedDiff([]byte("@@ -0 +1 @@\n+x\n")); !errors.Is(err, ErrMalformedUnifiedDiff) {
+		t.Fatalf("@@ -0 +1 @@ (nonzero old count at start 0) err=%v, want malformed", err)
+	}
+	if _, err := ParseUnifiedDiff([]byte("@@ -1,1 +0 @@\n-x\n")); !errors.Is(err, ErrMalformedUnifiedDiff) {
+		t.Fatalf("@@ -1,1 +0 @@ (nonzero new count at start 0) err=%v, want malformed", err)
+	}
+	// Overflowing explicit count must fail rather than default silently.
+	if _, err := ParseUnifiedDiff([]byte("@@ -1,99999999999999999999 +1,1 @@\n x\n")); !errors.Is(err, ErrMalformedUnifiedDiff) {
+		t.Fatalf("overflow count err=%v, want malformed", err)
+	}
 }
 
 func TestExecGitParseCatFileBatch(t *testing.T) {
@@ -922,5 +962,51 @@ func TestExecGitParseCatFileBatch(t *testing.T) {
 	// Truncated payload.
 	if _, err := ParseCatFileBatch([]byte("aaaa blob 99\nhi\n")); !errors.Is(err, ErrMalformedCatFile) {
 		t.Fatalf("truncated err=%v", err)
+	}
+}
+
+// ---- finding 2: driver discovery rejects bad properties ------------------
+
+func TestExecGitDriverDiscoveryRejectsBadProperties(t *testing.T) {
+	// Well-formed, expected properties parse into driver names.
+	filters, diffs, err := parseDriverNames([]byte("filter.lfs.clean\ngit-lfs\x00diff.jpg.textconv\nexif\x00"))
+	if err != nil {
+		t.Fatalf("valid parse: %v", err)
+	}
+	if len(filters) != 1 || filters[0] != "lfs" || len(diffs) != 1 || diffs[0] != "jpg" {
+		t.Fatalf("unexpected names: filters=%v diffs=%v", filters, diffs)
+	}
+	// Two-segment diff.<setting> keys are legitimate non-driver settings.
+	if _, _, err := parseDriverNames([]byte("diff.algorithm\nhistogram\x00")); err != nil {
+		t.Fatalf("diff.algorithm should be accepted: %v", err)
+	}
+	// Unknown filter / diff-driver properties under exit 0 are refused.
+	for _, out := range [][]byte{
+		[]byte("filter.evil.evilprop\nx\x00"),
+		[]byte("diff.evil.evilprop\nx\x00"),
+		[]byte("filter.evil\nx\x00"),                       // incomplete filter key
+		[]byte("filter.evil.clean garbage-no-newline\x00"), // bad key/value framing
+		[]byte("filter.evil.clean\nx"),                     // missing terminal NUL
+		[]byte("core.pager\ncat\x00"),                      // unexpected top-level key
+	} {
+		if _, _, err := parseDriverNames(out); !errors.Is(err, ErrDriverDiscovery) {
+			t.Errorf("parseDriverNames(%q) err=%v, want ErrDriverDiscovery", out, err)
+		}
+	}
+}
+
+func TestExecGitNeutralizesDiffDriverBinary(t *testing.T) {
+	cfg := ExecGit{}.baseConfig(nil, []string{"evil"})
+	for _, want := range []string{"diff.evil.command=", "diff.evil.textconv=", "diff.evil.cachetextconv=false", "diff.evil.binary=false"} {
+		found := false
+		for _, c := range cfg {
+			if c == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("baseConfig missing diff-driver neutralization %q", want)
+		}
 	}
 }

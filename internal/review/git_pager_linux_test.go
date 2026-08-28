@@ -49,7 +49,9 @@ func TestExecGitForcedPagerNeutralized(t *testing.T) {
 	hostilePager := "touch '" + marker + "'; cat"
 	t.Setenv("GIT_PAGER", hostilePager)
 
-	runPaged := func(env []string, extraConfig []string) {
+	// runOnPTY runs an already-built command with a TTY as stdout so Git will
+	// launch its pager, draining the master end.
+	runOnPTY := func(cmd *exec.Cmd) {
 		master, slave := openPTY(t)
 		defer master.Close()
 		defer slave.Close()
@@ -63,10 +65,6 @@ func TestExecGitForcedPagerNeutralized(t *testing.T) {
 				}
 			}
 		}()
-		args := append(append([]string{}, extraConfig...), "--paginate", "log")
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		cmd.Env = env
 		cmd.Stdout = slave
 		cmd.Stderr = slave
 		_ = cmd.Run()
@@ -79,16 +77,22 @@ func TestExecGitForcedPagerNeutralized(t *testing.T) {
 
 	// Control: the inherited hostile GIT_PAGER fires under forced pagination.
 	clearMarkers(t, markers)
-	runPaged(os.Environ(), nil)
+	ctrl := exec.Command("git", "--paginate", "log")
+	ctrl.Dir = root
+	ctrl.Env = os.Environ()
+	runOnPTY(ctrl)
 	if !markerPresent(markers, "pager") {
 		t.Fatal("control: forced pager did not fire; assertion would be vacuous")
 	}
 
-	// Sanitized: scrubGitEnv pins GIT_PAGER=cat and baseConfig pins
-	// core.pager=cat, so the hostile pager is never launched even on a TTY.
+	// Sanitized: build the command through ExecGit's real sanitizedCommand path
+	// (the same env scrub and -c config run uses), only supplying a TTY stdout.
+	// scrubGitEnv pins GIT_PAGER=cat and baseConfig pins core.pager=cat, so the
+	// hostile pager is never launched even on a TTY.
 	clearMarkers(t, markers)
 	g := ExecGit{HooksDir: t.TempDir()}
-	runPaged(scrubGitEnv(os.Environ()), g.baseConfig(nil, nil))
+	sanitized := g.sanitizedCommand(root, g.baseConfig(nil, nil), []string{"--paginate", "log"})
+	runOnPTY(sanitized)
 	if markerPresent(markers, "pager") {
 		t.Fatal("sanitized environment still ran the hostile pager")
 	}

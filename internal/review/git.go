@@ -218,14 +218,7 @@ func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io
 		defer cancel()
 	}
 
-	argv := make([]string, 0, len(config)+len(args))
-	argv = append(argv, config...)
-	argv = append(argv, args...)
-
-	cmd := exec.Command(g.binary(), argv...)
-	cmd.Dir = root
-	cmd.Env = scrubGitEnv(os.Environ())
-	cmd.WaitDelay = 10 * time.Second
+	cmd := g.sanitizedCommand(root, config, args)
 
 	stderr := &boundedBuffer{limit: g.maxStderr()}
 	cmd.Stderr = stderr
@@ -297,6 +290,22 @@ func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io
 	}
 }
 
+// sanitizedCommand builds the *exec.Cmd shared by run and by tests that must
+// supply their own stdout (e.g. a TTY for the pager control): explicit working
+// directory, allowlist-scrubbed environment, and the allowlisted -c config
+// followed by the command arguments. It is the single source of the
+// environment/config policy so tests never reassemble it by hand.
+func (g ExecGit) sanitizedCommand(root string, config, args []string) *exec.Cmd {
+	argv := make([]string, 0, len(config)+len(args))
+	argv = append(argv, config...)
+	argv = append(argv, args...)
+	cmd := exec.Command(g.binary(), argv...)
+	cmd.Dir = root
+	cmd.Env = scrubGitEnv(os.Environ())
+	cmd.WaitDelay = 10 * time.Second
+	return cmd
+}
+
 func firstArg(args []string) string {
 	if len(args) == 0 {
 		return "git"
@@ -311,15 +320,42 @@ var patchSubcommands = map[string]bool{
 	"show": true, "format-patch": true, "range-diff": true, "whatchanged": true,
 }
 
+// globalOptsWithValue are git global options that consume the following
+// argument as their value, so the subcommand resolver must skip both.
+var globalOptsWithValue = map[string]bool{"-C": true, "-c": true}
+
+// resolveSubcommand returns the actual git subcommand, skipping any leading
+// global options (e.g. -c k=v, -C path, --paginate, --no-optional-locks) so a
+// caller cannot hide a patch-producing subcommand behind them.
+func resolveSubcommand(args []string) string {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+			return ""
+		}
+		if !strings.HasPrefix(a, "-") {
+			return a // first non-option token is the subcommand
+		}
+		if globalOptsWithValue[a] {
+			i++ // also skip this option's separate value
+		}
+	}
+	return ""
+}
+
 // rejectPatchSubcommand refuses a patch-producing subcommand on the generic
-// runners, including `log` invoked with a patch flag.
+// runners, resolving the real subcommand past global options, including `log`
+// invoked with a patch flag.
 func rejectPatchSubcommand(args []string) error {
-	sub := firstArg(args)
+	sub := resolveSubcommand(args)
 	if patchSubcommands[sub] {
 		return fmt.Errorf("%w: %q", ErrPatchViaGenericRunner, sub)
 	}
 	if sub == "log" {
-		for _, a := range args[1:] {
+		for _, a := range args {
 			if a == "--" {
 				break
 			}
@@ -345,6 +381,8 @@ var reservedDiffOptions = []string{
 	"--find-renames", "-M", "--no-renames", "--rename-empty", "--no-rename-empty",
 	"--find-copies", "--find-copies-harder", "-C", "--break-rewrites", "-B",
 	"--ws-error-highlight", "--raw", "--numstat", "--stat", "--patch-with-raw",
+	"-p", "-u", "--patch", "--binary", "--full-index", "--abbrev", "--relative",
+	"--output", "--output-indicator-new", "--output-indicator-old", "--output-indicator-context",
 }
 
 // rejectUnsafeDiffArgs refuses caller options that would override a pinned
@@ -508,6 +546,14 @@ func (g ExecGit) enumerateDrivers(ctx context.Context, root string) (filters, di
 	}
 }
 
+// filterProps and diffDriverProps are the only configuration properties a
+// discovered filter or diff driver may carry; anything else under a successful
+// (exit 0) discovery is refused rather than run.
+var (
+	filterProps     = map[string]bool{"clean": true, "smudge": true, "process": true, "required": true}
+	diffDriverProps = map[string]bool{"command": true, "textconv": true, "cachetextconv": true, "binary": true}
+)
+
 // parseDriverNames extracts filter and diff-driver names from `git config -z
 // --get-regexp` output, validating NUL/newline framing and key shape. Any
 // unexpected key, missing key/value separator, incomplete filter key, or bad
@@ -538,16 +584,20 @@ func parseDriverNames(out []byte) (filters, diffs []string, err error) {
 			if dot <= 0 {
 				return nil, nil, fmt.Errorf("%w: incomplete filter key %q", ErrDriverDiscovery, key)
 			}
+			if !filterProps[rest[dot+1:]] {
+				return nil, nil, fmt.Errorf("%w: unexpected filter property %q", ErrDriverDiscovery, key)
+			}
 			fset[rest[:dot]] = true
 		case strings.HasPrefix(key, "diff."):
-			// diff.<setting> (two segments) is a legitimate non-driver key;
-			// only .command/.textconv/.cachetextconv/.binary name a driver.
+			// diff.<setting> (two segments) is a legitimate non-driver key; a
+			// three-segment diff.<name>.<prop> must be an expected driver
+			// property, else the config is refused.
 			rest := key[len("diff."):]
 			if dot := strings.LastIndexByte(rest, '.'); dot > 0 {
-				switch rest[dot+1:] {
-				case "command", "textconv", "cachetextconv", "binary":
-					dset[rest[:dot]] = true
+				if !diffDriverProps[rest[dot+1:]] {
+					return nil, nil, fmt.Errorf("%w: unexpected diff driver property %q", ErrDriverDiscovery, key)
 				}
+				dset[rest[:dot]] = true
 			}
 		default:
 			return nil, nil, fmt.Errorf("%w: unexpected key %q", ErrDriverDiscovery, key)
@@ -826,6 +876,11 @@ func ParseUnifiedDiff(data []byte) (UnifiedDiff, error) {
 			newLines, err4 := parseHunkNum(m[4], 1)
 			if err := cmp.Or(err1, err2, err3, err4); err != nil {
 				return UnifiedDiff{}, fmt.Errorf("%w: hunk header %q: %v", ErrMalformedUnifiedDiff, line, err)
+			}
+			// A start of 0 is only valid for an empty side (count 0); a nonzero
+			// count must begin at line 1 or later.
+			if (oldLines > 0 && oldStart < 1) || (newLines > 0 && newStart < 1) {
+				return UnifiedDiff{}, fmt.Errorf("%w: hunk header %q has a nonzero count starting at line 0", ErrMalformedUnifiedDiff, line)
 			}
 			hunk := DiffHunk{OldStart: oldStart, OldLines: oldLines, NewStart: newStart, NewLines: newLines}
 			ud.Hunks = append(ud.Hunks, hunk)
