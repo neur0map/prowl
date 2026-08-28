@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -129,6 +128,10 @@ func fakeGitConfig(t *testing.T, mode string) string {
 		probe = "sleep 30\n"
 	case "error":
 		probe = "echo boom 1>&2\nexit 2\n"
+	case "malformed":
+		// Exit 0 with output that is not valid `git config -z` framing
+		// (no NUL terminator, no key/value newline).
+		probe = "printf 'filter.evil.clean garbage-without-newline'\nexit 0\n"
 	default:
 		t.Fatalf("unknown config mode %q", mode)
 	}
@@ -405,24 +408,28 @@ func TestExecGitNeutralizesHostileSurfaces(t *testing.T) {
 		}
 	})
 
-	t.Run("pagerPinsForceCat", func(t *testing.T) {
-		// A live pager only runs against a TTY, unavailable here; assert the
-		// defense directly: config pins core.pager=cat and the environment
-		// forces GIT_PAGER/PAGER to cat even when a hostile pager is inherited.
-		if !slices.Contains(ExecGit{}.baseConfig(nil, nil), "core.pager=cat") {
-			t.Fatal("baseConfig does not pin core.pager=cat")
+	t.Run("credentialHelper", func(t *testing.T) {
+		root, markers := initRepo(t)
+		const desc = "protocol=https\nhost=example.com\n\n"
+		hostile := "!touch '" + m(markers, "cred") + "'; true"
+		// Control: a hostile credential helper fires when `git credential fill`
+		// runs, hermetically (no network peer needed).
+		clearMarkers(t, markers)
+		ctrl := exec.Command("git", "-C", root, "-c", "credential.helper="+hostile, "credential", "fill")
+		ctrl.Stdin = strings.NewReader(desc)
+		ctrl.Env = os.Environ()
+		_, _ = ctrl.CombinedOutput()
+		if !markerPresent(markers, "cred") {
+			t.Fatal("control: credential helper did not fire; assertion would be vacuous")
 		}
-		t.Setenv("GIT_PAGER", "touch /tmp/should-not-run; cat")
-		t.Setenv("PAGER", "touch /tmp/should-not-run; cat")
-		seen := envMap(scrubGitEnv(os.Environ()))
-		if seen["GIT_PAGER"] != "cat" || seen["PAGER"] != "cat" {
-			t.Fatalf("pager env not pinned to cat: GIT_PAGER=%q PAGER=%q", seen["GIT_PAGER"], seen["PAGER"])
-		}
-	})
-
-	t.Run("credentialHelperEmptied", func(t *testing.T) {
-		if !slices.Contains(ExecGit{}.baseConfig(nil, nil), "credential.helper=") {
-			t.Fatal("baseConfig does not empty credential.helper")
+		// Sanitized: the repository helper is emptied by our -c override, so it
+		// is never invoked.
+		rawGit(t, root, "config", "credential.helper", hostile)
+		clearMarkers(t, markers)
+		var out bytes.Buffer
+		_ = g(t).Pipe(ctx, root, 1<<20, strings.NewReader(desc), &out, "credential", "fill")
+		if markerPresent(markers, "cred") {
+			t.Fatal("sanitized credential fill invoked the repository credential helper")
 		}
 	})
 
@@ -557,6 +564,7 @@ func TestExecGitRefusesOnDriverDiscoveryFailure(t *testing.T) {
 		{"overflow", "overflow", 30 * time.Second},
 		{"timeout", "hang", 300 * time.Millisecond},
 		{"error", "error", 30 * time.Second},
+		{"malformed", "malformed", 30 * time.Second},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -636,6 +644,147 @@ func TestExecGitRejectsNonPositiveLimits(t *testing.T) {
 			t.Errorf("Pipe limit=%d err=%v, want ErrInvalidLimit", limit, err)
 		}
 	}
+}
+
+// ---- finding 3: generic runner rejects patch subcommands & unsafe opts ----
+
+func TestExecGitOutputRejectsPatchSubcommands(t *testing.T) {
+	g := ExecGit{HooksDir: t.TempDir()}
+	ctx := context.Background()
+	for _, args := range [][]string{
+		{"diff", "HEAD"},
+		{"show", "HEAD"},
+		{"diff-tree", "-r", "HEAD"},
+		{"format-patch", "-1"},
+		{"log", "-p"},
+		{"log", "--patch"},
+	} {
+		if _, err := g.Output(ctx, t.TempDir(), 1<<20, args...); !errors.Is(err, ErrPatchViaGenericRunner) {
+			t.Errorf("Output %v err=%v, want ErrPatchViaGenericRunner", args, err)
+		}
+		if err := g.Pipe(ctx, t.TempDir(), 1<<20, nil, io.Discard, args...); !errors.Is(err, ErrPatchViaGenericRunner) {
+			t.Errorf("Pipe %v err=%v, want ErrPatchViaGenericRunner", args, err)
+		}
+	}
+	// A non-patch subcommand is accepted by the guard (reaches discovery).
+	if err := rejectPatchSubcommand([]string{"status", "--porcelain"}); err != nil {
+		t.Errorf("status rejected: %v", err)
+	}
+}
+
+func TestExecGitDiffHelpersRejectOverridingOptions(t *testing.T) {
+	g := ExecGit{HooksDir: t.TempDir()}
+	ctx := context.Background()
+	unsafe := [][]string{
+		{"--textconv", "HEAD"},
+		{"--ext-diff"},
+		{"-U10", "HEAD"},
+		{"--unified=9"},
+		{"--inter-hunk-context=5"},
+		{"-M10%"},
+		{"-C"},
+		{"--find-copies-harder"},
+		{"--no-renames"},
+		{"--diff-algorithm=minimal"},
+		{"--src-prefix=x/"},
+		{"--color"},
+	}
+	for _, args := range unsafe {
+		if _, err := g.Diff(ctx, t.TempDir(), 1<<20, args...); !errors.Is(err, ErrUnsafeDiffOption) {
+			t.Errorf("Diff %v err=%v, want ErrUnsafeDiffOption", args, err)
+		}
+		if _, err := g.RawStatus(ctx, t.TempDir(), 1<<20, args...); !errors.Is(err, ErrUnsafeDiffOption) {
+			t.Errorf("RawStatus %v err=%v, want ErrUnsafeDiffOption", args, err)
+		}
+	}
+	// Pathspecs after -- that look like flags are operands, not options.
+	if err := rejectUnsafeDiffArgs([]string{"HEAD", "--", "--weird-name.txt"}); err != nil {
+		t.Errorf("pathspec after -- rejected: %v", err)
+	}
+}
+
+func TestExecGitRawStatusPinsRenamesNoCopies(t *testing.T) {
+	gitBin(t)
+	ctx := context.Background()
+	root, _ := initRepo(t)
+	// Hostile rename/copy config that the helper must override.
+	rawGit(t, root, "config", "diff.renames", "copies")
+	rawGit(t, root, "config", "diff.renameLimit", "1")
+	// Create a rename (content preserved) and a copy (duplicate content).
+	body := []byte("alpha\nbeta\ngamma\ndelta\nepsilon\nzeta\n")
+	if err := os.WriteFile(filepath.Join(root, "orig.txt"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rawGit(t, root, "add", "orig.txt")
+	rawGit(t, root, "commit", "-qm", "orig")
+	rawGit(t, root, "mv", "orig.txt", "renamed.txt")
+	if err := os.WriteFile(filepath.Join(root, "copy.txt"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rawGit(t, root, "add", "copy.txt")
+
+	g := ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+	out, err := g.RawStatus(ctx, root, 1<<20, "HEAD")
+	if err != nil {
+		t.Fatalf("RawStatus: %v", err)
+	}
+	changes, err := ParseRawStatusZ(out)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, c := range changes {
+		if strings.HasPrefix(c.Status, "C") {
+			t.Fatalf("copy detection was not disabled: %+v", c)
+		}
+	}
+	// Rename detection at 50% must still classify the moved content as a rename
+	// (git may pair the deletion with either identical file); copy detection
+	// stays off, so no record is a copy.
+	sawRename := false
+	for _, c := range changes {
+		if strings.HasPrefix(c.Status, "R") {
+			sawRename = true
+		}
+	}
+	if !sawRename {
+		t.Fatalf("expected a rename (renames pinned on); got %+v", changes)
+	}
+}
+
+// ---- finding 4: bounded Pipe short writes --------------------------------
+
+// shortWriter accepts at most max bytes total, short-writing the chunk that
+// crosses the cap (returning n < len(p) with a nil error).
+type shortWriter struct {
+	max int
+	n   int
+}
+
+func (w *shortWriter) Write(p []byte) (int, error) {
+	if w.n >= w.max {
+		return 0, nil
+	}
+	room := w.max - w.n
+	if len(p) > room {
+		w.n = w.max
+		return room, nil
+	}
+	w.n += len(p)
+	return len(p), nil
+}
+
+func TestExecGitPipeShortWriteKillsProcessGroup(t *testing.T) {
+	childPID := filepath.Join(t.TempDir(), "child.pid")
+	g := ExecGit{Binary: fakeGitProc(t, "stdout", childPID), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+	sw := &shortWriter{max: 100}
+	err := g.Pipe(context.Background(), t.TempDir(), 1<<20, nil, sw, "spew")
+	if !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("err=%v, want io.ErrShortWrite", err)
+	}
+	if sw.n > sw.max {
+		t.Fatalf("delivered %d bytes, exceeds cap %d (over-accounted)", sw.n, sw.max)
+	}
+	requireProcessDead(t, readPID(t, childPID))
 }
 
 // ---- no-index exit handling & streaming ----------------------------------

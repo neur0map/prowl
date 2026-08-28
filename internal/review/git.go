@@ -2,6 +2,7 @@ package review
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -31,6 +32,13 @@ var (
 	ErrGitStderrOverflow = errors.New("review: git stderr exceeded its byte limit")
 	// ErrInvalidLimit reports a non-positive output limit.
 	ErrInvalidLimit = errors.New("review: output byte limit must be positive")
+	// ErrPatchViaGenericRunner reports that a patch-producing subcommand was
+	// passed to the generic Output/Pipe runners instead of a dedicated,
+	// pinned diff helper.
+	ErrPatchViaGenericRunner = errors.New("review: patch-producing subcommand requires a dedicated diff helper")
+	// ErrUnsafeDiffOption reports that a caller supplied a diff option that would
+	// override a pinned canonical/safety control.
+	ErrUnsafeDiffOption = errors.New("review: caller diff option overrides a pinned control")
 	// ErrDriverDiscovery reports that filter/diff-driver enumeration failed, so
 	// the runner refuses the main command rather than run with an unknown or
 	// partial set of hostile drivers.
@@ -93,13 +101,15 @@ func (g ExecGit) maxStderr() int64 {
 	return defaultMaxStderrBytes
 }
 
-// Output runs git and returns stdout, failing with ErrInvalidLimit for a
-// non-positive limit, ErrGitOutputOverflow past the limit, ErrDriverDiscovery if
-// hostile-driver enumeration fails, and an error carrying stderr on non-zero
-// exit.
+// Output runs git and returns stdout. It rejects patch-producing subcommands
+// (which must use a dedicated diff helper), a non-positive limit, and surfaces
+// ErrGitOutputOverflow, ErrDriverDiscovery, or a stderr-bearing exit error.
 func (g ExecGit) Output(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
 	if limit <= 0 {
 		return nil, ErrInvalidLimit
+	}
+	if err := rejectPatchSubcommand(args); err != nil {
+		return nil, err
 	}
 	config, err := g.safeConfig(ctx, root)
 	if err != nil {
@@ -122,6 +132,9 @@ func (g ExecGit) Pipe(ctx context.Context, root string, limit int64, stdin io.Re
 	if limit <= 0 {
 		return ErrInvalidLimit
 	}
+	if err := rejectPatchSubcommand(args); err != nil {
+		return err
+	}
 	config, err := g.safeConfig(ctx, root)
 	if err != nil {
 		return err
@@ -137,17 +150,27 @@ func (g ExecGit) Pipe(ctx context.Context, root string, limit int64, stdin io.Re
 	return nil
 }
 
-// RawStatus captures NUL-delimited raw diff status with textconv and external
-// diff neutralized centrally; callers need not supply safety flags.
+// RawStatus captures NUL-delimited raw diff status with rename detection pinned
+// to 50% (no copies, unlimited rename limit) and textconv/external diff
+// neutralized centrally; callers supply only revisions and pathspecs.
 func (g ExecGit) RawStatus(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
-	return g.diffCapture(ctx, root, limit, false, append([]string{"diff", "--raw", "-z", "--no-textconv", "--no-ext-diff"}, args...)...)
+	if err := rejectUnsafeDiffArgs(args); err != nil {
+		return nil, err
+	}
+	fixed := []string{"diff", "--raw", "-z", "--no-textconv", "--no-ext-diff", "--find-renames=50%", "--no-color"}
+	return g.diffCapture(ctx, root, limit, false, append(fixed, args...)...)
 }
 
-// Diff captures a canonical worktree/tree patch. All diff-driver, textconv, and
-// output-affecting controls are injected here, so callers pass only the
-// revisions and pathspecs.
+// Diff captures a canonical worktree/tree patch. All diff-driver, textconv,
+// rename/copy, prefix, context, and algorithm controls are injected here, so
+// callers pass only revisions and pathspecs; options that would override a
+// pinned control are rejected.
 func (g ExecGit) Diff(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
-	return g.diffCapture(ctx, root, limit, false, append([]string{"diff", "--no-color", "--no-ext-diff", "--no-textconv"}, args...)...)
+	if err := rejectUnsafeDiffArgs(args); err != nil {
+		return nil, err
+	}
+	fixed := []string{"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames=50%", "--unified=3", "--src-prefix=a/", "--dst-prefix=b/"}
+	return g.diffCapture(ctx, root, limit, false, append(fixed, args...)...)
 }
 
 // DiffNoIndex is the dedicated forced-text diff helper for two out-of-tree
@@ -218,6 +241,7 @@ func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io
 	stdout.setOnOverflow(kill)
 
 	if err := cmd.Start(); err != nil {
+		pc.release() // free resources prepared before a failed Start
 		return 0, nil, err
 	}
 	if err := pc.started(cmd); err != nil {
@@ -254,12 +278,14 @@ func (g ExecGit) run(ctx context.Context, root string, config []string, stdin io
 		var exitErr *exec.ExitError
 		if errors.As(waitErr, &exitErr) {
 			exitCode = exitErr.ExitCode()
-		} else if !canceled.Load() && !stderr.overflowed() && !stdout.overflowed() {
+		} else if !canceled.Load() && !stderr.overflowed() && !stdout.overflowed() && stdout.failure() == nil {
 			return 0, stderr.bytes(), waitErr
 		}
 	}
 
 	switch {
+	case stdout.failure() != nil:
+		return exitCode, stderr.bytes(), stdout.failure()
 	case stdout.overflowed():
 		return exitCode, stderr.bytes(), ErrGitOutputOverflow
 	case stderr.overflowed():
@@ -276,6 +302,69 @@ func firstArg(args []string) string {
 		return "git"
 	}
 	return args[0]
+}
+
+// patchSubcommands produce diffs/patches and must go through a dedicated,
+// pinned diff helper rather than the generic Output/Pipe runners.
+var patchSubcommands = map[string]bool{
+	"diff": true, "diff-tree": true, "diff-index": true, "diff-files": true,
+	"show": true, "format-patch": true, "range-diff": true, "whatchanged": true,
+}
+
+// rejectPatchSubcommand refuses a patch-producing subcommand on the generic
+// runners, including `log` invoked with a patch flag.
+func rejectPatchSubcommand(args []string) error {
+	sub := firstArg(args)
+	if patchSubcommands[sub] {
+		return fmt.Errorf("%w: %q", ErrPatchViaGenericRunner, sub)
+	}
+	if sub == "log" {
+		for _, a := range args[1:] {
+			if a == "--" {
+				break
+			}
+			if a == "-p" || a == "-u" || a == "--patch" || a == "--full-diff" ||
+				strings.HasPrefix(a, "-U") || strings.HasPrefix(a, "--unified") {
+				return fmt.Errorf("%w: log %s", ErrPatchViaGenericRunner, a)
+			}
+		}
+	}
+	return nil
+}
+
+// reservedDiffOptions are diff options whose values the dedicated helpers pin;
+// a caller may not override them. Matched as exact flags or `--flag=...`/`-X...`
+// prefixes on the tokens before any `--` separator.
+var reservedDiffOptions = []string{
+	"--textconv", "--no-textconv", "--ext-diff", "--no-ext-diff",
+	"--color", "--no-color", "--color-moved", "--color-words", "--word-diff",
+	"--src-prefix", "--dst-prefix", "--no-prefix", "--default-prefix", "--line-prefix",
+	"--inter-hunk-context", "--unified", "-U",
+	"--diff-algorithm", "--histogram", "--patience", "--minimal", "--anchored",
+	"--indent-heuristic", "--no-indent-heuristic",
+	"--find-renames", "-M", "--no-renames", "--rename-empty", "--no-rename-empty",
+	"--find-copies", "--find-copies-harder", "-C", "--break-rewrites", "-B",
+	"--ws-error-highlight", "--raw", "--numstat", "--stat", "--patch-with-raw",
+}
+
+// rejectUnsafeDiffArgs refuses caller options that would override a pinned
+// canonical/safety control. Operands after `--` (pathspecs) are not options.
+func rejectUnsafeDiffArgs(args []string) error {
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		for _, r := range reservedDiffOptions {
+			if a == r || (strings.HasPrefix(r, "--") && strings.HasPrefix(a, r+"=")) ||
+				(!strings.HasPrefix(r, "--") && strings.HasPrefix(a, r)) {
+				return fmt.Errorf("%w: %s", ErrUnsafeDiffOption, a)
+			}
+		}
+	}
+	return nil
 }
 
 // ---- environment and configuration sanitization --------------------------
@@ -371,6 +460,7 @@ func (g ExecGit) baseConfig(filters, diffs []string) []string {
 			"-c", "diff."+name+".command=",
 			"-c", "diff."+name+".textconv=",
 			"-c", "diff."+name+".cachetextconv=false",
+			"-c", "diff."+name+".binary=false",
 		)
 	}
 	return cfg
@@ -385,6 +475,7 @@ func diffPinConfig() []string {
 		"-c", "diff.interHunkContext=0",
 		"-c", "diff.context=3",
 		"-c", "diff.renameLimit=0",
+		"-c", "diff.renames=true",
 		"-c", "diff.noprefix=false",
 		"-c", "diff.mnemonicPrefix=false",
 		"-c", "diff.colorMoved=no",
@@ -406,8 +497,7 @@ func (g ExecGit) enumerateDrivers(ctx context.Context, root string) (filters, di
 	}
 	switch code {
 	case 0:
-		filters, diffs = parseDriverNames(stdout.bytes())
-		return filters, diffs, nil
+		return parseDriverNames(stdout.bytes())
 	case 1:
 		if len(bytes.TrimSpace(stdout.bytes())) != 0 {
 			return nil, nil, fmt.Errorf("%w: exit 1 with unexpected output", ErrDriverDiscovery)
@@ -418,35 +508,52 @@ func (g ExecGit) enumerateDrivers(ctx context.Context, root string) (filters, di
 	}
 }
 
-func parseDriverNames(out []byte) (filters, diffs []string) {
+// parseDriverNames extracts filter and diff-driver names from `git config -z
+// --get-regexp` output, validating NUL/newline framing and key shape. Any
+// unexpected key, missing key/value separator, incomplete filter key, or bad
+// NUL framing is an error so a malformed but exit-0 discovery is refused.
+func parseDriverNames(out []byte) (filters, diffs []string, err error) {
 	fset := map[string]bool{}
 	dset := map[string]bool{}
-	for _, entry := range bytes.Split(out, []byte{0}) {
+	if len(out) == 0 {
+		return nil, nil, nil
+	}
+	if out[len(out)-1] != 0 {
+		return nil, nil, fmt.Errorf("%w: output not NUL-terminated", ErrDriverDiscovery)
+	}
+	records := bytes.Split(out[:len(out)-1], []byte{0})
+	for _, entry := range records {
 		if len(entry) == 0 {
-			continue
+			return nil, nil, fmt.Errorf("%w: empty config record", ErrDriverDiscovery)
 		}
-		key := entry
-		if nl := bytes.IndexByte(entry, '\n'); nl >= 0 {
-			key = entry[:nl]
+		nl := bytes.IndexByte(entry, '\n')
+		if nl < 0 {
+			return nil, nil, fmt.Errorf("%w: record %q missing key/value separator", ErrDriverDiscovery, entry)
 		}
-		s := string(key)
+		key := string(entry[:nl])
 		switch {
-		case strings.HasPrefix(s, "filter."):
-			rest := s[len("filter."):]
-			if dot := strings.LastIndexByte(rest, '.'); dot > 0 {
-				fset[rest[:dot]] = true
+		case strings.HasPrefix(key, "filter."):
+			rest := key[len("filter."):]
+			dot := strings.LastIndexByte(rest, '.')
+			if dot <= 0 {
+				return nil, nil, fmt.Errorf("%w: incomplete filter key %q", ErrDriverDiscovery, key)
 			}
-		case strings.HasPrefix(s, "diff."):
-			rest := s[len("diff."):]
+			fset[rest[:dot]] = true
+		case strings.HasPrefix(key, "diff."):
+			// diff.<setting> (two segments) is a legitimate non-driver key;
+			// only .command/.textconv/.cachetextconv/.binary name a driver.
+			rest := key[len("diff."):]
 			if dot := strings.LastIndexByte(rest, '.'); dot > 0 {
 				switch rest[dot+1:] {
 				case "command", "textconv", "cachetextconv", "binary":
 					dset[rest[:dot]] = true
 				}
 			}
+		default:
+			return nil, nil, fmt.Errorf("%w: unexpected key %q", ErrDriverDiscovery, key)
 		}
 	}
-	return sortedKeys(fset), sortedKeys(dset)
+	return sortedKeys(fset), sortedKeys(dset), nil
 }
 
 func sortedKeys(set map[string]bool) []string {
@@ -469,6 +576,9 @@ type overflowSink interface {
 	io.Writer
 	overflowed() bool
 	setOnOverflow(func())
+	// failure reports a terminal write error (short write or destination error)
+	// that should fail the whole command.
+	failure() error
 }
 
 // boundedBuffer captures up to limit bytes, firing onOverflow once when a write
@@ -524,6 +634,8 @@ func (b *boundedBuffer) bytes() []byte {
 	return b.buf.Bytes()
 }
 
+func (b *boundedBuffer) failure() error { return nil }
+
 // boundedWriter streams to an underlying writer up to limit bytes, firing
 // onOverflow once when exceeded and then discarding so the source never blocks.
 type boundedWriter struct {
@@ -532,6 +644,7 @@ type boundedWriter struct {
 	mu         sync.Mutex
 	n          int64
 	over       bool
+	failErr    error
 	onOverflow func()
 }
 
@@ -543,11 +656,11 @@ func (b *boundedWriter) setOnOverflow(f func()) {
 
 func (b *boundedWriter) Write(p []byte) (int, error) {
 	b.mu.Lock()
-	if b.over {
+	if b.over || b.failErr != nil {
 		b.mu.Unlock()
 		return len(p), nil
 	}
-	fire := false
+	overflow := false
 	write := p
 	if b.limit > 0 && b.n+int64(len(p)) > b.limit {
 		room := b.limit - b.n
@@ -555,21 +668,43 @@ func (b *boundedWriter) Write(p []byte) (int, error) {
 			room = 0
 		}
 		write = p[:room]
-		b.over = true
-		fire = true
+		overflow = true
 	}
-	b.n += int64(len(write))
 	cb := b.onOverflow
 	b.mu.Unlock()
 
+	delivered := 0
+	var werr error
 	if len(write) > 0 {
-		if _, err := b.dest.Write(write); err != nil {
-			return len(p), err
+		dn, err := b.dest.Write(write)
+		delivered = dn
+		switch {
+		case err != nil:
+			werr = err
+		case dn < len(write):
+			werr = io.ErrShortWrite
 		}
 	}
-	if fire && cb != nil {
-		cb()
+
+	b.mu.Lock()
+	b.n += int64(delivered) // account only delivered bytes
+	if overflow {
+		b.over = true
 	}
+	if werr != nil && b.failErr == nil {
+		b.failErr = werr
+	}
+	b.mu.Unlock()
+
+	if (overflow || werr != nil) && cb != nil {
+		cb() // kill the process tree on overflow or a destination failure
+	}
+	if werr != nil {
+		// Honor io.Writer's contract: n < len(p) implies a non-nil error.
+		return delivered, werr
+	}
+	// On overflow the excess is intentionally discarded; report full
+	// consumption so io.Copy does not treat it as a short write.
 	return len(p), nil
 }
 
@@ -577,6 +712,12 @@ func (b *boundedWriter) overflowed() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.over
+}
+
+func (b *boundedWriter) failure() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.failErr
 }
 
 // ---- parsers --------------------------------------------------------------
@@ -679,12 +820,14 @@ func ParseUnifiedDiff(data []byte) (UnifiedDiff, error) {
 			if m == nil {
 				return UnifiedDiff{}, fmt.Errorf("%w: bad hunk header %q", ErrMalformedUnifiedDiff, line)
 			}
-			hunk := DiffHunk{
-				OldStart: atoiOr(m[1], 0),
-				OldLines: atoiOr(m[2], 1),
-				NewStart: atoiOr(m[3], 0),
-				NewLines: atoiOr(m[4], 1),
+			oldStart, err1 := parseHunkNum(m[1], 0)
+			oldLines, err2 := parseHunkNum(m[2], 1)
+			newStart, err3 := parseHunkNum(m[3], 0)
+			newLines, err4 := parseHunkNum(m[4], 1)
+			if err := cmp.Or(err1, err2, err3, err4); err != nil {
+				return UnifiedDiff{}, fmt.Errorf("%w: hunk header %q: %v", ErrMalformedUnifiedDiff, line, err)
 			}
+			hunk := DiffHunk{OldStart: oldStart, OldLines: oldLines, NewStart: newStart, NewLines: newLines}
 			ud.Hunks = append(ud.Hunks, hunk)
 			oldRemaining, newRemaining = hunk.OldLines, hunk.NewLines
 			inHunk = true
@@ -815,12 +958,19 @@ func ParseCatFileBatch(data []byte) ([]CatFileObject, error) {
 	return objs, nil
 }
 
-func atoiOr(s string, def int) int {
+// parseHunkNum parses a unified-diff hunk-range number. An omitted optional
+// count (empty string) uses def; a present value must be a valid non-negative
+// int, so an overflowing or otherwise invalid explicit number is an error.
+func parseHunkNum(s string, def int) (int, error) {
 	if s == "" {
-		return def
+		return def, nil
 	}
-	if n, err := strconv.Atoi(s); err == nil {
-		return n
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, err
 	}
-	return def
+	if n < 0 {
+		return 0, fmt.Errorf("negative count %d", n)
+	}
+	return n, nil
 }

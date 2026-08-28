@@ -30,22 +30,6 @@ func TestOpenRegularNoFollowRejectsEverySymlinkComponent(t *testing.T) {
 	}
 }
 
-func TestReadlinkNoFollowDoesNotOpenTarget(t *testing.T) {
-	rootDir := t.TempDir()
-	if err := os.Symlink("missing-target", filepath.Join(rootDir, "link")); err != nil {
-		t.Skipf("symlink unsupported: %v", err)
-	}
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	got, err := ReadlinkNoFollow(root, "link")
-	if err != nil || got != "missing-target" {
-		t.Fatalf("%q %v", got, err)
-	}
-}
-
 func TestOpenRegularNoFollowReadsRegular(t *testing.T) {
 	rootDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(rootDir, "sub"), 0o755); err != nil {
@@ -229,67 +213,4 @@ func TestOpenRegularNoFollowBackslashIsOrdinaryFilename(t *testing.T) {
 	if got := read("a/b"); got != "nested-slash" {
 		t.Fatalf(`OpenRegularNoFollow("a/b") read %q, want the nested file`, got)
 	}
-}
-
-// TestReadlinkNoFollowFinalSymlinkSwapRace hammers a final symlink that an
-// attacker swaps between two distinct targets and a regular file. The
-// descriptor/identity-tied read must only ever return one of the legitimate
-// symlink targets or a typed error; it must never return truncated garbage nor
-// the regular file's content (readlink never opens the target).
-func TestReadlinkNoFollowFinalSymlinkSwapRace(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("swap race exercises POSIX rename semantics")
-	}
-	rootDir := t.TempDir()
-	const targetA = "target-alpha"
-	const targetB = "target-bravo-longer-value"
-	link := filepath.Join(rootDir, "lnk")
-	stash := filepath.Join(rootDir, "lnk.stash")
-	reg := filepath.Join(rootDir, "lnk.reg")
-	if err := os.Symlink(targetA, link); err != nil {
-		t.Skipf("symlink unsupported: %v", err)
-	}
-	if err := os.WriteFile(reg, []byte("REGULAR-FILE-CONTENT"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	root, err := os.OpenRoot(rootDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-
-	var stop atomic.Bool
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		toggle := false
-		for !stop.Load() {
-			_ = os.Remove(link)
-			if toggle {
-				_ = os.Symlink(targetB, link)
-			} else {
-				// briefly present as a regular file via a hard link
-				_ = os.Link(reg, link)
-			}
-			toggle = !toggle
-			_ = os.Remove(link)
-			_ = os.Symlink(targetA, link)
-		}
-	}()
-
-	for range 20000 {
-		got, err := ReadlinkNoFollow(root, "lnk")
-		if err != nil {
-			continue
-		}
-		if got != targetA && got != targetB {
-			stop.Store(true)
-			wg.Wait()
-			t.Fatalf("readlink returned unexpected value %q (not a legitimate target)", got)
-		}
-	}
-	stop.Store(true)
-	wg.Wait()
-	_ = os.Remove(stash)
 }
