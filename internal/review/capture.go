@@ -20,9 +20,15 @@ import (
 
 // captureGitOutputLimit bounds every capture Git subprocess whose stdout is not
 // otherwise budget-checked: raw status, untracked enumeration, cat-file batch,
-// and each forced-text no-index diff. It is a hard ceiling; a runaway or hostile
-// stream is killed rather than buffered without bound.
+// ls-tree/ls-files gitlink resolution, and each forced-text no-index diff. It is
+// a hard ceiling; a runaway or hostile stream is killed rather than buffered.
 const captureGitOutputLimit = 256 << 20
+
+// captureTrackedReadCeiling bounds an individual tracked or object-backed
+// workspace read for memory safety. It is deliberately not the untracked
+// exact-accounting cap: tracked binary/mode content above 64 MiB must not fail
+// under the untracked limits, only under this generous ceiling.
+const captureTrackedReadCeiling int64 = 256 << 20
 
 // Git canonical file modes as octal uint32 values.
 const (
@@ -37,25 +43,32 @@ var (
 	// raw bytes are not valid UTF-8. v1 requires valid UTF-8 paths; the error
 	// carries the offending bytes as an ASCII-quoted literal.
 	ErrInvalidPathEncoding = errors.New("review: changed path is not valid UTF-8")
-	// ErrCaptureFileTooLarge reports a workspace file above the exact per-file
+	// ErrCaptureFileTooLarge reports an untracked file above the exact per-file
 	// accounting bound. Capture fails rather than estimate or truncate churn.
-	ErrCaptureFileTooLarge = errors.New("review: workspace file exceeds the exact-accounting byte bound")
-	// ErrCaptureTotalTooLarge reports that workspace content read for exact
+	ErrCaptureFileTooLarge = errors.New("review: untracked file exceeds the exact-accounting byte bound")
+	// ErrCaptureTotalTooLarge reports that untracked content read for exact
 	// accounting exceeded the per-plan total bound.
-	ErrCaptureTotalTooLarge = errors.New("review: workspace content exceeds the total exact-accounting byte bound")
+	ErrCaptureTotalTooLarge = errors.New("review: untracked content exceeds the total exact-accounting byte bound")
 	// ErrCanonicalPatchOverflow reports that canonical raw hunk payload exceeded
 	// its byte cap. Capture fails rather than downgrade to an estimate.
 	ErrCanonicalPatchOverflow = errors.New("review: canonical raw hunk payload exceeds its byte cap")
 	// ErrTooManyChangedPaths reports that the changed-path count exceeded its cap.
 	ErrTooManyChangedPaths = errors.New("review: changed path count exceeds its cap")
 	// ErrUnsupportedCaptureScope reports a capture request for a scope kind this
-	// phase does not materialize. Committed range/commit materialization is a
-	// later phase; CaptureOnce handles the current workspace.
-	ErrUnsupportedCaptureScope = errors.New("review: capture supports only workspace scope in this phase")
+	// implementation does not support.
+	ErrUnsupportedCaptureScope = errors.New("review: unsupported capture scope kind")
 	// ErrConcurrentModification reports that a workspace entry changed type or
 	// vanished between enumeration and its rooted read. A replacement is never
 	// followed; the capture fails so a later transaction can retry.
 	ErrConcurrentModification = errors.New("review: workspace entry changed during capture")
+	// ErrHeadMoved reports that the live workspace HEAD no longer equals the
+	// resolved scope base. Workspace capture is pinned to the resolved base OID
+	// so two passes cannot silently diff against different bases.
+	ErrHeadMoved = errors.New("review: workspace HEAD moved from the resolved scope base")
+	// ErrGitlinkUnresolved reports that a submodule (gitlink) object id could not
+	// be resolved to a full identity, so capture fails closed rather than emit an
+	// absent or truncated gitlink side.
+	ErrGitlinkUnresolved = errors.New("review: gitlink object id could not be resolved")
 )
 
 // CaptureRunner is the sanitized Git surface CaptureOnce needs: the object
@@ -68,12 +81,14 @@ type CaptureRunner interface {
 	DiffNoIndex(ctx context.Context, root string, limit int64, base, head string) ([]byte, error)
 }
 
-// Capturer performs one deterministic raw change capture of a workspace scope.
-// Root is the pinned workspace directory; every workspace-side read is opened
-// relative to a descriptor for it with no-follow semantics. Runner is the
-// sanitized Git surface. AfterFingerprint, when set, is invoked once after every
-// rooted descriptor has been read and every fingerprint computed, so a test can
-// force a concurrent type/content change and prove the capture is immutable.
+// Capturer performs one deterministic raw change capture of a resolved scope.
+// For a workspace scope, Root is the pinned workspace directory and every
+// workspace-side read is opened relative to a descriptor for it with no-follow
+// semantics; commit/range scopes read only from Git objects and never touch the
+// worktree. Runner is the sanitized Git surface. AfterFingerprint, when set, is
+// invoked once after every rooted descriptor has been read and every fingerprint
+// computed, so a test can force a concurrent type/content change and prove the
+// capture is immutable.
 //
 // The Max* bounds default to their v1 constants when zero; production capture
 // uses the defaults, and tests may lower them to exercise the fail-closed
@@ -117,76 +132,56 @@ func (c *Capturer) maxChangedPaths() int {
 	return MaxChangedPathsV1
 }
 
-// CaptureOnce performs a single immutable workspace capture: it enumerates
-// tracked changes and non-ignored untracked paths, classifies every existing
-// side with ThresholdTextV1, diffs text paths through attribute-free forced-text
-// no-index diffs, and counts exact raw additions/deletions. It computes canonical
-// path/content fingerprints, workspace blob OIDs without writing objects, and the
-// WorkspaceTreeV1 head identity, then finalizes the scope digest. It never
-// computes reviewable_churn; hunk reviewability sizing is a later phase.
-//
-// The complete two-capture/two-refresh retry transaction belongs to the plan
-// service; CaptureOnce is one capture of that transaction.
+// CaptureOnce performs a single immutable capture of the resolved scope. It
+// classifies every existing side with ThresholdTextV1, diffs text paths through
+// attribute-free forced-text no-index diffs, counts exact raw additions and
+// deletions, and produces canonical path/hunk records, content/OID digests, and
+// the finalized scope digest. It never computes reviewable_churn; hunk
+// reviewability sizing is a later phase. The complete two-capture/two-refresh
+// retry transaction belongs to the plan service; CaptureOnce is one capture.
 func (c *Capturer) CaptureOnce(ctx context.Context, scope Scope) (Capture, error) {
-	if scope.Kind != ScopeWorkspace {
-		return Capture{}, fmt.Errorf("%w: %q", ErrUnsupportedCaptureScope, scope.Kind)
-	}
 	width, ok := oidWidthFor(scope.ObjectFormat)
 	if !ok {
 		return Capture{}, fmt.Errorf("%w: %q", ErrUnsupportedObjectFormat, scope.ObjectFormat)
 	}
-	root, err := os.OpenRoot(c.Root)
-	if err != nil {
-		return Capture{}, fmt.Errorf("review: open workspace root: %w", err)
+	st := &captureState{c: c, ctx: ctx, scope: scope, width: width, blobs: map[string]catBlob{}}
+	switch scope.Kind {
+	case ScopeWorkspace:
+		return st.captureWorkspace()
+	case ScopeCommit, ScopeRange:
+		return st.captureCommitted()
+	default:
+		return Capture{}, fmt.Errorf("%w: %q", ErrUnsupportedCaptureScope, scope.Kind)
 	}
-	defer root.Close()
-
-	st := &captureState{c: c, ctx: ctx, scope: scope, width: width, root: root}
-	if err := st.enumerate(); err != nil {
-		return Capture{}, err
-	}
-	if err := st.readOldSides(); err != nil {
-		return Capture{}, err
-	}
-	// Every rooted workspace descriptor is read here; nothing below re-reads the
-	// filesystem, so a change made after this point cannot leak into the result.
-	if err := st.buildRecords(); err != nil {
-		return Capture{}, err
-	}
-	result, err := st.finalize()
-	if err != nil {
-		return Capture{}, err
-	}
-	if c.AfterFingerprint != nil {
-		c.AfterFingerprint()
-	}
-	return result, nil
 }
 
 // captureState carries the per-capture accounting so the phase helpers stay
 // small and share the byte budgets and computed sides.
 type captureState struct {
-	c     *Capturer
-	ctx   context.Context
-	scope Scope
-	width int
-	root  *os.Root
+	c         *Capturer
+	ctx       context.Context
+	scope     Scope
+	width     int
+	root      *os.Root // workspace only
+	committed bool
+	baseHex   string
+	headHex   string
 
 	tracked   []RawChange
 	untracked []string
-	oldBlobs  map[string]catBlob
+	blobs     map[string]catBlob
 
 	records     []RawPathRecord
 	treeRecords []WorkspaceTreeRecord
 	rawAdd      int
 	rawDel      int
 
-	totalRead      int64
+	untrackedRead  int64
 	canonicalBytes int64
 }
 
-// catBlob is one resolved old-side blob: the full object id git echoed for a
-// possibly abbreviated request, plus its exact bytes.
+// catBlob is one resolved blob: the full object id git echoed for a possibly
+// abbreviated request, plus its exact bytes.
 type catBlob struct {
 	fullOID string
 	bytes   []byte
@@ -196,7 +191,7 @@ type catBlob struct {
 type sideData struct {
 	present bool
 	special bool // FIFO/socket/device/other: unreviewable, never opened
-	gitlink bool // submodule: no worktree bytes are read
+	gitlink bool // submodule: no blob bytes, identity is a resolved commit id
 	kind    string
 	mode    uint32
 	bytes   []byte
@@ -204,7 +199,7 @@ type sideData struct {
 }
 
 func (d sideData) identity() SideIdentity {
-	if !d.present || d.special || d.gitlink || d.oidHex == "" {
+	if !d.present || d.special || d.oidHex == "" {
 		return AbsentSide()
 	}
 	raw, err := hex.DecodeString(d.oidHex)
@@ -221,13 +216,244 @@ func (d sideData) blobSide() BlobSide {
 	return BlobSide{Present: true, Bytes: d.bytes}
 }
 
-// enumerate collects tracked changes and untracked paths, validating UTF-8 path
-// encoding and the changed-path cap before any content is read.
-func (s *captureState) enumerate() error {
-	rawOut, err := s.c.Runner.RawStatus(s.ctx, s.c.Root, captureGitOutputLimit, "HEAD")
+// ---- workspace capture ----------------------------------------------------
+
+// captureWorkspace captures the current worktree against the resolved base OID
+// (not the movable HEAD), pinning the base so two passes cannot silently switch
+// it, then enumerates tracked and untracked changes, reads new sides through
+// rooted no-follow descriptors, and derives the workspace head fingerprint.
+func (s *captureState) captureWorkspace() (Capture, error) {
+	root, err := os.OpenRoot(s.c.Root)
 	if err != nil {
-		return err
+		return Capture{}, fmt.Errorf("review: open workspace root: %w", err)
 	}
+	defer root.Close()
+	s.root = root
+	s.baseHex = hex.EncodeToString(s.scope.Base.Value)
+
+	head, err := s.revParseHead()
+	if err != nil {
+		return Capture{}, err
+	}
+	if !strings.EqualFold(head, s.baseHex) {
+		return Capture{}, fmt.Errorf("%w: HEAD %s != base %s", ErrHeadMoved, head, s.baseHex)
+	}
+
+	rawOut, err := s.c.Runner.RawStatus(s.ctx, s.c.Root, captureGitOutputLimit, s.baseHex)
+	if err != nil {
+		return Capture{}, err
+	}
+	if err := s.parseTracked(rawOut); err != nil {
+		return Capture{}, err
+	}
+
+	untrackedOut, err := s.c.Runner.Output(s.ctx, s.c.Root, captureGitOutputLimit,
+		"ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return Capture{}, err
+	}
+	paths, err := splitUntrackedZ(untrackedOut)
+	if err != nil {
+		return Capture{}, err
+	}
+	s.untracked = paths
+
+	if total := len(s.tracked) + len(s.untracked); total > s.c.maxChangedPaths() {
+		return Capture{}, fmt.Errorf("%w: %d paths", ErrTooManyChangedPaths, total)
+	}
+
+	if err := s.resolveBlobs(s.workspaceBlobOIDs()); err != nil {
+		return Capture{}, err
+	}
+
+	for _, ch := range s.tracked {
+		rec, tree, err := s.workspaceTrackedRecord(ch)
+		if err != nil {
+			return Capture{}, err
+		}
+		s.records = append(s.records, rec)
+		if tree != nil {
+			s.treeRecords = append(s.treeRecords, *tree)
+		}
+	}
+	for _, p := range s.untracked {
+		rec, tree, err := s.untrackedRecord(p)
+		if err != nil {
+			return Capture{}, err
+		}
+		s.records = append(s.records, rec)
+		if tree != nil {
+			s.treeRecords = append(s.treeRecords, *tree)
+		}
+	}
+
+	// Every rooted descriptor has been read; the fingerprint below is derived
+	// only from in-memory bytes, so a post-read change cannot leak in.
+	return s.finish(WorkspaceHeadIdentity(s.treeRecords))
+}
+
+// revParseHead returns the current HEAD object id, used to pin the workspace
+// capture to the resolved scope base.
+func (s *captureState) revParseHead() (string, error) {
+	out, err := s.c.Runner.Output(s.ctx, s.c.Root, captureGitOutputLimit, "rev-parse", "--verify", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// workspaceBlobOIDs are the base blob object ids the workspace capture must
+// resolve: one per non-addition change whose base is a regular file or symlink.
+func (s *captureState) workspaceBlobOIDs() []string {
+	var oids []string
+	for _, ch := range s.tracked {
+		if !isAdd(ch.Status) && isBlobMode(ch.OldMode) {
+			oids = append(oids, ch.OldOID)
+		}
+	}
+	return oids
+}
+
+// workspaceTrackedRecord builds one canonical record for a tracked change:
+// the base side from a resolved blob or the base tree (gitlink), and the new
+// side read from the workspace through rooted no-follow descriptors.
+func (s *captureState) workspaceTrackedRecord(ch RawChange) (RawPathRecord, *WorkspaceTreeRecord, error) {
+	oldPath, newPath := changePaths(ch)
+
+	old, err := s.workspaceOldSide(ch, oldPath)
+	if err != nil {
+		return RawPathRecord{}, nil, err
+	}
+	var new sideData
+	if newPath != "" {
+		new, err = s.workspaceNewSide(ch, newPath)
+		if err != nil {
+			return RawPathRecord{}, nil, err
+		}
+	}
+	return s.assemble("tracked", ch.Status, oldPath, newPath, old, new)
+}
+
+// workspaceOldSide builds the base side of a tracked change from a resolved blob
+// or the base tree for a gitlink.
+func (s *captureState) workspaceOldSide(ch RawChange, oldPath string) (sideData, error) {
+	if ch.OldMode == "000000" || ch.OldMode == "" {
+		return sideData{}, nil
+	}
+	if ch.OldMode == "160000" {
+		return s.gitlinkTreeSide(s.baseHex, oldPath)
+	}
+	if isBlobMode(ch.OldMode) {
+		return s.blobSide(ch.OldOID, ch.OldMode)
+	}
+	return sideData{}, nil
+}
+
+// workspaceNewSide builds the new side of a tracked change: a gitlink resolved
+// from the index, or a rooted no-follow read of the workspace entry.
+func (s *captureState) workspaceNewSide(ch RawChange, newPath string) (sideData, error) {
+	if ch.NewMode == "160000" {
+		return s.gitlinkIndexSide(newPath)
+	}
+	return s.readNewSide(newPath, false)
+}
+
+// untrackedRecord builds one canonical all-addition record for an untracked
+// path read from the workspace with the untracked accounting bounds applied.
+func (s *captureState) untrackedRecord(path string) (RawPathRecord, *WorkspaceTreeRecord, error) {
+	new, err := s.readNewSide(path, true)
+	if err != nil {
+		return RawPathRecord{}, nil, err
+	}
+	return s.assemble("untracked", "A", "", path, sideData{}, new)
+}
+
+// ---- committed (commit/range) capture -------------------------------------
+
+// captureCommitted captures the change between the resolved base and head trees
+// directly from Git objects, with no worktree involvement. Both sides are read
+// from Git blobs (regular/symlink) or resolved from the trees (gitlinks); the
+// scope head is already an object id, so no workspace fingerprint is derived.
+func (s *captureState) captureCommitted() (Capture, error) {
+	s.committed = true
+	s.baseHex = hex.EncodeToString(s.scope.Base.Value)
+	s.headHex = hex.EncodeToString(s.scope.Head.Value)
+
+	rawOut, err := s.c.Runner.RawStatus(s.ctx, s.c.Root, captureGitOutputLimit, s.baseHex, s.headHex)
+	if err != nil {
+		return Capture{}, err
+	}
+	if err := s.parseTracked(rawOut); err != nil {
+		return Capture{}, err
+	}
+	if len(s.tracked) > s.c.maxChangedPaths() {
+		return Capture{}, fmt.Errorf("%w: %d paths", ErrTooManyChangedPaths, len(s.tracked))
+	}
+	if err := s.resolveBlobs(s.committedBlobOIDs()); err != nil {
+		return Capture{}, err
+	}
+	for _, ch := range s.tracked {
+		rec, err := s.committedRecord(ch)
+		if err != nil {
+			return Capture{}, err
+		}
+		s.records = append(s.records, rec)
+	}
+	return s.finish(s.scope.Head)
+}
+
+// committedBlobOIDs are the base and head blob object ids the committed capture
+// must resolve: base blobs of non-additions and head blobs of non-deletions.
+func (s *captureState) committedBlobOIDs() []string {
+	var oids []string
+	for _, ch := range s.tracked {
+		if !isAdd(ch.Status) && isBlobMode(ch.OldMode) {
+			oids = append(oids, ch.OldOID)
+		}
+		if !isDelete(ch.Status) && isBlobMode(ch.NewMode) {
+			oids = append(oids, ch.NewOID)
+		}
+	}
+	return oids
+}
+
+// committedRecord builds one canonical record for a committed change, reading
+// both sides from Git objects (blobs) or resolving gitlinks from the trees.
+func (s *captureState) committedRecord(ch RawChange) (RawPathRecord, error) {
+	oldPath, newPath := changePaths(ch)
+
+	old, err := s.committedSide(ch.OldMode, ch.OldOID, s.baseHex, oldPath)
+	if err != nil {
+		return RawPathRecord{}, err
+	}
+	new, err := s.committedSide(ch.NewMode, ch.NewOID, s.headHex, newPath)
+	if err != nil {
+		return RawPathRecord{}, err
+	}
+	rec, _, err := s.assemble("tracked", ch.Status, oldPath, newPath, old, new)
+	return rec, err
+}
+
+// committedSide builds one object-backed side: absent when the mode is zero, a
+// gitlink resolved from its tree, or a blob from the resolved batch.
+func (s *captureState) committedSide(mode, oid, rev, path string) (sideData, error) {
+	if mode == "000000" || mode == "" {
+		return sideData{}, nil
+	}
+	if mode == "160000" {
+		return s.gitlinkTreeSide(rev, path)
+	}
+	if isBlobMode(mode) {
+		return s.blobSide(oid, mode)
+	}
+	return sideData{}, nil
+}
+
+// ---- shared helpers -------------------------------------------------------
+
+// parseTracked parses NUL-delimited raw status and rejects any changed path
+// whose raw bytes are not valid UTF-8 before it becomes a Go string.
+func (s *captureState) parseTracked(rawOut []byte) error {
 	changes, err := ParseRawStatusZ(rawOut)
 	if err != nil {
 		return err
@@ -241,59 +467,20 @@ func (s *captureState) enumerate() error {
 		}
 	}
 	s.tracked = changes
-
-	untrackedOut, err := s.c.Runner.Output(s.ctx, s.c.Root, captureGitOutputLimit,
-		"ls-files", "--others", "--exclude-standard", "-z")
-	if err != nil {
-		return err
-	}
-	paths, err := splitUntrackedZ(untrackedOut)
-	if err != nil {
-		return err
-	}
-	s.untracked = paths
-
-	if total := len(s.tracked) + len(s.untracked); total > s.c.maxChangedPaths() {
-		return fmt.Errorf("%w: %d paths", ErrTooManyChangedPaths, total)
-	}
 	return nil
 }
 
-// splitUntrackedZ splits git's NUL-delimited untracked enumeration, rejecting a
-// missing terminator, an empty record, and any path whose raw bytes are not
-// valid UTF-8 before converting it to a Go string.
-func splitUntrackedZ(data []byte) ([]string, error) {
-	if len(data) == 0 {
-		return nil, nil
-	}
-	if data[len(data)-1] != 0 {
-		return nil, fmt.Errorf("%w: untracked list not NUL-terminated", ErrMalformedRawStatus)
-	}
-	var paths []string
-	for _, seg := range bytes.Split(data[:len(data)-1], []byte{0}) {
-		if len(seg) == 0 {
-			return nil, fmt.Errorf("%w: empty untracked path", ErrMalformedRawStatus)
-		}
-		if !utf8.Valid(seg) {
-			return nil, fmt.Errorf("%w: %s", ErrInvalidPathEncoding, strconv.QuoteToASCII(string(seg)))
-		}
-		paths = append(paths, string(seg))
-	}
-	return paths, nil
-}
-
-// readOldSides resolves every tracked change's existing base blob in one
-// cat-file batch, keyed by the (possibly abbreviated) object id git reported.
-func (s *captureState) readOldSides() error {
-	s.oldBlobs = map[string]catBlob{}
+// resolveBlobs resolves a set of (possibly abbreviated) blob object ids in one
+// cat-file batch, keyed by the requested id and echoing the full id and bytes.
+func (s *captureState) resolveBlobs(oids []string) error {
 	var order []string
 	seen := map[string]bool{}
-	for _, ch := range s.tracked {
-		if !hasOldBlob(ch) || seen[ch.OldOID] {
+	for _, oid := range oids {
+		if oid == "" || seen[oid] {
 			continue
 		}
-		seen[ch.OldOID] = true
-		order = append(order, ch.OldOID)
+		seen[oid] = true
+		order = append(order, oid)
 	}
 	if len(order) == 0 {
 		return nil
@@ -317,105 +504,24 @@ func (s *captureState) readOldSides() error {
 	for i, oid := range order {
 		o := objs[i]
 		if o.Missing {
-			return fmt.Errorf("review: base blob %s missing from the local object store", oid)
+			return fmt.Errorf("review: object %s missing from the local object store", oid)
 		}
 		if o.Type != "blob" {
-			return fmt.Errorf("review: base object %s is a %s, not a blob", oid, o.Type)
+			return fmt.Errorf("review: object %s is a %s, not a blob", oid, o.Type)
 		}
-		s.oldBlobs[oid] = catBlob{fullOID: o.OID, bytes: o.Data}
+		s.blobs[oid] = catBlob{fullOID: o.OID, bytes: o.Data}
 	}
 	return nil
 }
 
-// hasOldBlob reports whether a change has an existing base blob whose bytes must
-// be read: any non-addition whose base mode is a regular file or symlink.
-func hasOldBlob(ch RawChange) bool {
-	if strings.HasPrefix(ch.Status, "A") {
-		return false
+// blobSide builds a regular/symlink side from an already-resolved blob.
+func (s *captureState) blobSide(oid, mode string) (sideData, error) {
+	blob, ok := s.blobs[oid]
+	if !ok {
+		return sideData{}, fmt.Errorf("review: blob %s was not resolved before use", oid)
 	}
-	switch ch.OldMode {
-	case "100644", "100755", "120000":
-		return true
-	}
-	return false
-}
-
-// buildRecords reads every new side through rooted no-follow descriptors and
-// assembles the canonical tracked and untracked path records in enumeration
-// order. Records are sorted canonically when the digest is computed.
-func (s *captureState) buildRecords() error {
-	for _, ch := range s.tracked {
-		rec, tree, err := s.trackedRecord(ch)
-		if err != nil {
-			return err
-		}
-		s.records = append(s.records, rec)
-		if tree != nil {
-			s.treeRecords = append(s.treeRecords, *tree)
-		}
-	}
-	for _, p := range s.untracked {
-		rec, tree, err := s.untrackedRecord(p)
-		if err != nil {
-			return err
-		}
-		s.records = append(s.records, rec)
-		if tree != nil {
-			s.treeRecords = append(s.treeRecords, *tree)
-		}
-	}
-	return nil
-}
-
-// trackedRecord builds one canonical record for a tracked change, deriving the
-// old/new paths from the status, reading the new side from the workspace, and
-// classifying and diffing text sides.
-func (s *captureState) trackedRecord(ch RawChange) (RawPathRecord, *WorkspaceTreeRecord, error) {
-	var oldPath, newPath string
-	switch {
-	case ch.Status == "A":
-		newPath = ch.Path
-	case ch.Status == "D":
-		oldPath = ch.Path
-	case strings.HasPrefix(ch.Status, "R"), strings.HasPrefix(ch.Status, "C"):
-		oldPath, newPath = ch.OldPath, ch.Path
-	default:
-		oldPath, newPath = ch.Path, ch.Path
-	}
-
-	old := s.oldSide(ch)
-	var new sideData
-	if newPath != "" {
-		ns, err := s.readNewSide(newPath, ch.NewMode)
-		if err != nil {
-			return RawPathRecord{}, nil, err
-		}
-		new = ns
-	}
-	return s.assemble("tracked", ch.Status, oldPath, newPath, old, new)
-}
-
-// untrackedRecord builds one canonical all-addition record for an untracked
-// path: an absent base and a new side read from the workspace.
-func (s *captureState) untrackedRecord(path string) (RawPathRecord, *WorkspaceTreeRecord, error) {
-	new, err := s.readNewSide(path, "")
-	if err != nil {
-		return RawPathRecord{}, nil, err
-	}
-	return s.assemble("untracked", "A", "", path, sideData{}, new)
-}
-
-// oldSide builds the base side from an already-resolved blob, or an absent side.
-func (s *captureState) oldSide(ch RawChange) sideData {
-	if ch.OldMode == "160000" {
-		return sideData{present: true, gitlink: true, kind: "gitlink", mode: modeGitlink}
-	}
-	if !hasOldBlob(ch) {
-		return sideData{}
-	}
-	blob := s.oldBlobs[ch.OldOID]
 	side := sideData{present: true, bytes: blob.bytes, oidHex: blob.fullOID}
-	switch ch.OldMode {
+	switch mode {
 	case "120000":
 		side.kind, side.mode = "symlink", modeSymlink
 	case "100755":
@@ -423,18 +529,56 @@ func (s *captureState) oldSide(ch RawChange) sideData {
 	default:
 		side.kind, side.mode = "regular", modeRegular
 	}
-	return side
+	return side, nil
+}
+
+// gitlinkTreeSide resolves a gitlink's full commit id from a tree so different
+// submodule commits at the same path yield distinct identities.
+func (s *captureState) gitlinkTreeSide(rev, path string) (sideData, error) {
+	if path == "" || rev == "" {
+		return sideData{}, fmt.Errorf("%w: missing tree/path for gitlink", ErrGitlinkUnresolved)
+	}
+	out, err := s.c.Runner.Output(s.ctx, s.c.Root, captureGitOutputLimit, "ls-tree", "-z", "--full-tree", rev, "--", path)
+	if err != nil {
+		return sideData{}, err
+	}
+	oid, err := parseLsTreeOID(out)
+	if err != nil {
+		return sideData{}, fmt.Errorf("%w: %q@%s: %v", ErrGitlinkUnresolved, path, rev, err)
+	}
+	return s.gitlinkSide(oid, path)
+}
+
+// gitlinkIndexSide resolves a workspace gitlink's full commit id from the index,
+// failing closed when the entry is absent or its id is zero/short.
+func (s *captureState) gitlinkIndexSide(path string) (sideData, error) {
+	out, err := s.c.Runner.Output(s.ctx, s.c.Root, captureGitOutputLimit, "ls-files", "-s", "-z", "--", path)
+	if err != nil {
+		return sideData{}, err
+	}
+	oid, err := parseLsFilesOID(out)
+	if err != nil {
+		return sideData{}, fmt.Errorf("%w: %q in index: %v", ErrGitlinkUnresolved, path, err)
+	}
+	return s.gitlinkSide(oid, path)
+}
+
+// gitlinkSide validates a resolved gitlink id to the object-format width and
+// builds an unreviewable gitlink side carrying that identity.
+func (s *captureState) gitlinkSide(oid, path string) (sideData, error) {
+	if !isFullOID(oid, s.width) {
+		return sideData{}, fmt.Errorf("%w: %q resolved to %q", ErrGitlinkUnresolved, path, oid)
+	}
+	return sideData{present: true, gitlink: true, kind: "gitlink", mode: modeGitlink, oidHex: oid}, nil
 }
 
 // readNewSide inspects a workspace path with a rooted no-follow Lstat and reads
 // only verified regular files (through OpenRegularNoFollow) and symlinks
-// (through ReadlinkNoFollow). Gitlinks and special entries are recorded without
-// being opened or followed. gitMode, when set from git's raw status, marks a
-// tracked gitlink so a submodule directory is never treated as a regular tree.
-func (s *captureState) readNewSide(path, gitMode string) (sideData, error) {
-	if gitMode == "160000" {
-		return sideData{present: true, gitlink: true, kind: "gitlink", mode: modeGitlink}, nil
-	}
+// (through ReadlinkNoFollow). FIFO/socket/device/other special entries are
+// recorded unreviewable without being opened or followed. The untracked flag
+// selects the exact-accounting bounds: untracked reads enforce the 64 MiB/512
+// MiB caps, tracked reads use only the memory-safety ceiling.
+func (s *captureState) readNewSide(path string, untracked bool) (sideData, error) {
 	info, err := s.root.Lstat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -450,12 +594,14 @@ func (s *captureState) readNewSide(path, gitMode string) (sideData, error) {
 			return sideData{}, err
 		}
 		b := []byte(target)
-		if err := s.account(path, int64(len(b))); err != nil {
-			return sideData{}, err
+		if untracked {
+			if err := s.accountUntracked(path, int64(len(b))); err != nil {
+				return sideData{}, err
+			}
 		}
 		return sideData{present: true, kind: "symlink", mode: modeSymlink, bytes: b, oidHex: s.blobOID(b)}, nil
 	case mode.IsRegular():
-		return s.readRegular(path)
+		return s.readRegular(path, untracked)
 	default:
 		// FIFO, socket, device, directory, or other special entry: unreviewable
 		// and never opened or followed.
@@ -463,10 +609,12 @@ func (s *captureState) readNewSide(path, gitMode string) (sideData, error) {
 	}
 }
 
-// readRegular reads a verified regular file through a no-follow descriptor,
-// enforcing the exact per-file and per-plan byte bounds before and after the
-// read so capture fails closed rather than estimating or truncating.
-func (s *captureState) readRegular(path string) (sideData, error) {
+// readRegular reads a verified regular file through a no-follow descriptor. An
+// untracked read enforces the exact per-file and per-plan accounting caps; a
+// tracked read is bounded only by the memory-safety ceiling so large tracked
+// content never fails under the untracked limits. Either way capture fails
+// closed rather than estimating or truncating.
+func (s *captureState) readRegular(path string, untracked bool) (sideData, error) {
 	f, err := boundedio.OpenRegularNoFollow(s.root, path)
 	if err != nil {
 		if errors.Is(err, boundedio.ErrNonRegular) || errors.Is(err, boundedio.ErrSymlink) {
@@ -480,21 +628,32 @@ func (s *captureState) readRegular(path string) (sideData, error) {
 		return sideData{}, err
 	}
 	size := info.Size()
-	if size > s.c.maxFileBytes() {
-		return sideData{}, fmt.Errorf("%w: %q is %d bytes", ErrCaptureFileTooLarge, path, size)
+
+	bound := captureTrackedReadCeiling
+	if untracked {
+		bound = s.c.maxFileBytes()
+		if size > bound {
+			return sideData{}, fmt.Errorf("%w: %q is %d bytes", ErrCaptureFileTooLarge, path, size)
+		}
+		if s.untrackedRead+size > s.c.maxTotalBytes() {
+			return sideData{}, fmt.Errorf("%w: %q would bring the total to %d bytes", ErrCaptureTotalTooLarge, path, s.untrackedRead+size)
+		}
 	}
-	if s.totalRead+size > s.c.maxTotalBytes() {
-		return sideData{}, fmt.Errorf("%w: %q would bring the total to %d bytes", ErrCaptureTotalTooLarge, path, s.totalRead+size)
-	}
-	b, err := boundedio.ReadAllContext(s.ctx, f, s.c.maxFileBytes())
+
+	b, err := boundedio.ReadAllContext(s.ctx, f, bound)
 	if err != nil {
 		if errors.Is(err, boundedio.ErrTooLarge) {
-			return sideData{}, fmt.Errorf("%w: %q grew past its bound during capture", ErrCaptureFileTooLarge, path)
+			if untracked {
+				return sideData{}, fmt.Errorf("%w: %q grew past its bound during capture", ErrCaptureFileTooLarge, path)
+			}
+			return sideData{}, fmt.Errorf("review: tracked workspace file %q exceeds the %d-byte read ceiling: %w", path, bound, err)
 		}
 		return sideData{}, err
 	}
-	if err := s.account(path, int64(len(b))); err != nil {
-		return sideData{}, err
+	if untracked {
+		if err := s.accountUntracked(path, int64(len(b))); err != nil {
+			return sideData{}, err
+		}
 	}
 	mode := modeRegular
 	if info.Mode()&0o111 != 0 {
@@ -503,18 +662,19 @@ func (s *captureState) readRegular(path string) (sideData, error) {
 	return sideData{present: true, kind: "regular", mode: mode, bytes: b, oidHex: s.blobOID(b)}, nil
 }
 
-// account adds n workspace bytes to the running total and fails when the exact
-// per-plan accounting bound is exceeded.
-func (s *captureState) account(path string, n int64) error {
-	s.totalRead += n
-	if s.totalRead > s.c.maxTotalBytes() {
-		return fmt.Errorf("%w: %q brought the total to %d bytes", ErrCaptureTotalTooLarge, path, s.totalRead)
+// accountUntracked adds n untracked bytes to the running total and fails when
+// the exact per-plan accounting bound is exceeded.
+func (s *captureState) accountUntracked(path string, n int64) error {
+	s.untrackedRead += n
+	if s.untrackedRead > s.c.maxTotalBytes() {
+		return fmt.Errorf("%w: %q brought the total to %d bytes", ErrCaptureTotalTooLarge, path, s.untrackedRead)
 	}
 	return nil
 }
 
-// assemble classifies a path from its two sides, diffs text paths, and produces
-// the canonical record plus the workspace-tree record for its final state.
+// assemble classifies a path from its two sides using each side's own path,
+// diffs text paths, and produces the canonical record plus the workspace-tree
+// record for its final state.
 func (s *captureState) assemble(kind, status, oldPath, newPath string, old, new sideData) (RawPathRecord, *WorkspaceTreeRecord, error) {
 	rec := RawPathRecord{
 		Kind:    kind,
@@ -526,19 +686,12 @@ func (s *captureState) assemble(kind, status, oldPath, newPath string, old, new 
 		OldSide: old.identity(),
 		NewSide: new.identity(),
 	}
-	unreviewable := old.special || new.special || old.gitlink || new.gitlink
-	if unreviewable {
+	if old.special || new.special || old.gitlink || new.gitlink {
 		rec.TextClass = string(TextClassBinary)
 		return rec, treeRecordFor(newPath, new), nil
 	}
 
-	// A deletion classifies by its base path, so a removed recognized source is
-	// still text even when its bytes carry NUL.
-	classPath := newPath
-	if classPath == "" {
-		classPath = oldPath
-	}
-	class := ThresholdText(classPath, old.blobSide(), new.blobSide())
+	class := ThresholdText(oldPath, newPath, old.blobSide(), new.blobSide())
 	rec.TextClass = string(class)
 	if old.present {
 		d := Digest(sha256.Sum256(old.bytes))
@@ -627,17 +780,20 @@ func (s *captureState) diffSides(old, new sideData) ([]RawHunk, int, int, error)
 	return hunks, add, del, nil
 }
 
-// finalize computes the canonical patch digest, the workspace head identity from
-// the sorted final-state tree records, and the finalized scope digest, then
-// returns the immutable capture. reviewable_churn is left zero for a later phase.
-func (s *captureState) finalize() (Capture, error) {
+// finish computes the canonical patch digest and the finalized scope digest for
+// the given head identity, then returns the immutable capture. The
+// AfterFingerprint seam fires once, after all reads and fingerprints, so a race
+// injected there cannot alter this result. reviewable_churn is left zero.
+func (s *captureState) finish(head SideIdentity) (Capture, error) {
 	canonicalDigest := CanonicalPatchDigest(s.records)
-	head := WorkspaceHeadIdentity(s.treeRecords)
 	scope := s.scope
 	scope.Head = head
-	scope.Digest = ScopeDigest(scope.ObjectFormat, scope.Base, head, ScopeWorkspace, canonicalDigest)
+	scope.Digest = ScopeDigest(scope.ObjectFormat, scope.Base, head, scope.Kind, canonicalDigest)
 	if err := scope.Validate(); err != nil {
 		return Capture{}, err
+	}
+	if s.c.AfterFingerprint != nil {
+		s.c.AfterFingerprint()
 	}
 	return Capture{
 		Scope:           scope,
@@ -666,4 +822,115 @@ func (s *captureState) blobOID(content []byte) string {
 	h.Write([]byte(header))
 	h.Write(content)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// ---- small pure helpers ---------------------------------------------------
+
+// changePaths derives the old and new paths of a change from its status and
+// modes: renames/copies carry both, an addition has no old path, a deletion no
+// new path, and every other change shares one path on both sides.
+func changePaths(ch RawChange) (oldPath, newPath string) {
+	if strings.HasPrefix(ch.Status, "R") || strings.HasPrefix(ch.Status, "C") {
+		return ch.OldPath, ch.Path
+	}
+	oldPath, newPath = ch.Path, ch.Path
+	if ch.OldMode == "000000" || ch.OldMode == "" {
+		oldPath = ""
+	}
+	if ch.NewMode == "000000" || ch.NewMode == "" {
+		newPath = ""
+	}
+	return oldPath, newPath
+}
+
+func isAdd(status string) bool    { return strings.HasPrefix(status, "A") }
+func isDelete(status string) bool { return strings.HasPrefix(status, "D") }
+
+// isBlobMode reports whether a git mode names a regular file or symlink blob.
+func isBlobMode(mode string) bool {
+	switch mode {
+	case "100644", "100755", "120000":
+		return true
+	}
+	return false
+}
+
+// isFullOID reports whether oid is a full, non-zero object id of the format's
+// hex width.
+func isFullOID(oid string, width int) bool {
+	if len(oid) != width*2 {
+		return false
+	}
+	zero := true
+	for _, c := range oid {
+		isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+		if !isHex {
+			return false
+		}
+		if c != '0' {
+			zero = false
+		}
+	}
+	return !zero
+}
+
+// splitUntrackedZ splits git's NUL-delimited untracked enumeration, rejecting a
+// missing terminator, an empty record, and any path whose raw bytes are not
+// valid UTF-8 before converting it to a Go string.
+func splitUntrackedZ(data []byte) ([]string, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	if data[len(data)-1] != 0 {
+		return nil, fmt.Errorf("%w: untracked list not NUL-terminated", ErrMalformedRawStatus)
+	}
+	var paths []string
+	for _, seg := range bytes.Split(data[:len(data)-1], []byte{0}) {
+		if len(seg) == 0 {
+			return nil, fmt.Errorf("%w: empty untracked path", ErrMalformedRawStatus)
+		}
+		if !utf8.Valid(seg) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidPathEncoding, strconv.QuoteToASCII(string(seg)))
+		}
+		paths = append(paths, string(seg))
+	}
+	return paths, nil
+}
+
+// parseLsTreeOID extracts the object id from `git ls-tree -z` output for a
+// single entry: "<mode> <type> <oid>\t<path>\0".
+func parseLsTreeOID(out []byte) (string, error) {
+	for _, rec := range bytes.Split(out, []byte{0}) {
+		if len(rec) == 0 {
+			continue
+		}
+		tab := bytes.IndexByte(rec, '\t')
+		if tab < 0 {
+			continue
+		}
+		fields := strings.Fields(string(rec[:tab]))
+		if len(fields) >= 3 {
+			return fields[2], nil
+		}
+	}
+	return "", errors.New("no tree entry")
+}
+
+// parseLsFilesOID extracts the object id from `git ls-files -s -z` output for a
+// single entry: "<mode> <oid> <stage>\t<path>\0".
+func parseLsFilesOID(out []byte) (string, error) {
+	for _, rec := range bytes.Split(out, []byte{0}) {
+		if len(rec) == 0 {
+			continue
+		}
+		tab := bytes.IndexByte(rec, '\t')
+		if tab < 0 {
+			continue
+		}
+		fields := strings.Fields(string(rec[:tab]))
+		if len(fields) >= 2 {
+			return fields[1], nil
+		}
+	}
+	return "", errors.New("no index entry")
 }

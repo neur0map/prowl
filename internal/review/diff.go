@@ -40,14 +40,17 @@ type BlobSide struct {
 }
 
 // ThresholdText classifies a changed path under the ThresholdTextV1 rule,
-// independent of any repository diff attribute. A side is recognized text when
-// Prowl recognizes its path as an indexed text language/config format or its
-// first min(8000, size) bytes contain no NUL. A path is text when either side
-// is recognized text; otherwise it is binary, because every present side of a
-// non-text path necessarily carries a NUL in that prefix. An empty side has an
-// empty prefix and is therefore always recognized text.
-func ThresholdText(path string, old, new BlobSide) TextClass {
-	if recognizedTextSide(path, old) || recognizedTextSide(path, new) {
+// independent of any repository diff attribute. Each side is recognized text by
+// its own path: Prowl recognizes the path as an indexed text language/config
+// format, or the side's first min(8000, size) bytes contain no NUL. A path is
+// text when either side is recognized text; otherwise it is binary, because
+// every present side of a non-text path necessarily carries a NUL in that
+// prefix. An empty side has an empty prefix and is therefore always recognized
+// text. Passing per-side paths keeps a rename whose base path is a recognized
+// source classified as text even when the new path is unrecognized and both
+// byte prefixes contain NUL.
+func ThresholdText(oldPath, newPath string, old, new BlobSide) TextClass {
+	if recognizedTextSide(oldPath, old) || recognizedTextSide(newPath, new) {
 		return TextClassText
 	}
 	return TextClassBinary

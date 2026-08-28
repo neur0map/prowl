@@ -125,6 +125,68 @@ func captureWorkspaceWith(t *testing.T, f *gitFixture, c *Capturer) Capture {
 	return cap
 }
 
+// captureCommit resolves a single-commit scope and runs one capture.
+func captureCommit(t *testing.T, f *gitFixture, commit string) Capture {
+	t.Helper()
+	ctx := context.Background()
+	runner := execRunner(t)
+	scope, err := ResolveScope(ctx, runner, f.root, PlanRequest{Commit: commit})
+	if err != nil {
+		t.Fatalf("resolve commit scope: %v", err)
+	}
+	cap, err := (&Capturer{Root: f.root, Runner: runner}).CaptureOnce(ctx, scope)
+	if err != nil {
+		t.Fatalf("capture commit: %v", err)
+	}
+	return cap
+}
+
+// captureRange resolves a base..head range scope and runs one capture.
+func captureRange(t *testing.T, f *gitFixture, base, head string) Capture {
+	t.Helper()
+	ctx := context.Background()
+	runner := execRunner(t)
+	scope, err := ResolveScope(ctx, runner, f.root, PlanRequest{Base: base, Head: head})
+	if err != nil {
+		t.Fatalf("resolve range scope: %v", err)
+	}
+	cap, err := (&Capturer{Root: f.root, Runner: runner}).CaptureOnce(ctx, scope)
+	if err != nil {
+		t.Fatalf("capture range: %v", err)
+	}
+	return cap
+}
+
+// commitGitlink stages a gitlink (submodule) entry at path pointing to a raw
+// commit object id and commits it, without any real submodule directory.
+func (f *gitFixture) commitGitlink(t *testing.T, path, commitOID string) {
+	t.Helper()
+	rawGit(t, f.root, "update-index", "--add", "--cacheinfo", "160000,"+commitOID+","+path)
+	rawGit(t, f.root, "commit", "-qm", "gitlink "+path)
+}
+
+// initNestedGitlink creates a real nested repository at rel, commits body into
+// it, stages it as a gitlink in the super-repo, and returns the nested HEAD id.
+func (f *gitFixture) initNestedGitlink(t *testing.T, rel, body string) string {
+	t.Helper()
+	dir := filepath.Join(f.root, rel)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rawGit(t, dir, "init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rawGit(t, dir, "add", "-A")
+	rawGit(t, dir, "commit", "-qm", "nested")
+	out, err := rawGitEnv(dir, nil, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("nested rev-parse: %v\n%s", err, out)
+	}
+	rawGit(t, f.root, "add", rel)
+	return strings.TrimSpace(string(out))
+}
+
 // recordByNewPath returns the changed-path record whose new path is p.
 func recordByNewPath(t *testing.T, cap Capture, p string) RawPathRecord {
 	t.Helper()

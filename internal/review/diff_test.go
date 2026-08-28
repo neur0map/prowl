@@ -34,10 +34,27 @@ func TestThresholdTextClassifiesSides(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ThresholdText(tc.path, tc.old, tc.new); got != tc.want {
+			if got := ThresholdText(tc.path, tc.path, tc.old, tc.new); got != tc.want {
 				t.Fatalf("ThresholdText(%q)=%q, want %q", tc.path, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestThresholdTextClassifiesEachSideByItsPath proves a rename recognizes each
+// side by its own path: a recognized base path keeps the path text even when the
+// new path is unrecognized and both byte prefixes contain NUL, and vice versa.
+func TestThresholdTextClassifiesEachSideByItsPath(t *testing.T) {
+	nulOld := textSide("package p\n\x00\n")
+	nulNew := textSide("\x00\x00still-nul\n")
+	if got := ThresholdText("a.go", "b.unknown", nulOld, nulNew); got != TextClassText {
+		t.Fatalf("recognized base path must classify text, got %q", got)
+	}
+	if got := ThresholdText("a.unknown", "b.go", nulOld, nulNew); got != TextClassText {
+		t.Fatalf("recognized new path must classify text, got %q", got)
+	}
+	if got := ThresholdText("a.unknown", "b.unknown", nulOld, nulNew); got != TextClassBinary {
+		t.Fatalf("neither path recognized with NUL both sides must be binary, got %q", got)
 	}
 }
 

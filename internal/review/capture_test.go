@@ -4,12 +4,17 @@ package review
 
 import (
 	"bytes"
+	"context"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/prowl-agent/prowl-agent/internal/boundedio"
 )
 
 // TestCaptureThresholdIgnoresGitAttributes proves threshold churn is computed
@@ -51,9 +56,10 @@ func TestCaptureThreshold300IsNotStructured(t *testing.T) {
 // and mode accounting across every changed-path shape the spec distinguishes.
 func TestCaptureByteSemantics(t *testing.T) {
 	cases := []struct {
-		name   string
-		setup  func(t *testing.T, repo *gitFixture)
-		verify func(t *testing.T, cap Capture)
+		name                 string
+		setup                func(t *testing.T, repo *gitFixture)
+		verify               func(t *testing.T, cap Capture)
+		readsWorktreeSymlink bool
 	}{
 		{
 			name: "CRLF is one line",
@@ -209,6 +215,7 @@ func TestCaptureByteSemantics(t *testing.T) {
 					t.Fatalf("modes old=%o new=%o, want 100644->120000", rec.OldMode, rec.NewMode)
 				}
 			},
+			readsWorktreeSymlink: true,
 		},
 		{
 			name: "symlink to regular transition diffs raw blobs",
@@ -253,6 +260,15 @@ func TestCaptureByteSemantics(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := newGitFixture(t)
 			tc.setup(t, repo)
+			// Reading a worktree symlink needs a descriptor-tied no-follow
+			// readlink, which only Linux provides; elsewhere capture must fail
+			// closed with the deliberate unsupported ruling rather than succeed.
+			if tc.readsWorktreeSymlink && runtime.GOOS != "linux" {
+				if _, err := runCapture(t, repo, &Capturer{}); !errors.Is(err, boundedio.ErrUnsupported) {
+					t.Fatalf("err=%v, want boundedio.ErrUnsupported on %s", err, runtime.GOOS)
+				}
+				return
+			}
 			cap := captureWorkspace(t, repo)
 			tc.verify(t, cap)
 		})
@@ -478,4 +494,162 @@ func sameFingerprint(a, b Capture) bool {
 func fingerprint(c Capture) string {
 	return string(c.Scope.Head.Value) + "|" + string(c.CanonicalPatch[:]) + "|" +
 		string(rune(c.RawChurn)) + "|" + string(rune(c.ChangedPaths))
+}
+
+// TestCaptureCommitScope proves a single-commit scope captures its diff against
+// the first parent directly from Git objects with exact churn.
+func TestCaptureCommitScope(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "a.go", "package p\n")
+	repo.commitFile(t, "a.go", "package p\nvar X = 1\nvar Y = 2\n")
+
+	cap := captureCommit(t, repo, repo.revParse(t, "HEAD"))
+	if cap.Scope.Kind != ScopeCommit {
+		t.Fatalf("scope kind=%q, want commit", cap.Scope.Kind)
+	}
+	if cap.RawChurn != 2 {
+		t.Fatalf("raw churn=%d, want 2", cap.RawChurn)
+	}
+	rec := recordByNewPath(t, cap, "a.go")
+	assertRec(t, rec, "M", TextClassText, 2, 0)
+	if rec.OldSide.Kind != SideGitOID || rec.NewSide.Kind != SideGitOID {
+		t.Fatalf("committed sides must both be git_oid: %+v", rec)
+	}
+}
+
+// TestCaptureRangeScope proves a base..head range captures the merged diff of a
+// linear range from Git objects with exact churn across multiple paths.
+func TestCaptureRangeScope(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "base.go", "package p\n")
+	base := repo.revParse(t, "HEAD")
+	repo.commitFile(t, "base.go", "package p\nvar A = 1\n")
+	repo.commitFile(t, "extra.go", "package q\nvar B = 2\n")
+	head := repo.revParse(t, "HEAD")
+
+	cap := captureRange(t, repo, base, head)
+	if cap.Scope.Kind != ScopeRange {
+		t.Fatalf("scope kind=%q, want range", cap.Scope.Kind)
+	}
+	if cap.RawChurn != 3 || cap.ChangedPaths != 2 {
+		t.Fatalf("churn=%d paths=%d, want 3/2", cap.RawChurn, cap.ChangedPaths)
+	}
+	assertRec(t, recordByNewPath(t, cap, "base.go"), "M", TextClassText, 1, 0)
+	assertRec(t, recordByNewPath(t, cap, "extra.go"), "A", TextClassText, 2, 0)
+}
+
+// TestCaptureCommittedGitlinkPreservesOIDs proves committed capture resolves full
+// gitlink object ids into the side identities and that different submodule
+// commits at the same path yield different capture fingerprints.
+func TestCaptureCommittedGitlinkPreservesOIDs(t *testing.T) {
+	oid1 := strings.Repeat("a", 40)
+	oid2 := strings.Repeat("b", 40)
+	oid3 := strings.Repeat("c", 40)
+
+	capAB := gitlinkRangeCapture(t, oid1, oid2)
+	rec := recordByNewPath(t, capAB, "sub")
+	assertRec(t, rec, "M", TextClassBinary, 0, 0)
+	if rec.OldMode != modeGitlink || rec.NewMode != modeGitlink {
+		t.Fatalf("gitlink modes old=%o new=%o", rec.OldMode, rec.NewMode)
+	}
+	if hex.EncodeToString(rec.OldSide.Value) != oid1 || hex.EncodeToString(rec.NewSide.Value) != oid2 {
+		t.Fatalf("gitlink sides old=%x new=%x, want %s/%s", rec.OldSide.Value, rec.NewSide.Value, oid1, oid2)
+	}
+
+	capAC := gitlinkRangeCapture(t, oid1, oid3)
+	if capAB.CanonicalPatch == capAC.CanonicalPatch {
+		t.Fatalf("different submodule commits must change the capture fingerprint")
+	}
+}
+
+// gitlinkRangeCapture builds a fresh repo whose sub gitlink moves from -> to and
+// captures that one-commit range.
+func gitlinkRangeCapture(t *testing.T, from, to string) Capture {
+	t.Helper()
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	repo.commitGitlink(t, "sub", from)
+	g1 := repo.revParse(t, "HEAD")
+	repo.commitGitlink(t, "sub", to)
+	return captureRange(t, repo, g1, repo.revParse(t, "HEAD"))
+}
+
+// TestCaptureWorkspaceGitlinkResolvesFromIndex proves a workspace gitlink's full
+// identity is resolved from the index and that a different submodule commit
+// changes the workspace fingerprint.
+func TestCaptureWorkspaceGitlinkResolvesFromIndex(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	oid := repo.initNestedGitlink(t, "sub", "one\n")
+
+	cap := captureWorkspace(t, repo)
+	rec := recordByNewPath(t, cap, "sub")
+	assertRec(t, rec, "A", TextClassBinary, 0, 0)
+	if rec.NewSide.Kind != SideGitOID || hex.EncodeToString(rec.NewSide.Value) != oid {
+		t.Fatalf("new gitlink side=%x, want git_oid %s", rec.NewSide.Value, oid)
+	}
+
+	// Advance the submodule and re-stage: the workspace fingerprint must change.
+	sub := filepath.Join(repo.root, "sub")
+	repo.write(t, "sub/file", "two\n")
+	rawGit(t, sub, "commit", "-aqm", "advance")
+	rawGit(t, repo.root, "add", "sub")
+	moved := captureWorkspace(t, repo)
+	if sameFingerprint(cap, moved) {
+		t.Fatalf("advancing the submodule must change the workspace fingerprint")
+	}
+}
+
+// TestCaptureRejectsMovedHead proves workspace capture is pinned to the resolved
+// base OID: if HEAD advances after the scope is resolved, capture fails closed.
+func TestCaptureRejectsMovedHead(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "a.go", "package p\n")
+	ctx := context.Background()
+	runner := execRunner(t)
+	scope, err := ResolveScope(ctx, runner, repo.root, PlanRequest{})
+	if err != nil {
+		t.Fatalf("resolve scope: %v", err)
+	}
+	repo.commitFile(t, "b.go", "package q\n") // HEAD advances past the resolved base
+
+	_, err = (&Capturer{Root: repo.root, Runner: runner}).CaptureOnce(ctx, scope)
+	if !errors.Is(err, ErrHeadMoved) {
+		t.Fatalf("err=%v, want ErrHeadMoved", err)
+	}
+}
+
+// TestCaptureRenameClassifiesByBasePath proves a rename to an unrecognized path
+// stays text when its base path is a recognized source, even with NUL bytes.
+func TestCaptureRenameClassifiesByBasePath(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "a.go", "package p\nvar Z\x00 = 1\n")
+	rawGit(t, repo.root, "mv", "a.go", "b.unknown")
+
+	cap := captureWorkspace(t, repo)
+	rec := recordByNewPath(t, cap, "b.unknown")
+	if !strings.HasPrefix(rec.Status, "R") || rec.OldPath != "a.go" {
+		t.Fatalf("want rename from a.go, got status=%q old=%q", rec.Status, rec.OldPath)
+	}
+	if rec.TextClass != string(TextClassText) {
+		t.Fatalf("class=%q, want text via the recognized base path", rec.TextClass)
+	}
+}
+
+// TestCaptureTrackedFileExemptFromUntrackedCap proves the 64 MiB/512 MiB exact
+// accounting caps apply only to untracked content: a tracked file above a tiny
+// configured per-file cap is captured, while an untracked one fails.
+func TestCaptureTrackedFileExemptFromUntrackedCap(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "big.txt", "small\n")
+	repo.write(t, "big.txt", strings.Repeat("x", 200))
+
+	cap := captureWorkspaceWith(t, repo, &Capturer{MaxFileBytes: 16, MaxTotalBytes: 16})
+	rec := recordByNewPath(t, cap, "big.txt")
+	if rec.Kind != "tracked" {
+		t.Fatalf("kind=%q, want tracked", rec.Kind)
+	}
+	if rec.Additions != 1 || rec.Deletions != 1 {
+		t.Fatalf("tracked churn add=%d del=%d, want 1/1", rec.Additions, rec.Deletions)
+	}
 }
