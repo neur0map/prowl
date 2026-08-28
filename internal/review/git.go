@@ -324,40 +324,46 @@ var patchSubcommands = map[string]bool{
 // argument as their value, so the subcommand resolver must skip both.
 var globalOptsWithValue = map[string]bool{"-C": true, "-c": true}
 
-// resolveSubcommand returns the actual git subcommand, skipping any leading
-// global options (e.g. -c k=v, -C path, --paginate, --no-optional-locks) so a
-// caller cannot hide a patch-producing subcommand behind them.
-func resolveSubcommand(args []string) string {
+// resolveSubcommand returns the actual git subcommand and the arguments that
+// follow it, skipping any leading global options (e.g. -c k=v, -C path,
+// --paginate, --no-optional-locks) and a global `--` so a caller cannot hide a
+// patch-producing subcommand (or a patch flag on it) behind them. ok is false
+// when no subcommand is present.
+func resolveSubcommand(args []string) (sub string, rest []string, ok bool) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if a == "--" {
 			if i+1 < len(args) {
-				return args[i+1]
+				return args[i+1], args[i+2:], true
 			}
-			return ""
+			return "", nil, false
 		}
 		if !strings.HasPrefix(a, "-") {
-			return a // first non-option token is the subcommand
+			return a, args[i+1:], true // first non-option token is the subcommand
 		}
 		if globalOptsWithValue[a] {
 			i++ // also skip this option's separate value
 		}
 	}
-	return ""
+	return "", nil, false
 }
 
 // rejectPatchSubcommand refuses a patch-producing subcommand on the generic
-// runners, resolving the real subcommand past global options, including `log`
-// invoked with a patch flag.
+// runners, resolving the real subcommand past global options (including a global
+// `--`), and a `log` invoked with a patch flag. The patch-flag scan runs on the
+// arguments after the subcommand so a global `--` cannot terminate it early.
 func rejectPatchSubcommand(args []string) error {
-	sub := resolveSubcommand(args)
+	sub, rest, ok := resolveSubcommand(args)
+	if !ok {
+		return nil
+	}
 	if patchSubcommands[sub] {
 		return fmt.Errorf("%w: %q", ErrPatchViaGenericRunner, sub)
 	}
 	if sub == "log" {
-		for _, a := range args {
+		for _, a := range rest {
 			if a == "--" {
-				break
+				break // pathspec separator: operands follow, not options
 			}
 			if a == "-p" || a == "-u" || a == "--patch" || a == "--full-diff" ||
 				strings.HasPrefix(a, "-U") || strings.HasPrefix(a, "--unified") {
@@ -368,38 +374,20 @@ func rejectPatchSubcommand(args []string) error {
 	return nil
 }
 
-// reservedDiffOptions are diff options whose values the dedicated helpers pin;
-// a caller may not override them. Matched as exact flags or `--flag=...`/`-X...`
-// prefixes on the tokens before any `--` separator.
-var reservedDiffOptions = []string{
-	"--textconv", "--no-textconv", "--ext-diff", "--no-ext-diff",
-	"--color", "--no-color", "--color-moved", "--color-words", "--word-diff",
-	"--src-prefix", "--dst-prefix", "--no-prefix", "--default-prefix", "--line-prefix",
-	"--inter-hunk-context", "--unified", "-U",
-	"--diff-algorithm", "--histogram", "--patience", "--minimal", "--anchored",
-	"--indent-heuristic", "--no-indent-heuristic",
-	"--find-renames", "-M", "--no-renames", "--rename-empty", "--no-rename-empty",
-	"--find-copies", "--find-copies-harder", "-C", "--break-rewrites", "-B",
-	"--ws-error-highlight", "--raw", "--numstat", "--stat", "--patch-with-raw",
-	"-p", "-u", "--patch", "--binary", "--full-index", "--abbrev", "--relative",
-	"--output", "--output-indicator-new", "--output-indicator-old", "--output-indicator-context",
-}
-
-// rejectUnsafeDiffArgs refuses caller options that would override a pinned
-// canonical/safety control. Operands after `--` (pathspecs) are not options.
+// rejectUnsafeDiffArgs enforces that callers of the dedicated diff helpers pass
+// only safe operands: revisions and pathspecs. Every token before the `--`
+// separator must be a non-flag operand, so no caller option can override a
+// pinned output or canonicalization control (whitespace, word/name/stat/summary,
+// raw/patch/binary/full-index/abbrev/relative/output/context/algorithm/rename/
+// copy, or any future flag). Tokens after `--` are pathspecs and are never
+// interpreted as options by git.
 func rejectUnsafeDiffArgs(args []string) error {
 	for _, a := range args {
 		if a == "--" {
-			break
+			break // pathspec separator: everything after is an operand
 		}
-		if !strings.HasPrefix(a, "-") {
-			continue
-		}
-		for _, r := range reservedDiffOptions {
-			if a == r || (strings.HasPrefix(r, "--") && strings.HasPrefix(a, r+"=")) ||
-				(!strings.HasPrefix(r, "--") && strings.HasPrefix(a, r)) {
-				return fmt.Errorf("%w: %s", ErrUnsafeDiffOption, a)
-			}
+		if strings.HasPrefix(a, "-") {
+			return fmt.Errorf("%w: %s", ErrUnsafeDiffOption, a)
 		}
 	}
 	return nil
@@ -554,6 +542,22 @@ var (
 	diffDriverProps = map[string]bool{"command": true, "textconv": true, "cachetextconv": true, "binary": true}
 )
 
+// splitDriverKey splits a `<name>.<prop>` driver subkey on its final dot,
+// reporting ok only when both the driver name and the property segment are
+// non-empty. Any empty segment (e.g. `.clean`, `foo.`, `.`) is malformed so a
+// discovery that carries one is refused rather than silently accepted.
+func splitDriverKey(rest string) (name, prop string, ok bool) {
+	dot := strings.LastIndexByte(rest, '.')
+	if dot < 0 {
+		return "", "", false
+	}
+	name, prop = rest[:dot], rest[dot+1:]
+	if name == "" || prop == "" {
+		return "", "", false
+	}
+	return name, prop, true
+}
+
 // parseDriverNames extracts filter and diff-driver names from `git config -z
 // --get-regexp` output, validating NUL/newline framing and key shape. Any
 // unexpected key, missing key/value separator, incomplete filter key, or bad
@@ -579,26 +583,36 @@ func parseDriverNames(out []byte) (filters, diffs []string, err error) {
 		key := string(entry[:nl])
 		switch {
 		case strings.HasPrefix(key, "filter."):
-			rest := key[len("filter."):]
-			dot := strings.LastIndexByte(rest, '.')
-			if dot <= 0 {
-				return nil, nil, fmt.Errorf("%w: incomplete filter key %q", ErrDriverDiscovery, key)
+			// filter keys are always <name>.<prop>; an empty name or property
+			// segment is malformed and refused.
+			name, prop, ok := splitDriverKey(key[len("filter."):])
+			if !ok {
+				return nil, nil, fmt.Errorf("%w: malformed filter key %q", ErrDriverDiscovery, key)
 			}
-			if !filterProps[rest[dot+1:]] {
+			if !filterProps[prop] {
 				return nil, nil, fmt.Errorf("%w: unexpected filter property %q", ErrDriverDiscovery, key)
 			}
-			fset[rest[:dot]] = true
+			fset[name] = true
 		case strings.HasPrefix(key, "diff."):
-			// diff.<setting> (two segments) is a legitimate non-driver key; a
-			// three-segment diff.<name>.<prop> must be an expected driver
-			// property, else the config is refused.
 			rest := key[len("diff."):]
-			if dot := strings.LastIndexByte(rest, '.'); dot > 0 {
-				if !diffDriverProps[rest[dot+1:]] {
-					return nil, nil, fmt.Errorf("%w: unexpected diff driver property %q", ErrDriverDiscovery, key)
+			if strings.IndexByte(rest, '.') < 0 {
+				// diff.<setting> (two segments) is a legitimate non-driver key;
+				// an empty setting (diff.) is malformed.
+				if rest == "" {
+					return nil, nil, fmt.Errorf("%w: empty diff key %q", ErrDriverDiscovery, key)
 				}
-				dset[rest[:dot]] = true
+				continue
 			}
+			// A three-or-more-segment diff.<name>.<prop> is a driver key; an
+			// empty name (diff..binary) or property (diff.foo.) is refused.
+			name, prop, ok := splitDriverKey(rest)
+			if !ok {
+				return nil, nil, fmt.Errorf("%w: malformed diff driver key %q", ErrDriverDiscovery, key)
+			}
+			if !diffDriverProps[prop] {
+				return nil, nil, fmt.Errorf("%w: unexpected diff driver property %q", ErrDriverDiscovery, key)
+			}
+			dset[name] = true
 		default:
 			return nil, nil, fmt.Errorf("%w: unexpected key %q", ErrDriverDiscovery, key)
 		}

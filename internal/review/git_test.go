@@ -132,6 +132,10 @@ func fakeGitConfig(t *testing.T, mode string) string {
 		// Exit 0 with output that is not valid `git config -z` framing
 		// (no NUL terminator, no key/value newline).
 		probe = "printf 'filter.evil.clean garbage-without-newline'\nexit 0\n"
+	case "emptyname":
+		// Exit 0 with well-framed output whose key carries an empty driver
+		// name segment (diff..binary). Discovery must fail closed.
+		probe = "printf 'diff..binary\\nfalse\\000'\nexit 0\n"
 	default:
 		t.Fatalf("unknown config mode %q", mode)
 	}
@@ -574,6 +578,7 @@ func TestExecGitRefusesOnDriverDiscoveryFailure(t *testing.T) {
 		{"timeout", "hang", 300 * time.Millisecond},
 		{"error", "error", 30 * time.Second},
 		{"malformed", "malformed", 30 * time.Second},
+		{"emptyname", "emptyname", 30 * time.Second},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -673,6 +678,10 @@ func TestExecGitOutputRejectsPatchSubcommands(t *testing.T) {
 		{"-c", "core.pager=cat", "diff"},
 		{"-C", ".", "diff-index", "HEAD"},
 		{"--literal-pathspecs", "log", "-p"},
+		// A global `--` must not let a patch flag on the real subcommand slip
+		// past the generic-runner guard.
+		{"--", "log", "-p"},
+		{"--", "log", "--patch"},
 	} {
 		if _, err := g.Output(ctx, t.TempDir(), 1<<20, args...); !errors.Is(err, ErrPatchViaGenericRunner) {
 			t.Errorf("Output %v err=%v, want ErrPatchViaGenericRunner", args, err)
@@ -684,6 +693,10 @@ func TestExecGitOutputRejectsPatchSubcommands(t *testing.T) {
 	// A non-patch subcommand is accepted by the guard (reaches discovery).
 	if err := rejectPatchSubcommand([]string{"status", "--porcelain"}); err != nil {
 		t.Errorf("status rejected: %v", err)
+	}
+	// The global-`--`-hidden patch flag is rejected by the parser directly.
+	if err := rejectPatchSubcommand([]string{"--", "log", "-p"}); !errors.Is(err, ErrPatchViaGenericRunner) {
+		t.Errorf("global -- hidden log -p err=%v, want ErrPatchViaGenericRunner", err)
 	}
 }
 
@@ -711,6 +724,24 @@ func TestExecGitDiffHelpersRejectOverridingOptions(t *testing.T) {
 		{"--abbrev=8"},
 		{"--relative=sub"},
 		{"--output=/tmp/x"},
+		// Output/canonicalization overrides the round-3 denylist missed:
+		// whitespace, word/name/stat/summary, and exit/check forms.
+		{"-w"},
+		{"--ignore-all-space"},
+		{"-b", "HEAD"},
+		{"--ignore-space-change"},
+		{"--ignore-space-at-eol"},
+		{"--ignore-blank-lines"},
+		{"--ignore-cr-at-eol"},
+		{"--name-only"},
+		{"--name-status"},
+		{"--summary"},
+		{"--shortstat"},
+		{"--compact-summary"},
+		{"--dirstat"},
+		{"-z"},
+		{"--exit-code"},
+		{"--check"},
 	}
 	for _, args := range unsafe {
 		if _, err := g.Diff(ctx, t.TempDir(), 1<<20, args...); !errors.Is(err, ErrUnsafeDiffOption) {
@@ -723,6 +754,14 @@ func TestExecGitDiffHelpersRejectOverridingOptions(t *testing.T) {
 	// Pathspecs after -- that look like flags are operands, not options.
 	if err := rejectUnsafeDiffArgs([]string{"HEAD", "--", "--weird-name.txt"}); err != nil {
 		t.Errorf("pathspec after -- rejected: %v", err)
+	}
+	// A flag before the `--` separator cannot slip through as an operand.
+	if err := rejectUnsafeDiffArgs([]string{"-w", "--"}); !errors.Is(err, ErrUnsafeDiffOption) {
+		t.Errorf("flag before -- err=%v, want ErrUnsafeDiffOption", err)
+	}
+	// A flag after `--` is a pathspec operand and is left alone.
+	if err := rejectUnsafeDiffArgs([]string{"HEAD", "--", "-w"}); err != nil {
+		t.Errorf("flag after -- rejected: %v", err)
 	}
 }
 
@@ -988,6 +1027,23 @@ func TestExecGitDriverDiscoveryRejectsBadProperties(t *testing.T) {
 		[]byte("filter.evil.clean garbage-no-newline\x00"), // bad key/value framing
 		[]byte("filter.evil.clean\nx"),                     // missing terminal NUL
 		[]byte("core.pager\ncat\x00"),                      // unexpected top-level key
+	} {
+		if _, _, err := parseDriverNames(out); !errors.Is(err, ErrDriverDiscovery) {
+			t.Errorf("parseDriverNames(%q) err=%v, want ErrDriverDiscovery", out, err)
+		}
+	}
+}
+
+func TestExecGitDriverDiscoveryRejectsEmptyDriverNames(t *testing.T) {
+	// Every empty driver/property segment under a successful (exit 0) discovery
+	// must fail closed with ErrDriverDiscovery so the main command never runs.
+	for _, out := range [][]byte{
+		[]byte("diff..binary\nfalse\x00"), // empty diff driver name
+		[]byte("diff..command\nsh\x00"),   // empty diff driver name
+		[]byte("diff..\nx\x00"),           // empty diff name and property
+		[]byte("diff.foo.\nx\x00"),        // empty diff property
+		[]byte("filter..clean\nsh\x00"),   // empty filter name
+		[]byte("filter.foo.\nx\x00"),      // empty filter property
 	} {
 		if _, _, err := parseDriverNames(out); !errors.Is(err, ErrDriverDiscovery) {
 			t.Errorf("parseDriverNames(%q) err=%v, want ErrDriverDiscovery", out, err)
