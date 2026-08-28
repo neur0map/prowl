@@ -8,12 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/prowl-agent/prowl-agent/internal/config"
+	"github.com/prowl-agent/prowl-agent/internal/index"
+	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/prowl-agent/prowl-agent/internal/store"
 )
 
 // fakeTreeRunner is a GitRunner whose ls-tree/cat-file responses are scripted,
@@ -292,7 +297,8 @@ func TestMaterializeBlobCapBoundary(t *testing.T) {
 	}
 }
 
-// TestMaterializeTotalCapBoundary proves the total content cap is enforced.
+// TestMaterializeTotalCapBoundary proves the total content cap is exact at, below,
+// and above the total size.
 func TestMaterializeTotalCapBoundary(t *testing.T) {
 	f := newGitFixture(t)
 	f.write(t, "a.bin", "01234")
@@ -300,18 +306,27 @@ func TestMaterializeTotalCapBoundary(t *testing.T) {
 	f.commit(t, "seed") // 10 bytes total
 	head := f.revParse(t, "HEAD")
 
-	hv, err := OpenHeadView(context.Background(), HeadViewOptions{
-		Runner:         f.runner,
-		RepoRoot:       f.root,
-		ObjectFormat:   "sha1",
-		HeadTreeish:    head,
-		SnapshotParent: t.TempDir(),
-		MaxTotalBytes:  9,
-	})
-	if err == nil {
-		hv.Close()
+	openAt := func(max int64) error {
+		hv, err := OpenHeadView(context.Background(), HeadViewOptions{
+			Runner:         f.runner,
+			RepoRoot:       f.root,
+			ObjectFormat:   "sha1",
+			HeadTreeish:    head,
+			SnapshotParent: t.TempDir(),
+			MaxTotalBytes:  max,
+		})
+		if err == nil {
+			hv.Close()
+		}
+		return err
 	}
-	if !errors.Is(err, ErrSnapshotTotalTooLarge) {
+	if err := openAt(11); err != nil {
+		t.Fatalf("total below the cap failed: %v", err)
+	}
+	if err := openAt(10); err != nil {
+		t.Fatalf("total exactly at the cap failed: %v", err)
+	}
+	if err := openAt(9); !errors.Is(err, ErrSnapshotTotalTooLarge) {
 		t.Fatalf("total above the cap err=%v, want ErrSnapshotTotalTooLarge", err)
 	}
 }
@@ -406,4 +421,192 @@ func contains(ss []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// ---- verified reuse (finding 1) -------------------------------------------
+
+// indexCurrent indexes root into a fresh store and records the signature meta a
+// published project store carries, so reuse eligibility can be verified.
+func indexCurrent(t *testing.T, root string) *store.Store {
+	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opt := index.Options{}
+	if _, err := index.IndexWithOptionsContext(context.Background(), db, root, opt); err != nil {
+		t.Fatal(err)
+	}
+	sig, err := index.SignatureWithOptionsContext(context.Background(), root, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetMeta("cli_sig", strconv.FormatUint(sig, 16)); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+// TestHeadViewReuseVerified proves a clean worktree at the resolved head with a
+// matching published index is reused, and that a dirty tree, a mismatched head,
+// or a stale index is materialized instead.
+func TestHeadViewReuseVerified(t *testing.T) {
+	f := newGitFixture(t)
+	f.write(t, "pkg/foo.go", "package pkg\n\nfunc ReuseFunc() int { return 1 }\n")
+	f.commit(t, "c1")
+	base := f.revParse(t, "HEAD")
+	f.write(t, "pkg/foo.go", "package pkg\n\nfunc ReuseFuncV2() int { return 2 }\n")
+	f.commit(t, "c2")
+	head := f.revParse(t, "HEAD")
+
+	reuseOpts := func(db *store.Store, headTreeish string) HeadViewOptions {
+		return HeadViewOptions{
+			Runner:         f.runner,
+			RepoRoot:       f.root,
+			ObjectFormat:   "sha1",
+			BaseTreeish:    base,
+			HeadTreeish:    headTreeish,
+			SnapshotParent: t.TempDir(),
+			Reuse:          &ReusableView{Root: f.root, Store: db, Query: query.New(db)},
+		}
+	}
+
+	t.Run("clean exact head reused", func(t *testing.T) {
+		db := indexCurrent(t, f.root)
+		defer db.Close()
+		hv, err := OpenHeadView(context.Background(), reuseOpts(db, head))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer hv.Close()
+		if hv.Store != db || hv.Root != f.root {
+			t.Fatalf("eligible reuse materialized instead: root=%s", hv.Root)
+		}
+		if hits, err := hv.Query.FindSymbol("ReuseFuncV2"); err != nil || len(hits) == 0 {
+			t.Fatalf("reused index query=%v err=%v", hits, err)
+		}
+	})
+
+	t.Run("dirty worktree materializes", func(t *testing.T) {
+		db := indexCurrent(t, f.root)
+		defer db.Close()
+		f.write(t, "dirty.txt", "uncommitted\n")
+		defer os.Remove(filepath.Join(f.root, "dirty.txt"))
+		hv, err := OpenHeadView(context.Background(), reuseOpts(db, head))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer hv.Close()
+		if hv.Store == db {
+			t.Fatal("dirty worktree was reused instead of materialized")
+		}
+	})
+
+	t.Run("mismatched head materializes", func(t *testing.T) {
+		db := indexCurrent(t, f.root)
+		defer db.Close()
+		hv, err := OpenHeadView(context.Background(), reuseOpts(db, base)) // resolved head != current HEAD
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer hv.Close()
+		if hv.Store == db {
+			t.Fatal("mismatched head was reused instead of materialized")
+		}
+	})
+
+	t.Run("stale index materializes", func(t *testing.T) {
+		db := indexCurrent(t, f.root)
+		defer db.Close()
+		if err := db.SetMeta("cli_sig", "deadbeef"); err != nil { // signature no longer matches
+			t.Fatal(err)
+		}
+		hv, err := OpenHeadView(context.Background(), reuseOpts(db, head))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer hv.Close()
+		if hv.Store == db {
+			t.Fatal("stale index was reused instead of materialized")
+		}
+	})
+
+	t.Run("ineligible without head is unavailable", func(t *testing.T) {
+		empty, err := store.Open(filepath.Join(t.TempDir(), "empty.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer empty.Close()
+		opts := reuseOpts(empty, "")
+		opts.Reuse.Workspace = true
+		if _, err := OpenHeadView(context.Background(), opts); !errors.Is(err, ErrReuseUnavailable) {
+			t.Fatalf("err=%v, want ErrReuseUnavailable", err)
+		}
+	})
+}
+
+// ---- strict cat-file binding (finding 2) ---------------------------------
+
+// TestSourceResolverStrictCatFileBinding proves the resolver rejects unbound or
+// malformed ls-tree/cat-file output before returning bytes.
+func TestMaterializeSourceResolverStrictCatFileBinding(t *testing.T) {
+	const oid = fortyHex
+	other := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	lsOK := treeRecord("100644", "blob", oid, "x")
+
+	cases := []struct {
+		name  string
+		ls    string
+		check string // cat-file --batch-check output
+		blob  string // cat-file --batch output
+		want  error
+	}{
+		{"ls multiple records", treeRecord("100644", "blob", oid, "x") + treeRecord("100644", "blob", oid, "x"), "", "", ErrSnapshotMalformedStream},
+		{"ls mode/type mismatch", treeRecord("100644", "tree", oid, "x"), "", "", ErrSnapshotUnsafeEntry},
+		{"ls short id", treeRecord("100644", "blob", "abcd", "x"), "", "", ErrSnapshotUnsafeEntry},
+		{"batch-check wrong oid", lsOK, other + " blob 3\n", "", ErrSnapshotMalformedStream},
+		{"batch-check wrong type", lsOK, oid + " tree 3\n", "", ErrSnapshotMalformedStream},
+		{"batch wrong oid", lsOK, oid + " blob 3\n", other + " blob 3\nabc\n", ErrSnapshotMalformedStream},
+		{"batch size mismatch", lsOK, oid + " blob 5\n", oid + " blob 3\nabc\n", ErrSnapshotMalformedStream},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runner := fakeTreeRunner{
+				onOutput: func(args []string) ([]byte, error) {
+					if len(args) > 0 && args[0] == "ls-tree" {
+						return []byte(tc.ls), nil
+					}
+					return nil, fmt.Errorf("unexpected Output %v", args)
+				},
+				onPipe: func(_ io.Reader, args []string) ([]byte, error) {
+					if len(args) >= 2 && args[0] == "cat-file" && args[1] == "--batch-check" {
+						return []byte(tc.check), nil
+					}
+					if len(args) >= 2 && args[0] == "cat-file" && args[1] == "--batch" {
+						return []byte(tc.blob), nil
+					}
+					return nil, fmt.Errorf("unexpected Pipe %v", args)
+				},
+			}
+			resolver := &gitTreeResolver{runner: runner, root: t.TempDir(), width: 20, treeish: fortyHex}
+			if _, err := resolver.read(context.Background(), "x", 1<<20); !errors.Is(err, tc.want) {
+				t.Fatalf("read err=%v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestBatchCheckRejectsBadSizes proves overflow/negative/MaxInt64 sizes are
+// rejected before any content read.
+func TestMaterializeBatchCheckRejectsBadSizes(t *testing.T) {
+	for _, size := range []string{"-1", strconv.FormatInt(math.MaxInt64, 10), "not-a-number"} {
+		runner := fakeTreeRunner{
+			onPipe: func(_ io.Reader, args []string) ([]byte, error) {
+				return []byte(fortyHex + " blob " + size + "\n"), nil
+			},
+		}
+		if _, err := batchCheck(context.Background(), runner, t.TempDir(), []string{fortyHex}); !errors.Is(err, ErrSnapshotMalformedStream) {
+			t.Fatalf("size %q err=%v, want ErrSnapshotMalformedStream", size, err)
+		}
+	}
 }

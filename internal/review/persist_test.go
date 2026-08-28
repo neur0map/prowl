@@ -15,16 +15,43 @@ import (
 	"time"
 )
 
-// makeArtifacts builds a minimal valid direct-mode plan whose review id is the
-// canonical truncation of its plan digest, so the store's identity checks pass.
-func makeArtifacts(name string) PlanArtifacts {
-	full := sha256.Sum256([]byte("plan:" + name))
-	return artifactsFromDigest(full)
+func sha256Digest(b []byte) Digest { return sha256.Sum256(b) }
+
+// planIdentity derives the canonical identity bytes, review id, and plan digest
+// for a named test plan, exactly as the store recomputes them.
+func planIdentity(name string) (idBytes []byte, reviewID, planDigest string) {
+	idBytes = []byte("review.plan.v1|" + name)
+	full := sha256.Sum256(idBytes)
+	reviewID = "rvw_" + hex.EncodeToString(full[:20])
+	planDigest = hex.EncodeToString(full[:])
+	return
 }
 
-func artifactsFromDigest(full [32]byte) PlanArtifacts {
-	reviewID := "rvw_" + hex.EncodeToString(full[:20])
-	planDigest := hex.EncodeToString(full[:])
+// pathRecord builds a real p_ StableID plus its identity record for a changed
+// path, using the given content digest so collision fixtures can inject one.
+func pathRecord(digest func([]byte) Digest) (public string, record IDRecord) {
+	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
+	scope := ScopeDigest("sha1", oid20, oid20, ScopeCommit, Digest{})
+	rec := RawPathRecord{
+		Kind: "tracked", Status: "M", OldPath: "a.go", NewPath: "a.go",
+		OldMode: 0o100644, NewMode: 0o100644, OldSide: oid20, NewSide: oid20,
+		TextClass: "text", Additions: 1,
+	}
+	canonical := Frame(Field{Name: "scope", Value: scope[:]}, Field{Name: "record", Value: rec.Frame()})
+	full := digest(canonical)
+	public = PublicID(PathIDPrefixV1, full, PublicIDContentBytesV1).Public
+	return public, IDRecord{Kind: PathIDPrefixV1, Public: public, Full: full, Canonical: canonical}
+}
+
+// makeArtifacts builds a minimal valid direct-mode plan with a real StableID for
+// its single changed path and a complete identity registry.
+func makeArtifacts(name string) PlanArtifacts {
+	return makeArtifactsWith(name, sha256Digest)
+}
+
+func makeArtifactsWith(name string, digest func([]byte) Digest) PlanArtifacts {
+	idBytes, reviewID, planDigest := planIdentity(name)
+	public, record := pathRecord(digest)
 	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
 	plan := Plan{
 		Schema:       PlanSchemaV1,
@@ -33,14 +60,57 @@ func artifactsFromDigest(full [32]byte) PlanArtifacts {
 		Mode:         ModeDirect,
 		Scope:        Scope{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20},
 		Stats:        PlanStats{ChangedPaths: 1},
-		ChangedPaths: []PlanPath{{PathID: "p_x", NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
+		ChangedPaths: []PlanPath{{PathID: public, NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
 		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
 	}
-	return PlanArtifacts{Plan: plan}
+	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, IDRecords: []IDRecord{record}}
 }
 
-// linkedWorktree builds a repository plus a detached linked worktree, returning
-// both roots and a sanitized runner.
+// makeWorkspaceArtifacts builds a workspace-scope plan with a fingerprint bound
+// to its workspace head.
+func makeWorkspaceArtifacts(name string) PlanArtifacts {
+	a := makeArtifacts(name)
+	head := make([]byte, 32)
+	head[0] = 0x5a
+	a.Plan.Scope.Kind = ScopeWorkspace
+	a.Plan.Scope.Base = SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
+	a.Plan.Scope.Head = SideIdentity{Kind: SideWorkspaceSHA256, Value: head}
+	a.WorkspaceFingerprint = hex.EncodeToString(head)
+	return a
+}
+
+// collidingDigest maps every input to a digest whose first 16 bytes are zero
+// (identical public prefix) but whose 17th byte carries the input's first byte
+// (distinct full digest), forcing a same-kind prefix collision.
+func collidingDigest(b []byte) Digest {
+	var d Digest
+	if len(b) > 0 {
+		d[16] = b[0]
+	}
+	return d
+}
+
+// collidingArtifacts builds a plan whose single p_ record hashes (under the
+// colliding digest) to the shared prefix but a canonical-specific full digest.
+func collidingArtifacts(name string, canonical []byte) PlanArtifacts {
+	idBytes, reviewID, planDigest := planIdentity(name)
+	full := collidingDigest(canonical)
+	public := PublicID(PathIDPrefixV1, full, PublicIDContentBytesV1).Public
+	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
+	plan := Plan{
+		Schema:       PlanSchemaV1,
+		ReviewID:     reviewID,
+		PlanDigest:   planDigest,
+		Mode:         ModeDirect,
+		Scope:        Scope{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20},
+		Stats:        PlanStats{ChangedPaths: 1},
+		ChangedPaths: []PlanPath{{PathID: public, NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
+		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
+	}
+	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, IDRecords: []IDRecord{{Kind: PathIDPrefixV1, Public: public, Full: full, Canonical: canonical}}}
+}
+
+// linkedWorktree builds a repository plus a detached linked worktree.
 func linkedWorktree(t *testing.T) (main, linked string, runner GitRunner) {
 	t.Helper()
 	f := newGitFixture(t)
@@ -51,8 +121,9 @@ func linkedWorktree(t *testing.T) (main, linked string, runner GitRunner) {
 }
 
 // TestPlanStoreLivesOutsideWorktreeAndDetectsCollision proves review state lives
-// under the shared Git common dir (outside a linked worktree) and that reusing a
-// public review id with a different full digest is a collision.
+// under the shared Git common dir (outside a linked worktree, one domain) and
+// that a same-kind public prefix mapping to a different full digest across the
+// domain is a collision.
 func TestPlanStoreLivesOutsideWorktreeAndDetectsCollision(t *testing.T) {
 	main, linked, runner := linkedWorktree(t)
 	ctx := context.Background()
@@ -64,7 +135,6 @@ func TestPlanStoreLivesOutsideWorktreeAndDetectsCollision(t *testing.T) {
 	if hasPathPrefix(store.Root(), linked) {
 		t.Fatalf("state leaked into worktree: %s", store.Root())
 	}
-	// Linked worktrees share one collision/retention domain.
 	mainStore, err := OpenPlanStore(ctx, runner, main)
 	if err != nil {
 		t.Fatal(err)
@@ -73,20 +143,14 @@ func TestPlanStoreLivesOutsideWorktreeAndDetectsCollision(t *testing.T) {
 		t.Fatalf("linked worktree domain differs: %s vs %s", mainStore.Root(), store.Root())
 	}
 
-	a := makeArtifacts("collide")
-	if err := store.Save(ctx, a, ""); err != nil {
+	store.digest = collidingDigest
+	if err := store.Save(ctx, collidingArtifacts("one", []byte("A")), ""); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
-	// Same public review id, different full plan digest (flip a trailing byte so
-	// the first 20 bytes - and thus the review id - are unchanged).
-	full := sha256.Sum256([]byte("plan:collide"))
-	full[31] ^= 0xff
-	b := artifactsFromDigest(full)
-	if b.Plan.ReviewID != a.Plan.ReviewID {
-		t.Fatalf("test setup: review ids differ %s vs %s", b.Plan.ReviewID, a.Plan.ReviewID)
-	}
-	if err := store.Save(ctx, b, ""); !errors.Is(err, ErrIDCollision) {
-		t.Fatalf("collision save err=%v, want ErrIDCollision", err)
+	// A second worktree instance sees the same domain and must reject the collision.
+	mainStore.digest = collidingDigest
+	if err := mainStore.Save(ctx, collidingArtifacts("two", []byte("B")), ""); !errors.Is(err, ErrIDCollision) {
+		t.Fatalf("cross-worktree collision err=%v, want ErrIDCollision", err)
 	}
 }
 
@@ -97,7 +161,8 @@ func TestPlanStoreSaveLoadRoundTrip(t *testing.T) {
 	a := makeArtifacts("round")
 	a.PublishedIndexSignature = "sig-123"
 	a.MandatoryUnits = map[string][]byte{"u_1": []byte("{\"schema\":\"review.unit.v1\"}\n")}
-	a.Citations = map[string]CitationProof{"c_1": {ID: "c_1", Side: SideHead, Path: "a.go", ContentHash: hex.EncodeToString(make([]byte, 32)), Start: 1, End: 4}}
+	pathID := a.Plan.ChangedPaths[0].PathID
+	a.Citations = map[string]CitationProof{pathID: {ID: pathID, Side: SideHead, Path: "a.go", ContentHash: hex.EncodeToString(make([]byte, 32)), Start: 1, End: 4}}
 	if err := store.Save(ctx, a, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -111,25 +176,116 @@ func TestPlanStoreSaveLoadRoundTrip(t *testing.T) {
 	if string(got.MandatoryUnits["u_1"]) != string(a.MandatoryUnits["u_1"]) {
 		t.Fatalf("mandatory bytes lost: %q", got.MandatoryUnits["u_1"])
 	}
-	if got.Citations["c_1"].Path != "a.go" {
+	if got.Citations[pathID].Path != "a.go" {
 		t.Fatalf("citation proof lost: %+v", got.Citations)
+	}
+	if len(got.IDRecords) != 1 || got.IDRecords[0].Public != pathID {
+		t.Fatalf("id records lost: %+v", got.IDRecords)
 	}
 }
 
-// TestPlanStoreAtomicTempRename proves the review directory is published by an
-// atomic rename with the snapshot moved in and no temp directory left behind.
+// TestPlanStoreRejectsSuppliedDigestMismatch proves the store recomputes the
+// plan digest from its canonical bytes and never trusts a supplied string.
+func TestPlanStoreRejectsSuppliedDigestMismatch(t *testing.T) {
+	store := newStore(t)
+	a := makeArtifacts("mismatch")
+	// A different (still well-formed) plan digest not derived from the identity.
+	other := sha256.Sum256([]byte("something else"))
+	a.Plan.PlanDigest = hex.EncodeToString(other[:])
+	if err := store.Save(context.Background(), a, ""); !errors.Is(err, ErrPlanIdentityMismatch) {
+		t.Fatalf("supplied-digest mismatch err=%v, want ErrPlanIdentityMismatch", err)
+	}
+}
+
+// TestPlanStoreRegistryRejectsShapeViolations proves omission, foreign, mapping,
+// and duplicate identity-record violations are rejected.
+func TestPlanStoreRegistryRejectsShapeViolations(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name  string
+		mutey func(a *PlanArtifacts)
+		want  error
+	}{
+		{"omission: plan id without record", func(a *PlanArtifacts) { a.IDRecords = nil }, ErrIDRegistry},
+		{"foreign: record not in plan", func(a *PlanArtifacts) {
+			_, extra := pathRecord(func(b []byte) Digest { return sha256.Sum256(append([]byte("x"), b...)) })
+			a.IDRecords = append(a.IDRecords, extra)
+		}, ErrIDRegistry},
+		{"mapping: full does not match canonical", func(a *PlanArtifacts) {
+			a.IDRecords[0].Full = sha256.Sum256([]byte("wrong"))
+		}, ErrIDRegistry},
+		{"mapping: public does not match full", func(a *PlanArtifacts) {
+			a.IDRecords[0].Public = PathIDPrefixV1 + hex.EncodeToString(make([]byte, 16))
+		}, ErrIDRegistry},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newStore(t)
+			a := makeArtifacts("shape")
+			tc.mutey(&a)
+			if err := store.Save(ctx, a, ""); !errors.Is(err, tc.want) {
+				t.Fatalf("err=%v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestPlanStoreForcedCollisionDuringConstruction injects a digest that maps
+// distinct canonical inputs to the same public prefix with different fulls, and
+// proves Save rejects the second plan.
+func TestPlanStoreForcedCollisionDuringConstruction(t *testing.T) {
+	store := newStore(t)
+	store.digest = collidingDigest
+	ctx := context.Background()
+	if err := store.Save(ctx, collidingArtifacts("c-one", []byte("A")), ""); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	if err := store.Save(ctx, collidingArtifacts("c-two", []byte("B")), ""); !errors.Is(err, ErrIDCollision) {
+		t.Fatalf("colliding construction err=%v, want ErrIDCollision", err)
+	}
+}
+
+// TestPlanStoreForcedCollisionDuringLoad writes a manifest whose two records
+// collide under the loader's injected digest and proves Load rejects it.
+func TestPlanStoreForcedCollisionDuringLoad(t *testing.T) {
+	store := newStore(t)
+	store.digest = collidingDigest
+	ctx := context.Background()
+
+	idBytes, reviewID, planDigest := planIdentity("load-collide")
+	fullA := collidingDigest([]byte("A"))
+	fullB := collidingDigest([]byte("B"))
+	public := PublicID(PathIDPrefixV1, fullA, PublicIDContentBytesV1).Public
+	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
+	plan := Plan{
+		Schema: PlanSchemaV1, ReviewID: reviewID, PlanDigest: planDigest, Mode: ModeDirect,
+		Scope:        Scope{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20},
+		Stats:        PlanStats{ChangedPaths: 1},
+		ChangedPaths: []PlanPath{{PathID: public, NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
+		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
+	}
+	m := planManifest{
+		Schema: planStoreSchemaV1, ReviewID: reviewID, PlanDigest: planDigest, ScopeKind: ScopeCommit,
+		CreatedAt: 1, Plan: plan, PlanIdentityBytes: idBytes,
+		IDRecords: []IDRecord{
+			{Kind: PathIDPrefixV1, Public: public, Full: fullA, Canonical: []byte("A")},
+			{Kind: PathIDPrefixV1, Public: public, Full: fullB, Canonical: []byte("B")},
+		},
+	}
+	writeManifestDirect(t, store, m)
+	if _, err := store.Load(ctx, reviewID); !errors.Is(err, ErrIDCollision) {
+		t.Fatalf("colliding load err=%v, want ErrIDCollision", err)
+	}
+}
+
+// TestPlanStoreAtomicTempRename proves atomic publication with the snapshot moved
+// in, the caller's snapshot consumed, and no temp directory left behind.
 func TestPlanStoreAtomicTempRename(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
 	a := makeArtifacts("atomic")
 
-	snapshotDir, err := os.MkdirTemp(store.Root(), "snap-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(snapshotDir, "marker"), []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	snapshotDir := makeSnapshot(t, store, "marker")
 	if err := store.Save(ctx, a, snapshotDir); err != nil {
 		t.Fatal(err)
 	}
@@ -141,15 +297,37 @@ func TestPlanStoreAtomicTempRename(t *testing.T) {
 		t.Fatalf("snapshot not moved into review dir: %v", err)
 	}
 	if _, err := os.Stat(snapshotDir); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("original snapshot dir still present: %v", err)
+		t.Fatalf("caller snapshot not consumed: %v", err)
 	}
-	// No .tmp-* work directory left behind.
-	entries, _ := os.ReadDir(store.Root())
-	for _, e := range entries {
-		if len(e.Name()) >= 5 && e.Name()[:5] == ".tmp-" {
-			t.Fatalf("temp directory leaked: %s", e.Name())
-		}
+	assertNoTempLeftover(t, store)
+}
+
+// TestPlanStoreRollbackRestoresSnapshot proves a failed publication restores the
+// caller's snapshot and leaves no temp directory.
+func TestPlanStoreRollbackRestoresSnapshot(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	a := makeArtifacts("rollback")
+
+	// Pre-create a non-empty review directory so the final rename fails.
+	reviewDir := filepath.Join(store.Root(), a.Plan.ReviewID)
+	if err := os.MkdirAll(reviewDir, 0o700); err != nil {
+		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(reviewDir, "blocker"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshotDir := makeSnapshot(t, store, "marker")
+	if err := store.Save(ctx, a, snapshotDir); !errors.Is(err, ErrSnapshotOwnership) {
+		t.Fatalf("blocked publication err=%v, want ErrSnapshotOwnership", err)
+	}
+	if _, err := os.Stat(filepath.Join(snapshotDir, "marker")); err != nil {
+		t.Fatalf("caller snapshot not restored: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(reviewDir, manifestName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("partial manifest published: %v", err)
+	}
+	assertNoTempLeftover(t, store)
 }
 
 // TestPlanStoreLockExclusion proves Save fails when the store lock is held.
@@ -164,11 +342,41 @@ func TestPlanStoreLockExclusion(t *testing.T) {
 	}
 	defer release()
 
-	// A second store instance over the same root cannot acquire the lock.
-	other := &PlanStore{root: store.root, lockPath: store.lockPath, lockTimeout: 150 * time.Millisecond, digest: store.digest, now: store.now}
+	other := &PlanStore{root: store.root, locksDir: store.locksDir, lockPath: store.lockPath, lockTimeout: 150 * time.Millisecond, maxManifest: store.maxManifest, digest: store.digest, now: store.now}
 	if err := other.Save(ctx, makeArtifacts("locked"), ""); !errors.Is(err, ErrPlanLocked) {
 		t.Fatalf("save under held lock err=%v, want ErrPlanLocked", err)
 	}
+}
+
+// TestPlanStoreWorkspaceFingerprintInvariants proves the fingerprint is required
+// and bound for workspace scope and forbidden for committed scope.
+func TestPlanStoreWorkspaceFingerprintInvariants(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("committed with fingerprint rejected", func(t *testing.T) {
+		store := newStore(t)
+		a := makeArtifacts("commit-fp")
+		a.WorkspaceFingerprint = "deadbeef"
+		if err := store.Save(ctx, a, ""); !errors.Is(err, ErrWorkspaceFingerprint) {
+			t.Fatalf("err=%v, want ErrWorkspaceFingerprint", err)
+		}
+	})
+	t.Run("workspace without fingerprint rejected", func(t *testing.T) {
+		store := newStore(t)
+		a := makeWorkspaceArtifacts("ws-empty")
+		a.WorkspaceFingerprint = ""
+		if err := store.Save(ctx, a, ""); !errors.Is(err, ErrWorkspaceFingerprint) {
+			t.Fatalf("err=%v, want ErrWorkspaceFingerprint", err)
+		}
+	})
+	t.Run("workspace fingerprint not bound to head rejected", func(t *testing.T) {
+		store := newStore(t)
+		a := makeWorkspaceArtifacts("ws-bad")
+		a.WorkspaceFingerprint = hex.EncodeToString(make([]byte, 32)) // not the head value
+		if err := store.Save(ctx, a, ""); !errors.Is(err, ErrWorkspaceFingerprint) {
+			t.Fatalf("err=%v, want ErrWorkspaceFingerprint", err)
+		}
+	})
 }
 
 // TestPlanStoreStaleWorkspaceFingerprint proves a workspace plan is stale when
@@ -177,18 +385,14 @@ func TestPlanStoreStaleWorkspaceFingerprint(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
 
-	ws := makeArtifacts("workspace")
-	ws.Plan.Scope.Kind = ScopeWorkspace
-	ws.Plan.Scope.Base = SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
-	ws.Plan.Scope.Head = SideIdentity{Kind: SideWorkspaceSHA256, Value: make([]byte, 32)}
-	ws.WorkspaceFingerprint = "fp-A"
+	ws := makeWorkspaceArtifacts("workspace")
 	if err := store.Save(ctx, ws, ""); err != nil {
 		t.Fatal(err)
 	}
-	if stale, err := store.Stale(ctx, ws.Plan.ReviewID, "fp-A"); err != nil || stale {
+	if stale, err := store.Stale(ctx, ws.Plan.ReviewID, ws.WorkspaceFingerprint); err != nil || stale {
 		t.Fatalf("fresh workspace plan stale=%v err=%v", stale, err)
 	}
-	if stale, err := store.Stale(ctx, ws.Plan.ReviewID, "fp-B"); err != nil || !stale {
+	if stale, err := store.Stale(ctx, ws.Plan.ReviewID, "different"); err != nil || !stale {
 		t.Fatalf("changed workspace plan stale=%v err=%v; want stale", stale, err)
 	}
 
@@ -202,7 +406,7 @@ func TestPlanStoreStaleWorkspaceFingerprint(t *testing.T) {
 }
 
 // TestPlanStoreImmutableReuse proves saving an identical plan reuses the existing
-// immutable manifest and snapshot without rewriting.
+// manifest and snapshot without rewriting, deleting the redundant incoming one.
 func TestPlanStoreImmutableReuse(t *testing.T) {
 	store := newStore(t)
 	base := time.Unix(1_700_000_000, 0)
@@ -210,16 +414,14 @@ func TestPlanStoreImmutableReuse(t *testing.T) {
 	ctx := context.Background()
 
 	a := makeArtifacts("reuse")
-	snap, _ := os.MkdirTemp(store.Root(), "snap-")
-	_ = os.WriteFile(filepath.Join(snap, "keep"), []byte("1"), 0o600)
+	snap := makeSnapshot(t, store, "keep")
 	if err := store.Save(ctx, a, snap); err != nil {
 		t.Fatal(err)
 	}
 	firstCreated := mustManifest(t, store, a.Plan.ReviewID).CreatedAt
 
-	// A later, identical save must be a no-op reuse (created time unchanged).
 	store.now = func() time.Time { return base.Add(72 * time.Hour) }
-	extra, _ := os.MkdirTemp(store.Root(), "snap2-")
+	extra := makeSnapshot(t, store, "redundant")
 	if err := store.Save(ctx, a, extra); err != nil {
 		t.Fatalf("reuse save: %v", err)
 	}
@@ -229,11 +431,15 @@ func TestPlanStoreImmutableReuse(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(store.Root(), a.Plan.ReviewID, snapshotName, "keep")); err != nil {
 		t.Fatalf("original snapshot not preserved on reuse: %v", err)
 	}
+	if _, err := os.Stat(extra); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("redundant incoming snapshot not deleted on reuse: %v", err)
+	}
 }
 
-// TestPlanStoreRetentionSevenDayAndLock proves creation prunes plans older than
-// seven days but never a plan held by a per-review lock.
-func TestPlanStoreRetentionSevenDayAndLock(t *testing.T) {
+// TestPlanStoreRetentionSevenDayAndLockRace proves creation prunes plans older
+// than seven days but never one a reader holds through the stable lock, and that
+// releasing the lock lets a later prune delete it.
+func TestPlanStoreRetentionSevenDayAndLockRace(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
 	base := time.Unix(1_700_000_000, 0)
@@ -247,21 +453,15 @@ func TestPlanStoreRetentionSevenDayAndLock(t *testing.T) {
 	if err := store.Save(ctx, locked, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Load(ctx, old.Plan.ReviewID); err != nil {
-		t.Fatalf("old plan not saved: %v", err)
-	}
 
-	// Hold the locked plan so retention cannot delete it.
 	release, err := store.LockReview(ctx, locked.Plan.ReviewID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer release()
 
-	// A creation eight days later prunes the unlocked old plan.
+	// A creation eight days later prunes the unlocked old plan but not the locked.
 	store.now = func() time.Time { return base.Add(8 * 24 * time.Hour) }
-	fresh := makeArtifacts("fresh")
-	if err := store.Save(ctx, fresh, ""); err != nil {
+	if err := store.Save(ctx, makeArtifacts("fresh"), ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Load(ctx, old.Plan.ReviewID); !errors.Is(err, ErrReviewNotFound) {
@@ -270,8 +470,14 @@ func TestPlanStoreRetentionSevenDayAndLock(t *testing.T) {
 	if _, err := store.Load(ctx, locked.Plan.ReviewID); err != nil {
 		t.Fatalf("locked plan was pruned: %v", err)
 	}
-	if _, err := store.Load(ctx, fresh.Plan.ReviewID); err != nil {
-		t.Fatalf("fresh plan missing: %v", err)
+
+	// After release, an explicit prune deletes the now-unlocked old plan.
+	release()
+	if err := store.Prune(ctx, base.Add(8*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(ctx, locked.Plan.ReviewID); !errors.Is(err, ErrReviewNotFound) {
+		t.Fatalf("released plan not pruned: err=%v", err)
 	}
 }
 
@@ -292,44 +498,46 @@ func TestPlanStoreRetentionTwentyPlans(t *testing.T) {
 	}
 }
 
-// TestPlanStoreForcedCollisionDuringConstruction injects a digest that maps
-// distinct identity inputs to the same public prefix with different fulls, and
-// proves Save rejects the second plan.
-func TestPlanStoreForcedCollisionDuringConstruction(t *testing.T) {
+// TestPlanStoreLoadRejectsMalformedReviewID proves review ids are validated
+// before any path join or open.
+func TestPlanStoreLoadRejectsMalformedReviewID(t *testing.T) {
 	store := newStore(t)
-	store.digest = collidingDigest
 	ctx := context.Background()
-
-	first := makeArtifacts("c-one")
-	first.IDInputs = []IDInput{{Kind: PathIDPrefixV1, Bytes: []byte("A")}}
-	if err := store.Save(ctx, first, ""); err != nil {
-		t.Fatalf("first save: %v", err)
-	}
-	second := makeArtifacts("c-two")
-	second.IDInputs = []IDInput{{Kind: PathIDPrefixV1, Bytes: []byte("B")}}
-	if err := store.Save(ctx, second, ""); !errors.Is(err, ErrIDCollision) {
-		t.Fatalf("colliding construction err=%v, want ErrIDCollision", err)
+	for _, id := range []string{"../escape", "rvw_short", "rvw_" + "zz", "notareview"} {
+		if _, err := store.Load(ctx, id); err == nil {
+			t.Fatalf("Load(%q) accepted a malformed review id", id)
+		}
+		if _, err := store.LockReview(ctx, id); err == nil {
+			t.Fatalf("LockReview(%q) accepted a malformed review id", id)
+		}
 	}
 }
 
-// TestPlanStoreForcedCollisionDuringLoad saves two non-colliding inputs with a
-// registry rebuilt during manifest loading rejects the collision.
-func TestPlanStoreForcedCollisionDuringLoad(t *testing.T) {
+// TestPlanStoreLoadRejectsHugeManifest proves the bounded read fails closed.
+func TestPlanStoreLoadRejectsHugeManifest(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
-
-	a := makeArtifacts("load-collide")
-	a.IDInputs = []IDInput{
-		{Kind: PathIDPrefixV1, Bytes: []byte("A")},
-		{Kind: PathIDPrefixV1, Bytes: []byte("B")},
-	}
+	a := makeArtifacts("huge")
 	if err := store.Save(ctx, a, ""); err != nil {
-		t.Fatalf("save: %v", err)
+		t.Fatal(err)
 	}
-	// A fresh store over the same root whose digest collides the two inputs.
-	loader := &PlanStore{root: store.root, lockPath: store.lockPath, lockTimeout: store.lockTimeout, digest: collidingDigest, now: store.now}
-	if _, err := loader.Load(ctx, a.Plan.ReviewID); !errors.Is(err, ErrIDCollision) {
-		t.Fatalf("colliding load err=%v, want ErrIDCollision", err)
+	store.maxManifest = 40 // smaller than any real manifest
+	if _, err := store.Load(ctx, a.Plan.ReviewID); !errors.Is(err, ErrManifestCorrupt) {
+		t.Fatalf("huge manifest err=%v, want ErrManifestCorrupt", err)
+	}
+}
+
+// TestPlanStoreLoadHonorsCancellation proves a canceled context surfaces.
+func TestPlanStoreLoadHonorsCancellation(t *testing.T) {
+	store := newStore(t)
+	a := makeArtifacts("cancel")
+	if err := store.Save(context.Background(), a, ""); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := store.Load(ctx, a.Plan.ReviewID); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled load err=%v, want context.Canceled", err)
 	}
 }
 
@@ -347,8 +555,6 @@ func TestPlanStoreLoadDetectsTamper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Mutate a field value while keeping the stored content digest, so loading
-	// recomputes a digest that no longer matches.
 	var m planManifest
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
@@ -366,18 +572,25 @@ func TestPlanStoreLoadDetectsTamper(t *testing.T) {
 	}
 }
 
-// ---- helpers --------------------------------------------------------------
-
-// collidingDigest maps every input to a digest whose first 16 bytes are zero
-// (identical public prefix) but whose 17th byte carries the input's first byte
-// (distinct full digest), forcing a same-kind prefix collision.
-func collidingDigest(b []byte) Digest {
-	var d Digest
-	if len(b) > 0 {
-		d[16] = b[0]
+// TestPlanStoreLoadDetectsScopeHeaderMismatch proves the manifest header must
+// agree with the embedded plan.
+func TestPlanStoreLoadDetectsScopeHeaderMismatch(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	a := makeArtifacts("scope-header")
+	idBytes := a.PlanIdentityBytes
+	m := planManifest{
+		Schema: planStoreSchemaV1, ReviewID: a.Plan.ReviewID, PlanDigest: a.Plan.PlanDigest,
+		ScopeKind: ScopeWorkspace, // disagrees with the embedded commit-scope plan
+		CreatedAt: 1, Plan: a.Plan, PlanIdentityBytes: idBytes, IDRecords: a.IDRecords,
 	}
-	return d
+	writeManifestDirect(t, store, m)
+	if _, err := store.Load(ctx, a.Plan.ReviewID); !errors.Is(err, ErrManifestCorrupt) {
+		t.Fatalf("scope-header mismatch err=%v, want ErrManifestCorrupt", err)
+	}
 }
+
+// ---- helpers --------------------------------------------------------------
 
 func newStore(t *testing.T) *PlanStore {
 	t.Helper()
@@ -390,9 +603,36 @@ func newStore(t *testing.T) *PlanStore {
 	return store
 }
 
+func makeSnapshot(t *testing.T, store *PlanStore, marker string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp(store.Root(), "snap-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, marker), []byte("1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func writeManifestDirect(t *testing.T, store *PlanStore, m planManifest) {
+	t.Helper()
+	payload, err := marshalManifest(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(store.Root(), m.ReviewID)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, manifestName), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func mustManifest(t *testing.T, store *PlanStore, reviewID string) planManifest {
 	t.Helper()
-	m, err := store.loadManifest(reviewID)
+	m, err := store.loadManifest(context.Background(), reviewID)
 	if err != nil {
 		t.Fatalf("loadManifest %s: %v", reviewID, err)
 	}
@@ -412,6 +652,16 @@ func countReviews(t *testing.T, store *PlanStore) int {
 		}
 	}
 	return n
+}
+
+func assertNoTempLeftover(t *testing.T, store *PlanStore) {
+	t.Helper()
+	entries, _ := os.ReadDir(store.Root())
+	for _, e := range entries {
+		if len(e.Name()) >= 5 && e.Name()[:5] == ".tmp-" {
+			t.Fatalf("temp directory leaked: %s", e.Name())
+		}
+	}
 }
 
 func hasPathPrefix(path, dir string) bool {

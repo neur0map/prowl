@@ -3,20 +3,25 @@ package review
 // snapshot.go materializes an immutable head view for committed range/commit
 // review and resolves arbitrary base/head source bytes. A committed head is
 // enumerated with sanitized `ls-tree -rz --full-tree`, its regular and symlink
-// blobs are read with sanitized `cat-file`, and both are written into a private
+// blobs are read with sanitized `cat-file` (each echoed id, type, and size bound
+// to the request before a byte is written), and both are written into a private
 // snapshot below Git common state and indexed with a private Prowl store. The
 // writer never trusts the enumerated stream: absolute paths, parent traversal,
-// duplicate entries, parent/file conflicts, malformed records, unsupported
-// modes, and the entry/blob/total caps all fail before a single byte is written.
+// duplicate entries, parent/file conflicts, malformed records, mode/type
+// mismatches, and the entry/blob/total caps all fail before a single byte is
+// written, with the entry stream parsed incrementally and stopped at the cap.
 // A malformed symlink blob (a 120000 blob whose target bytes contain NUL) is
 // kept verbatim by the SourceResolver but is never turned into a filesystem
-// symlink or indexed; it is recorded as an omission instead.
+// symlink or indexed; it is recorded as an omission instead. A current, clean,
+// verified worktree at the resolved head is reused instead of materialized.
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,12 +29,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/prowl-agent/prowl-agent/internal/config"
 	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
 	"github.com/prowl-agent/prowl-agent/internal/index"
 	"github.com/prowl-agent/prowl-agent/internal/query"
 	"github.com/prowl-agent/prowl-agent/internal/store"
-
-	"github.com/prowl-agent/prowl-agent/internal/config"
 )
 
 // snapshotGitOutputLimit bounds every snapshot Git subprocess whose stdout is
@@ -44,29 +49,29 @@ const snapshotGitOutputLimit = 256 << 20
 // wave, keeping peak memory bounded regardless of the 4 GiB total cap.
 const snapshotContentBatchBytes int64 = 128 << 20
 
-// snapshotContentDir is the subdirectory of a snapshot root that holds the
-// materialized head tree. The private store lives in a sibling .prowl directory
-// so the store database is never itself enumerated as source.
+// snapshotContentDir holds the materialized head tree; the private store lives in
+// a sibling .prowl directory so the store database is never enumerated as source.
 const snapshotContentDir = "content"
+
+// snapshotReadCeiling bounds a workspace-side source read when no explicit
+// per-read bound is supplied.
+const snapshotReadCeiling int64 = 256 << 20
 
 // v1 snapshot boundaries. They default to these constants on HeadViewOptions and
 // are lowerable by tests so the fail-closed accounting paths run without
 // materializing gigabytes.
 const (
-	// MaxSnapshotEntriesV1 bounds the number of tree entries a head view may
-	// materialize.
-	MaxSnapshotEntriesV1 = 250_000
-	// MaxSnapshotBlobBytesV1 bounds a single materialized regular blob.
-	MaxSnapshotBlobBytesV1 int64 = 64 << 20
-	// MaxSnapshotTotalBytesV1 bounds the total materialized blob content.
+	MaxSnapshotEntriesV1          = 250_000
+	MaxSnapshotBlobBytesV1  int64 = 64 << 20
 	MaxSnapshotTotalBytesV1 int64 = 4 << 30
 )
 
 var (
 	// ErrSnapshotUnsafeEntry reports a tree entry the writer refuses to
 	// materialize: an absolute path, parent traversal, a duplicate path, a
-	// parent/file conflict, a malformed record, or an unsupported mode Git would
-	// normally never create. It fails the whole materialization before any write.
+	// parent/file conflict, a malformed record, a mode/type mismatch, or a mode
+	// Git would normally never create. It fails the whole materialization before
+	// any write.
 	ErrSnapshotUnsafeEntry = errors.New("review: unsafe snapshot tree entry")
 	// ErrSnapshotTooManyEntries reports that the enumerated tree exceeded the
 	// entry cap.
@@ -80,13 +85,17 @@ var (
 	// local object store. A missing object fails closed rather than triggering a
 	// promisor/lazy fetch.
 	ErrSnapshotObjectMissing = errors.New("review: snapshot object missing from the local object store")
-	// ErrSnapshotMalformedStream reports unparseable ls-tree or cat-file output.
+	// ErrSnapshotMalformedStream reports unparseable or unbound ls-tree/cat-file
+	// output.
 	ErrSnapshotMalformedStream = errors.New("review: malformed snapshot object stream")
 	// ErrSourceTooLarge reports that a resolved source blob exceeded the caller's
 	// per-read byte bound.
 	ErrSourceTooLarge = errors.New("review: source blob exceeds the requested byte bound")
 	// ErrSourceSideUnavailable reports that a review side has no resolver.
 	ErrSourceSideUnavailable = errors.New("review: review side has no source resolver")
+	// ErrReuseUnavailable reports that a requested index reuse is not eligible and
+	// no head tree-ish is available to materialize instead.
+	ErrReuseUnavailable = errors.New("review: index reuse is not eligible and no head tree-ish is available")
 )
 
 // ReviewSide names one revision side of a review. It reuses the model's Side type
@@ -102,10 +111,10 @@ type SourceEntry struct {
 	Side      ReviewSide
 	Present   bool
 	Mode      uint32
-	Kind      string // "regular" | "symlink" | "gitlink" | "tree" | "absent"
+	Kind      string // "regular" | "symlink" | "gitlink" | "tree" | "special" | "absent"
 	OID       string
 	Bytes     []byte
-	TextClass TextClass // "text" | "binary"; empty for gitlink/tree/absent
+	TextClass TextClass // "text" | "binary"; empty for gitlink/tree/special/absent
 }
 
 // IsSymlink reports whether the entry is a symbolic link.
@@ -122,41 +131,37 @@ func (e SourceEntry) MalformedSymlink() bool {
 }
 
 // SourceResolver resolves the exact bytes and classification of an arbitrary
-// (changed or unchanged) path on one review side, reading only from Git objects.
+// (changed or unchanged) path on one review side.
 type SourceResolver interface {
 	Read(ctx context.Context, side ReviewSide, path string, maxBytes int64) (SourceEntry, error)
 }
 
-// gitTreeResolver reads a single side's blobs directly from a resolved tree-ish
-// object, never touching a worktree or following a link.
-type gitTreeResolver struct {
-	runner  GitRunner
-	root    string
-	width   int
-	treeish string
+// sideReader resolves one side's paths.
+type sideReader interface {
+	read(ctx context.Context, path string, maxBytes int64) (SourceEntry, error)
 }
 
-// sideSourceResolver dispatches Read to the per-side git tree resolver.
+// sideSourceResolver dispatches Read to the per-side reader.
 type sideSourceResolver struct {
-	base *gitTreeResolver
-	head *gitTreeResolver
+	base sideReader
+	head sideReader
 }
 
 // Read resolves path on side, bounding the read at maxBytes.
 func (r *sideSourceResolver) Read(ctx context.Context, side ReviewSide, p string, maxBytes int64) (SourceEntry, error) {
-	var res *gitTreeResolver
+	var reader sideReader
 	switch side {
 	case SideBase:
-		res = r.base
+		reader = r.base
 	case SideHead:
-		res = r.head
+		reader = r.head
 	default:
 		return SourceEntry{}, fmt.Errorf("%w: unknown side %q", ErrSourceSideUnavailable, side)
 	}
-	if res == nil {
+	if reader == nil {
 		return SourceEntry{}, fmt.Errorf("%w: %q", ErrSourceSideUnavailable, side)
 	}
-	entry, err := res.read(ctx, p, maxBytes)
+	entry, err := reader.read(ctx, p, maxBytes)
 	if err != nil {
 		return SourceEntry{}, err
 	}
@@ -164,13 +169,20 @@ func (r *sideSourceResolver) Read(ctx context.Context, side ReviewSide, p string
 	return entry, nil
 }
 
-// read resolves one path from the resolver's tree-ish. An absent path yields a
-// non-present absent entry; a directory yields a "tree" entry; a gitlink yields
-// a "gitlink" entry; a regular/symlink blob yields its exact bytes and
-// ThresholdTextV1 classification. maxBytes, when positive, bounds the blob size;
-// a larger blob fails with ErrSourceTooLarge rather than being truncated.
+// gitTreeResolver reads a side's blobs directly from a resolved tree-ish object,
+// never touching a worktree or following a link.
+type gitTreeResolver struct {
+	runner  GitRunner
+	root    string
+	width   int
+	treeish string
+}
+
+// read resolves one path from the resolver's tree-ish with strict stream
+// binding: exactly one NUL-terminated record, an exhaustive mode/type matrix,
+// full-width object ids, and a size checked before any content read.
 func (g *gitTreeResolver) read(ctx context.Context, p string, maxBytes int64) (SourceEntry, error) {
-	clean, err := cleanTreePath(p)
+	clean, err := safeTreePath(p)
 	if err != nil {
 		return SourceEntry{}, err
 	}
@@ -179,36 +191,57 @@ func (g *gitTreeResolver) read(ctx context.Context, p string, maxBytes int64) (S
 	if err != nil {
 		return SourceEntry{}, err
 	}
-	trimmed := bytes.TrimRight(out, "\x00")
-	if len(trimmed) == 0 {
+	if len(out) == 0 {
 		return SourceEntry{Path: clean, Present: false, Kind: "absent"}, nil
 	}
-	if bytes.IndexByte(trimmed, 0) >= 0 {
-		// More than one record: the path names a directory listing rather than a
-		// single entry. Treat it as a tree.
-		return SourceEntry{Path: clean, Present: true, Kind: "tree"}, nil
+	rec, err := singleNULRecord(out)
+	if err != nil {
+		return SourceEntry{}, fmt.Errorf("%w: source lookup: %v", ErrSnapshotMalformedStream, err)
 	}
-	mode, typ, oid, recPath, err := parseLsTreeRecord(trimmed)
+	mode, typ, oid, recPath, err := parseLsTreeRecord(rec)
 	if err != nil {
 		return SourceEntry{}, fmt.Errorf("%w: %v", ErrSnapshotMalformedStream, err)
 	}
 	if recPath != clean {
-		return SourceEntry{Path: clean, Present: false, Kind: "absent"}, nil
+		return SourceEntry{}, fmt.Errorf("%w: source lookup returned %q, want %q", ErrSnapshotMalformedStream, recPath, clean)
 	}
-	switch {
-	case typ == "tree" || mode == "040000":
+	entryKind, err := classifyEntry(mode, typ)
+	if err != nil {
+		return SourceEntry{}, err
+	}
+	switch entryKind {
+	case "tree":
 		return SourceEntry{Path: clean, Present: true, Mode: modeTree, Kind: "tree", OID: oid}, nil
-	case mode == "160000":
+	case "gitlink":
+		if !isFullOID(oid, g.width) {
+			return SourceEntry{}, fmt.Errorf("%w: gitlink %q has malformed id %q", ErrSnapshotUnsafeEntry, clean, oid)
+		}
 		return SourceEntry{Path: clean, Present: true, Mode: modeGitlink, Kind: "gitlink", OID: oid}, nil
-	case isBlobMode(mode):
+	default: // regular | symlink
+		if !isFullOID(oid, g.width) {
+			return SourceEntry{}, fmt.Errorf("%w: blob %q has malformed id %q", ErrSnapshotUnsafeEntry, clean, oid)
+		}
 		return g.readBlob(ctx, clean, mode, oid, maxBytes)
-	default:
-		return SourceEntry{}, fmt.Errorf("%w: unsupported mode %q for %q", ErrSnapshotUnsafeEntry, mode, clean)
 	}
 }
 
-// readBlob reads a regular/symlink blob's exact bytes and classifies it.
+// readBlob checks the blob's size before reading its content, then binds the
+// echoed object's id, type, and payload size to the request.
 func (g *gitTreeResolver) readBlob(ctx context.Context, clean, mode, oid string, maxBytes int64) (SourceEntry, error) {
+	sizes, err := batchCheck(ctx, g.runner, g.root, []string{oid})
+	if err != nil {
+		return SourceEntry{}, err
+	}
+	meta, ok := sizes[oid]
+	if !ok || meta.missing {
+		return SourceEntry{}, fmt.Errorf("%w: %s", ErrSnapshotObjectMissing, oid)
+	}
+	if meta.typ != "blob" {
+		return SourceEntry{}, fmt.Errorf("%w: %s is a %s, not a blob", ErrSnapshotMalformedStream, oid, meta.typ)
+	}
+	if maxBytes > 0 && meta.size > maxBytes {
+		return SourceEntry{}, fmt.Errorf("%w: %q is %d bytes, bound %d", ErrSourceTooLarge, clean, meta.size, maxBytes)
+	}
 	objs, err := batchBlobs(ctx, g.runner, g.root, []string{oid}, snapshotGitOutputLimit)
 	if err != nil {
 		return SourceEntry{}, err
@@ -217,11 +250,8 @@ func (g *gitTreeResolver) readBlob(ctx context.Context, clean, mode, oid string,
 	if !ok || o.Missing {
 		return SourceEntry{}, fmt.Errorf("%w: %s", ErrSnapshotObjectMissing, oid)
 	}
-	if o.Type != "blob" {
-		return SourceEntry{}, fmt.Errorf("%w: %s is a %s, not a blob", ErrSnapshotMalformedStream, oid, o.Type)
-	}
-	if maxBytes > 0 && int64(len(o.Data)) > maxBytes {
-		return SourceEntry{}, fmt.Errorf("%w: %q is %d bytes, bound %d", ErrSourceTooLarge, clean, len(o.Data), maxBytes)
+	if o.Type != "blob" || int64(len(o.Data)) != meta.size {
+		return SourceEntry{}, fmt.Errorf("%w: %s payload does not match its checked size/type", ErrSnapshotMalformedStream, oid)
 	}
 	kind, m := "regular", modeRegular
 	switch mode {
@@ -240,6 +270,104 @@ func (g *gitTreeResolver) readBlob(ctx context.Context, clean, mode, oid string,
 		Bytes:     o.Data,
 		TextClass: ThresholdText(clean, clean, side, side),
 	}, nil
+}
+
+// fsHeadResolver reads a reused workspace head's paths from the live worktree
+// with rooted, no-follow semantics. It never follows a link or opens a special
+// path.
+type fsHeadResolver struct {
+	root  string
+	width int
+}
+
+func (r *fsHeadResolver) read(ctx context.Context, p string, maxBytes int64) (SourceEntry, error) {
+	clean, err := safeTreePath(p)
+	if err != nil {
+		return SourceEntry{}, err
+	}
+	root, err := os.OpenRoot(r.root)
+	if err != nil {
+		return SourceEntry{}, err
+	}
+	defer root.Close()
+	info, err := root.Lstat(clean)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return SourceEntry{Path: clean, Present: false, Kind: "absent"}, nil
+		}
+		return SourceEntry{}, err
+	}
+	switch mode := info.Mode(); {
+	case mode&fs.ModeSymlink != 0:
+		target, err := boundedio.ReadlinkNoFollow(root, clean)
+		if err != nil {
+			return SourceEntry{}, err
+		}
+		b := []byte(target)
+		side := BlobSide{Present: true, Bytes: b}
+		return SourceEntry{Path: clean, Present: true, Mode: modeSymlink, Kind: "symlink", Bytes: b, TextClass: ThresholdText(clean, clean, side, side)}, nil
+	case mode.IsRegular():
+		f, err := boundedio.OpenRegularNoFollow(root, clean)
+		if err != nil {
+			return SourceEntry{}, err
+		}
+		defer f.Close()
+		st, err := f.Stat()
+		if err != nil {
+			return SourceEntry{}, err
+		}
+		bound := snapshotReadCeiling
+		if maxBytes > 0 {
+			if st.Size() > maxBytes {
+				return SourceEntry{}, fmt.Errorf("%w: %q is %d bytes, bound %d", ErrSourceTooLarge, clean, st.Size(), maxBytes)
+			}
+			bound = maxBytes
+		}
+		data, err := boundedio.ReadAllContext(ctx, f, bound)
+		if err != nil {
+			if errors.Is(err, boundedio.ErrTooLarge) {
+				return SourceEntry{}, fmt.Errorf("%w: %q grew past its bound", ErrSourceTooLarge, clean)
+			}
+			return SourceEntry{}, err
+		}
+		m := modeRegular
+		if st.Mode()&0o111 != 0 {
+			m = modeExecutable
+		}
+		side := BlobSide{Present: true, Bytes: data}
+		return SourceEntry{Path: clean, Present: true, Mode: m, Kind: "regular", Bytes: data, TextClass: ThresholdText(clean, clean, side, side)}, nil
+	default:
+		return SourceEntry{Path: clean, Present: true, Kind: "special"}, nil
+	}
+}
+
+// classifyEntry validates a git (mode, type) pair against the exhaustive matrix
+// and returns the entry kind.
+func classifyEntry(mode, typ string) (string, error) {
+	switch mode {
+	case "040000":
+		if typ != "tree" {
+			return "", fmt.Errorf("%w: mode 040000 with type %q", ErrSnapshotUnsafeEntry, typ)
+		}
+		return "tree", nil
+	case "160000":
+		if typ != "commit" {
+			return "", fmt.Errorf("%w: mode 160000 with type %q", ErrSnapshotUnsafeEntry, typ)
+		}
+		return "gitlink", nil
+	case "100644", "100755":
+		if typ != "blob" {
+			return "", fmt.Errorf("%w: mode %s with type %q", ErrSnapshotUnsafeEntry, mode, typ)
+		}
+		return "regular", nil
+	case "120000":
+		if typ != "blob" {
+			return "", fmt.Errorf("%w: mode 120000 with type %q", ErrSnapshotUnsafeEntry, typ)
+		}
+		return "symlink", nil
+	default:
+		return "", fmt.Errorf("%w: unsupported mode %q", ErrSnapshotUnsafeEntry, mode)
+	}
 }
 
 // Omission is a materialized-tree path the writer deliberately skipped, with a
@@ -267,15 +395,18 @@ type HeadView struct {
 	Close     func() error
 }
 
-// ReusableView carries the current project services a HeadView reuses when the
-// reviewed content is exactly the current clean worktree (or the workspace
-// itself). The HeadView does not own these services, so its Close never touches
-// them.
+// ReusableView carries the current project services a HeadView may reuse when the
+// reviewed content is exactly the current clean worktree at the resolved head
+// (or the workspace itself). The HeadView does not own these services, so its
+// Close never touches them. Eligibility is always verified by OpenHeadView.
 type ReusableView struct {
 	Root    string
 	Store   *store.Store
 	Query   *query.Querier
 	Context *contextpacket.Service
+	// Workspace marks a workspace-scope reuse: the reviewed head is the live
+	// worktree, so there is no resolved head OID to match.
+	Workspace bool
 }
 
 // symlinkFunc creates a symbolic link rooted in a snapshot. It is a seam so a
@@ -289,8 +420,8 @@ func rootSymlink(root *os.Root, target, linkname string) error {
 // HeadViewOptions configures OpenHeadView. Runner, RepoRoot, and ObjectFormat
 // are always required. For a materialized committed head, HeadTreeish must be a
 // resolved commit/tree object id; BaseTreeish enables base-side source reads.
-// Reuse, when set, wraps existing services instead of materializing. The Max*
-// bounds default to their v1 constants when zero.
+// Reuse, when set, wraps existing services if and only if reuse is verified. The
+// Max* bounds default to their v1 constants when zero.
 type HeadViewOptions struct {
 	Runner       GitRunner
 	RepoRoot     string
@@ -300,8 +431,6 @@ type HeadViewOptions struct {
 	HeadTreeish string
 	BaseTreeish string
 
-	// Reuse wraps current project services for a clean exact-head or workspace
-	// view rather than materializing a private snapshot.
 	Reuse *ReusableView
 
 	// SnapshotParent is the directory a materialized snapshot is created under.
@@ -344,12 +473,13 @@ func (o HeadViewOptions) symlinker() symlinkFunc {
 	return rootSymlink
 }
 
-// OpenHeadView builds an immutable head view. When opts.Reuse is set it wraps
-// those services (Close is a no-op). Otherwise it materializes opts.HeadTreeish
-// into a private snapshot below Git common state, indexes it with the project's
-// ignore/language configuration, and assembles a private query/context service.
-// The side-aware SourceResolver resolves arbitrary base/head paths from Git
-// objects in every mode.
+// OpenHeadView builds an immutable head view. When opts.Reuse is set and reuse
+// is verified (matching root, complete published index equal to the current
+// worktree, and - for a committed head - the current HEAD equal to the resolved
+// head over a clean worktree) it wraps those services with a no-op Close.
+// Otherwise it materializes opts.HeadTreeish into a private snapshot below Git
+// common state and indexes it. The side-aware SourceResolver resolves arbitrary
+// base/head paths in every mode.
 func OpenHeadView(ctx context.Context, opts HeadViewOptions) (*HeadView, error) {
 	if opts.Runner == nil {
 		return nil, errors.New("review: OpenHeadView requires a runner")
@@ -358,35 +488,109 @@ func OpenHeadView(ctx context.Context, opts HeadViewOptions) (*HeadView, error) 
 	if !ok {
 		return nil, fmt.Errorf("%w: %q", ErrUnsupportedObjectFormat, opts.ObjectFormat)
 	}
-	resolver := &sideSourceResolver{}
-	if opts.BaseTreeish != "" {
-		resolver.base = &gitTreeResolver{runner: opts.Runner, root: opts.RepoRoot, width: width, treeish: opts.BaseTreeish}
-	}
-	if opts.HeadTreeish != "" {
-		resolver.head = &gitTreeResolver{runner: opts.Runner, root: opts.RepoRoot, width: width, treeish: opts.HeadTreeish}
-	}
+	opt := index.Options{Ignore: opts.Config.Ignore, Languages: opts.Config.Languages}
 
 	if opts.Reuse != nil {
-		reuse := opts.Reuse
-		return &HeadView{
-			Root:    reuse.Root,
-			Store:   reuse.Store,
-			Query:   reuse.Query,
-			Context: reuse.Context,
-			Sources: resolver,
-			Close:   func() error { return nil },
-		}, nil
+		eligible, err := eligibleReuse(ctx, opts, opt, width)
+		if err != nil {
+			return nil, err
+		}
+		if eligible {
+			return newReuseHeadView(opts, width), nil
+		}
+		if opts.HeadTreeish == "" {
+			return nil, ErrReuseUnavailable
+		}
 	}
 
 	if opts.HeadTreeish == "" {
 		return nil, errors.New("review: OpenHeadView requires a head tree-ish to materialize")
 	}
-	return materializeHeadView(ctx, opts, width, resolver)
+	return materializeHeadView(ctx, opts, width, opt)
+}
+
+// newSourceResolver builds the side-aware resolver for the given options.
+func newSourceResolver(opts HeadViewOptions, width int, workspaceHead bool) *sideSourceResolver {
+	resolver := &sideSourceResolver{}
+	if opts.BaseTreeish != "" {
+		resolver.base = &gitTreeResolver{runner: opts.Runner, root: opts.RepoRoot, width: width, treeish: opts.BaseTreeish}
+	}
+	switch {
+	case workspaceHead:
+		resolver.head = &fsHeadResolver{root: opts.RepoRoot, width: width}
+	case opts.HeadTreeish != "":
+		resolver.head = &gitTreeResolver{runner: opts.Runner, root: opts.RepoRoot, width: width, treeish: opts.HeadTreeish}
+	}
+	return resolver
+}
+
+// newReuseHeadView wraps verified current services.
+func newReuseHeadView(opts HeadViewOptions, width int) *HeadView {
+	reuse := opts.Reuse
+	return &HeadView{
+		Root:    reuse.Root,
+		Store:   reuse.Store,
+		Query:   reuse.Query,
+		Context: reuse.Context,
+		Sources: newSourceResolver(opts, width, reuse.Workspace),
+		Close:   func() error { return nil },
+	}
+}
+
+// eligibleReuse verifies every condition under which the current index may stand
+// in for the resolved head. Any unmet condition returns false (materialize);
+// only a genuine error (cancellation, git/index failure) returns an error.
+func eligibleReuse(ctx context.Context, opts HeadViewOptions, opt index.Options, width int) (bool, error) {
+	r := opts.Reuse
+	if r.Root == "" || r.Store == nil || r.Query == nil || r.Root != opts.RepoRoot {
+		return false, nil
+	}
+	state, err := r.Store.GetMeta("index_state")
+	if err != nil {
+		return false, err
+	}
+	if state != "complete" {
+		return false, nil
+	}
+	sig, err := index.SignatureWithOptionsContext(ctx, r.Root, opt)
+	if err != nil {
+		return false, err
+	}
+	stored, err := r.Store.GetMeta("cli_sig")
+	if err != nil {
+		return false, err
+	}
+	if stored != strconv.FormatUint(sig, 16) {
+		return false, nil
+	}
+	if r.Workspace {
+		return true, nil
+	}
+	if !isFullOID(opts.HeadTreeish, width) {
+		return false, nil
+	}
+	head, err := resolveCommitOID(ctx, opts.Runner, r.Root, "HEAD")
+	if err != nil {
+		return false, err
+	}
+	if !strings.EqualFold(head, opts.HeadTreeish) {
+		return false, nil
+	}
+	return worktreeClean(ctx, opts.Runner, r.Root)
+}
+
+// worktreeClean reports whether the worktree has no tracked or untracked change.
+func worktreeClean(ctx context.Context, runner GitRunner, root string) (bool, error) {
+	out, err := runner.Output(ctx, root, snapshotGitOutputLimit, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimRight(out, "\x00")) == 0, nil
 }
 
 // materializeHeadView enumerates and writes the head tree into a private
 // snapshot, builds a private index, and returns an owning HeadView.
-func materializeHeadView(ctx context.Context, opts HeadViewOptions, width int, resolver *sideSourceResolver) (*HeadView, error) {
+func materializeHeadView(ctx context.Context, opts HeadViewOptions, width int, opt index.Options) (*HeadView, error) {
 	parent := opts.SnapshotParent
 	if parent == "" {
 		common, err := gitCommonDir(ctx, opts.Runner, opts.RepoRoot)
@@ -426,21 +630,18 @@ func materializeHeadView(ctx context.Context, opts HeadViewOptions, width int, r
 		cleanup()
 		return nil, err
 	}
-	opt := index.Options{Ignore: opts.Config.Ignore, Languages: opts.Config.Languages}
 	if _, err := index.IndexWithOptionsContext(ctx, db, contentDir, opt); err != nil {
 		_ = db.Close()
 		cleanup()
 		return nil, err
 	}
 
-	querier := query.New(db)
-	contextService := &contextpacket.Service{Store: db, Root: contentDir}
 	return &HeadView{
 		Root:      work,
 		Store:     db,
-		Query:     querier,
-		Context:   contextService,
-		Sources:   resolver,
+		Query:     query.New(db),
+		Context:   &contextpacket.Service{Store: db, Root: contentDir},
+		Sources:   newSourceResolver(opts, width, false),
 		Omissions: omissions,
 		Close: func() error {
 			err := db.Close()
@@ -485,29 +686,26 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 	if err != nil {
 		return nil, err
 	}
-	var total int64
-	for oid, meta := range sizes {
-		if meta.missing {
-			return nil, fmt.Errorf("%w: %s", ErrSnapshotObjectMissing, oid)
-		}
-		if meta.typ != "blob" {
-			return nil, fmt.Errorf("%w: %s is a %s, not a blob", ErrSnapshotMalformedStream, oid, meta.typ)
-		}
-	}
-	// Regular blobs are bounded per-blob and in total; symlink target blobs are
-	// small and counted only toward the total.
+	remaining := opts.maxTotalBytes()
 	for _, e := range entries {
 		meta, ok := sizes[e.oid]
 		if !ok || !isBlobMode(e.mode) {
 			continue
 		}
+		if meta.missing {
+			return nil, fmt.Errorf("%w: %s", ErrSnapshotObjectMissing, e.oid)
+		}
+		if meta.typ != "blob" {
+			return nil, fmt.Errorf("%w: %s is a %s, not a blob", ErrSnapshotMalformedStream, e.oid, meta.typ)
+		}
 		if e.mode != "120000" && meta.size > opts.maxBlobBytes() {
 			return nil, fmt.Errorf("%w: %q is %d bytes", ErrSnapshotBlobTooLarge, e.path, meta.size)
 		}
-		total += meta.size
-		if total > opts.maxTotalBytes() {
-			return nil, fmt.Errorf("%w: total reached %d bytes", ErrSnapshotTotalTooLarge, total)
+		// Overflow-safe total accounting: subtraction never overflows.
+		if meta.size > remaining {
+			return nil, fmt.Errorf("%w: %q exceeds the remaining budget", ErrSnapshotTotalTooLarge, e.path)
 		}
+		remaining -= meta.size
 	}
 
 	root, err := os.OpenRoot(contentDir)
@@ -526,8 +724,6 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 		}
 		if e.mode == "120000" {
 			if bytes.IndexByte(data, 0) >= 0 {
-				// A malformed symlink target cannot become a filesystem link;
-				// keep it only in the SourceResolver and record an omission.
 				omissions = append(omissions, Omission{Path: e.path, Side: SideHead, Reason: "malformed symlink target (NUL)"})
 				return nil
 			}
@@ -542,32 +738,33 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 
 	// Write blob content in size-bounded waves to bound peak memory.
 	for start := 0; start < len(entries); {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		wave := make([]string, 0, 64)
 		waveBytes := int64(0)
 		seen := map[string]bool{}
 		i := start
 		for ; i < len(entries); i++ {
 			e := entries[i]
-			if e.mode == "160000" {
-				continue // gitlink: no content to write
-			}
-			if !isBlobMode(e.mode) {
+			if e.mode == "160000" || !isBlobMode(e.mode) {
 				continue
 			}
 			meta := sizes[e.oid]
-			if !seen[e.oid] {
-				if len(wave) > 0 && waveBytes+meta.size > snapshotContentBatchBytes {
-					break
-				}
-				wave = append(wave, e.oid)
-				seen[e.oid] = true
-				waveBytes += meta.size
+			if seen[e.oid] {
+				continue
 			}
+			if len(wave) > 0 && waveBytes+meta.size > snapshotContentBatchBytes {
+				break
+			}
+			wave = append(wave, e.oid)
+			seen[e.oid] = true
+			waveBytes += meta.size
 		}
 		end := i
 		objs := map[string]CatFileObject{}
 		if len(wave) > 0 {
-			objs, err = batchBlobs(ctx, opts.Runner, opts.RepoRoot, wave, snapshotGitOutputLimit)
+			objs, err = batchBlobs(ctx, opts.Runner, opts.RepoRoot, wave, snapshotContentBatchBytes+int64(len(wave))*128+2)
 			if err != nil {
 				return nil, err
 			}
@@ -581,15 +778,11 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 			if !ok || o.Missing {
 				return nil, fmt.Errorf("%w: %s", ErrSnapshotObjectMissing, e.oid)
 			}
+			if o.Type != "blob" || int64(len(o.Data)) != sizes[e.oid].size {
+				return nil, fmt.Errorf("%w: %s payload does not match its checked size/type", ErrSnapshotMalformedStream, e.oid)
+			}
 			if err := writeBlob(e, o.Data); err != nil {
 				return nil, err
-			}
-		}
-		if end == start {
-			// No writable blob in this wave (e.g. a run of gitlinks); advance.
-			end = i
-			if end == start {
-				break
 			}
 		}
 		start = end
@@ -597,22 +790,23 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 	return omissions, nil
 }
 
-// parseTreeEntries parses `ls-tree -rz --full-tree` output into validated
-// entries. It rejects a missing terminal NUL, a malformed record, an invalid or
+// parseTreeEntries parses `ls-tree -rz --full-tree` output incrementally into
+// validated entries, stopping as soon as the entry cap is exceeded. It rejects a
+// missing terminal NUL, a malformed record, a mode/type mismatch, an invalid or
 // non-UTF-8 path, an absolute path, parent traversal, a duplicate path, a
-// parent/file conflict, an unsupported mode, and more than maxEntries entries.
+// parent/file conflict, an unsupported mode, and a short object id.
 func parseTreeEntries(out []byte, width, maxEntries int) ([]treeEntry, error) {
-	if len(out) == 0 {
-		return nil, nil
-	}
-	if out[len(out)-1] != 0 {
-		return nil, fmt.Errorf("%w: ls-tree output not NUL-terminated", ErrSnapshotMalformedStream)
-	}
-	records := bytes.Split(out[:len(out)-1], []byte{0})
-	entries := make([]treeEntry, 0, len(records))
+	var entries []treeEntry
 	files := map[string]bool{}
 	dirs := map[string]bool{}
-	for _, rec := range records {
+	rest := out
+	for len(rest) > 0 {
+		i := bytes.IndexByte(rest, 0)
+		if i < 0 {
+			return nil, fmt.Errorf("%w: ls-tree output not NUL-terminated", ErrSnapshotMalformedStream)
+		}
+		rec := rest[:i]
+		rest = rest[i+1:]
 		if len(rec) == 0 {
 			return nil, fmt.Errorf("%w: empty ls-tree record", ErrSnapshotMalformedStream)
 		}
@@ -620,16 +814,13 @@ func parseTreeEntries(out []byte, width, maxEntries int) ([]treeEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrSnapshotMalformedStream, err)
 		}
-		if !modeSupported(mode) {
-			return nil, fmt.Errorf("%w: unsupported mode %q for %q", ErrSnapshotUnsafeEntry, mode, p)
+		if _, err := classifyEntry(mode, typ); err != nil {
+			return nil, err
 		}
 		if isBlobMode(mode) || mode == "160000" {
 			if !isFullOID(oid, width) {
 				return nil, fmt.Errorf("%w: entry %q has malformed object id %q", ErrSnapshotUnsafeEntry, p, oid)
 			}
-		}
-		if typ == "commit" && mode != "160000" {
-			return nil, fmt.Errorf("%w: entry %q has type commit with mode %q", ErrSnapshotUnsafeEntry, p, mode)
 		}
 		clean, err := safeTreePath(p)
 		if err != nil {
@@ -638,15 +829,11 @@ func parseTreeEntries(out []byte, width, maxEntries int) ([]treeEntry, error) {
 		if files[clean] || dirs[clean] {
 			return nil, fmt.Errorf("%w: duplicate or conflicting path %q", ErrSnapshotUnsafeEntry, clean)
 		}
-		// A materialized path may not be both a file and a directory prefix.
 		for _, ancestor := range ancestorPaths(clean) {
 			if files[ancestor] {
 				return nil, fmt.Errorf("%w: %q conflicts with file %q", ErrSnapshotUnsafeEntry, clean, ancestor)
 			}
 			dirs[ancestor] = true
-		}
-		if dirs[clean] {
-			return nil, fmt.Errorf("%w: %q conflicts with an existing directory", ErrSnapshotUnsafeEntry, clean)
 		}
 		files[clean] = true
 		entries = append(entries, treeEntry{mode: mode, typ: typ, oid: oid, path: clean})
@@ -657,21 +844,9 @@ func parseTreeEntries(out []byte, width, maxEntries int) ([]treeEntry, error) {
 	return entries, nil
 }
 
-// modeSupported reports whether a git tree mode may appear in a head snapshot:
-// regular file, executable, symlink, or gitlink. Any other mode (a hard link,
-// device, FIFO, socket, or a mode Git would refuse to create) is rejected.
-func modeSupported(mode string) bool {
-	switch mode {
-	case "100644", "100755", "120000", "160000", "040000":
-		return true
-	default:
-		return false
-	}
-}
-
 // safeTreePath validates a tree entry path: non-empty valid UTF-8, relative
 // (not absolute), forward-slash separated, and free of "." / ".." / empty
-// components. It returns the cleaned slash path.
+// components and NUL/backslash. It returns the cleaned slash path.
 func safeTreePath(p string) (string, error) {
 	if p == "" {
 		return "", fmt.Errorf("%w: empty path", ErrSnapshotUnsafeEntry)
@@ -685,27 +860,15 @@ func safeTreePath(p string) (string, error) {
 	if strings.ContainsRune(p, 0) {
 		return "", fmt.Errorf("%w: path %q contains NUL", ErrSnapshotUnsafeEntry, p)
 	}
-	// Reject a Windows-style absolute or volume path defensively.
 	if strings.Contains(p, "\\") {
 		return "", fmt.Errorf("%w: backslash in path %q", ErrSnapshotUnsafeEntry, p)
 	}
-	parts := strings.Split(p, "/")
-	for _, part := range parts {
+	for _, part := range strings.Split(p, "/") {
 		if part == "" || part == "." || part == ".." {
 			return "", fmt.Errorf("%w: unsafe component in path %q", ErrSnapshotUnsafeEntry, p)
 		}
 	}
-	return strings.Join(parts, "/"), nil
-}
-
-// cleanTreePath validates a caller-supplied source path for a SourceResolver
-// read, applying the same relative/no-traversal rule as materialization.
-func cleanTreePath(p string) (string, error) {
-	clean, err := safeTreePath(p)
-	if err != nil {
-		return "", fmt.Errorf("%w", err)
-	}
-	return clean, nil
+	return p, nil
 }
 
 // ancestorPaths returns the directory prefixes of a slash path, excluding the
@@ -730,8 +893,9 @@ type batchCheckMeta struct {
 }
 
 // batchCheck resolves object metadata for a set of (deduplicated) object ids
-// without reading their content, so sizes and existence are known before any
-// content read or filesystem write. A missing object is reported, never fetched.
+// without reading their content, verifying echoed id and request order and
+// rejecting a negative, overflowing, or MaxInt64 size. A missing object is
+// reported, never fetched.
 func batchCheck(ctx context.Context, runner GitRunner, root string, oids []string) (map[string]batchCheckMeta, error) {
 	order, ok := dedupOIDs(oids)
 	result := map[string]batchCheckMeta{}
@@ -753,6 +917,9 @@ func batchCheck(ctx context.Context, runner GitRunner, root string, oids []strin
 	}
 	for i, line := range lines {
 		fields := strings.Fields(line)
+		if len(fields) == 0 || !strings.EqualFold(fields[0], order[i]) {
+			return nil, fmt.Errorf("%w: batch-check echoed %q, want %s", ErrSnapshotMalformedStream, line, order[i])
+		}
 		if len(fields) == 2 && fields[1] == "missing" {
 			result[order[i]] = batchCheckMeta{missing: true}
 			continue
@@ -761,7 +928,7 @@ func batchCheck(ctx context.Context, runner GitRunner, root string, oids []strin
 			return nil, fmt.Errorf("%w: bad batch-check line %q", ErrSnapshotMalformedStream, line)
 		}
 		size, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil || size < 0 {
+		if err != nil || size < 0 || size == math.MaxInt64 {
 			return nil, fmt.Errorf("%w: bad object size in %q", ErrSnapshotMalformedStream, line)
 		}
 		result[order[i]] = batchCheckMeta{typ: fields[1], size: size}
@@ -770,7 +937,7 @@ func batchCheck(ctx context.Context, runner GitRunner, root string, oids []strin
 }
 
 // batchBlobs reads a set of (deduplicated) object ids in one cat-file batch,
-// keyed by the requested id and echoing the full id and exact bytes.
+// verifying the echoed id and request order and returning exact bytes.
 func batchBlobs(ctx context.Context, runner GitRunner, root string, oids []string, limit int64) (map[string]CatFileObject, error) {
 	order, ok := dedupOIDs(oids)
 	result := map[string]CatFileObject{}
@@ -794,6 +961,9 @@ func batchBlobs(ctx context.Context, runner GitRunner, root string, oids []strin
 		return nil, fmt.Errorf("%w: cat-file returned %d objects, want %d", ErrSnapshotMalformedStream, len(objs), len(order))
 	}
 	for i, oid := range order {
+		if !strings.EqualFold(objs[i].OID, oid) {
+			return nil, fmt.Errorf("%w: cat-file echoed %q, want %s", ErrSnapshotMalformedStream, objs[i].OID, oid)
+		}
 		result[oid] = objs[i]
 	}
 	return result, nil
