@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -574,36 +575,99 @@ func gitlinkRangeCapture(t *testing.T, from, to string) Capture {
 	return captureRange(t, repo, g1, repo.revParse(t, "HEAD"))
 }
 
-// TestCaptureWorkspaceGitlinkUsesLiveSubmoduleHead proves a workspace gitlink is
-// identified by the submodule worktree's live HEAD, not the stale index: an
-// unstaged submodule advance changes the captured identity, and two distinct
-// live commits produce distinct workspace fingerprints.
-func TestCaptureWorkspaceGitlinkUsesLiveSubmoduleHead(t *testing.T) {
+// stageNested advances the nested repo at rel and stages the new gitlink id in
+// the super-repo, returning the new nested HEAD id.
+func stageNested(t *testing.T, repo *gitFixture, rel, body string) string {
+	t.Helper()
+	oid := repo.advanceNested(t, rel, body)
+	rawGit(t, repo.root, "add", rel)
+	return oid
+}
+
+// TestCaptureWorkspaceGitlinkUsesStagedIndexOID proves a staged workspace gitlink
+// is identified by its full staged index id (no live checkout required), and two
+// distinct staged commits produce distinct workspace fingerprints.
+func TestCaptureWorkspaceGitlinkUsesStagedIndexOID(t *testing.T) {
 	repo := newGitFixture(t)
 	repo.commitFile(t, "seed.go", "package p\n")
-	indexOID := repo.initNestedGitlink(t, "sub", "one\n") // staged at c1
-	repo.commit(t, "track sub")                           // super now tracks sub@c1
+	repo.initNestedGitlink(t, "sub", "one\n") // staged at c1
+	repo.commit(t, "track sub")               // super tracks sub@c1
 
-	live2 := repo.advanceNested(t, "sub", "two\n") // advance c1->c2, NOT staged in super
+	staged2 := stageNested(t, repo, "sub", "two\n") // advance c1->c2 and stage it
 	capA := captureWorkspace(t, repo)
 	recA := recordByNewPath(t, capA, "sub")
 	assertRec(t, recA, "M", TextClassBinary, 0, 0)
-	got := hex.EncodeToString(recA.NewSide.Value)
-	if got != live2 {
-		t.Fatalf("new gitlink side=%s, want live HEAD %s", got, live2)
-	}
-	if got == indexOID {
-		t.Fatalf("new gitlink side is the stale index/base id %s, not the live HEAD", indexOID)
+	if got := hex.EncodeToString(recA.NewSide.Value); got != staged2 {
+		t.Fatalf("new gitlink side=%s, want staged index id %s", got, staged2)
 	}
 
-	live3 := repo.advanceNested(t, "sub", "three\n") // advance c2->c3, still unstaged
+	stageNested(t, repo, "sub", "three\n") // advance c2->c3 and stage it
 	capB := captureWorkspace(t, repo)
-	if hex.EncodeToString(recordByNewPath(t, capB, "sub").NewSide.Value) != live3 {
-		t.Fatalf("second capture did not track the live HEAD %s", live3)
-	}
 	if sameFingerprint(capA, capB) {
-		t.Fatalf("two distinct live submodule commits must change the workspace fingerprint")
+		t.Fatalf("two distinct staged submodule commits must change the workspace fingerprint")
 	}
+}
+
+// TestCaptureWorkspaceGitlinkZeroOIDFailsClosed proves an unstaged submodule
+// advance (zero raw worktree gitlink OID) fails closed rather than being
+// re-resolved by pathname.
+func TestCaptureWorkspaceGitlinkZeroOIDFailsClosed(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	repo.initNestedGitlink(t, "sub", "one\n")
+	repo.commit(t, "track sub")
+	repo.advanceNested(t, "sub", "two\n") // advance WITHOUT staging -> zero raw OID
+
+	if _, err := runCapture(t, repo, &Capturer{}); !errors.Is(err, ErrGitlinkUnresolved) {
+		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
+	}
+}
+
+// TestCaptureWorkspaceGitlinkNoNestedGitInvocation proves gitlink resolution runs
+// no Git process against the workspace path: every invocation is rooted at the
+// pinned workspace root, never a submodule subdirectory.
+func TestCaptureWorkspaceGitlinkNoNestedGitInvocation(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	repo.initNestedGitlink(t, "sub", "one\n")
+	repo.commit(t, "track sub")
+	stageNested(t, repo, "sub", "two\n")
+
+	ctx := context.Background()
+	runner := rootAssertRunner{ExecGit: execRunner(t), root: repo.root, t: t}
+	scope, err := ResolveScope(ctx, runner, repo.root, PlanRequest{})
+	if err != nil {
+		t.Fatalf("resolve scope: %v", err)
+	}
+	cap, err := (&Capturer{Root: repo.root, Runner: runner}).CaptureOnce(ctx, scope)
+	if err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	if recordByNewPath(t, cap, "sub").NewSide.Kind != SideGitOID {
+		t.Fatalf("staged gitlink new side must be a git_oid")
+	}
+}
+
+// rootAssertRunner fails the test if any Git invocation runs outside the pinned
+// workspace root, proving no nested-directory Git process is spawned.
+type rootAssertRunner struct {
+	ExecGit
+	root string
+	t    *testing.T
+}
+
+func (r rootAssertRunner) Output(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
+	if root != r.root {
+		r.t.Fatalf("git invoked outside the pinned root: root=%q args=%v", root, args)
+	}
+	return r.ExecGit.Output(ctx, root, limit, args...)
+}
+
+func (r rootAssertRunner) Pipe(ctx context.Context, root string, limit int64, stdin io.Reader, stdout io.Writer, args ...string) error {
+	if root != r.root {
+		r.t.Fatalf("git pipe invoked outside the pinned root: root=%q args=%v", root, args)
+	}
+	return r.ExecGit.Pipe(ctx, root, limit, stdin, stdout, args...)
 }
 
 // TestCaptureRejectsMovedHead proves workspace capture is pinned to the resolved
@@ -676,6 +740,10 @@ func TestParseGitlinkLsTreeStrict(t *testing.T) {
 		out  string
 	}{
 		{"no records", ""},
+		{"missing terminal NUL", "160000 commit " + oid + "\tsub"},
+		{"truncated final record", "160000 commit " + oid + "\tsub\x00160000 commit " + strings.Repeat("b", 40) + "\tsubZ"},
+		{"double NUL", "160000 commit " + oid + "\tsub\x00\x00"},
+		{"leading NUL", "\x00160000 commit " + oid + "\tsub\x00"},
 		{"two records", "160000 commit " + oid + "\tsub\x00160000 commit " + strings.Repeat("b", 40) + "\tsubZ\x00"},
 		{"wrong path", "160000 commit " + oid + "\tother\x00"},
 		{"wrong mode", "100644 blob " + oid + "\tsub\x00"},
@@ -688,6 +756,41 @@ func TestParseGitlinkLsTreeStrict(t *testing.T) {
 	for _, tc := range bad {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := parseGitlinkLsTree([]byte(tc.out), "sub", 20); err == nil {
+				t.Fatalf("want error for %s", tc.name)
+			}
+		})
+	}
+}
+
+// TestParseGitlinkLsFilesStrict proves the gitlink index parser accepts exactly
+// one well-formed stage-0 160000 record for the requested path and rejects every
+// malformed shape, including bad NUL framing and a nonzero stage.
+func TestParseGitlinkLsFilesStrict(t *testing.T) {
+	oid := strings.Repeat("a", 40)
+	good := []byte("160000 " + oid + " 0\tsub\x00")
+	got, err := parseGitlinkLsFiles(good, "sub", 20)
+	if err != nil || got != oid {
+		t.Fatalf("good record: got %q err %v", got, err)
+	}
+
+	bad := []struct {
+		name string
+		out  string
+	}{
+		{"no records", ""},
+		{"missing terminal NUL", "160000 " + oid + " 0\tsub"},
+		{"double NUL", "160000 " + oid + " 0\tsub\x00\x00"},
+		{"leading NUL", "\x00160000 " + oid + " 0\tsub\x00"},
+		{"two records", "160000 " + oid + " 0\tsub\x00160000 " + strings.Repeat("b", 40) + " 0\tsubZ\x00"},
+		{"wrong path", "160000 " + oid + " 0\tother\x00"},
+		{"wrong mode", "100644 " + oid + " 0\tsub\x00"},
+		{"nonzero stage", "160000 " + oid + " 1\tsub\x00"},
+		{"short oid", "160000 " + strings.Repeat("a", 7) + " 0\tsub\x00"},
+		{"missing tab", "160000 " + oid + " 0 sub\x00"},
+	}
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := parseGitlinkLsFiles([]byte(tc.out), "sub", 20); err == nil {
 				t.Fatalf("want error for %s", tc.name)
 			}
 		})
@@ -761,36 +864,6 @@ func TestCaptureGitlinkRejectsMalformedTreeOutput(t *testing.T) {
 		},
 	}
 	scope, err := ResolveScope(ctx, runner, repo.root, PlanRequest{Base: g1, Head: g2})
-	if err != nil {
-		t.Fatalf("resolve scope: %v", err)
-	}
-	_, err = (&Capturer{Root: repo.root, Runner: runner}).CaptureOnce(ctx, scope)
-	if !errors.Is(err, ErrGitlinkUnresolved) {
-		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
-	}
-}
-
-// TestCaptureWorkspaceGitlinkRejectsBadLiveHead proves a workspace gitlink fails
-// closed when the live submodule rev-parse yields a non-OID.
-func TestCaptureWorkspaceGitlinkRejectsBadLiveHead(t *testing.T) {
-	repo := newGitFixture(t)
-	repo.commitFile(t, "seed.go", "package p\n")
-	repo.initNestedGitlink(t, "sub", "one\n")
-	repo.commit(t, "track sub")
-	repo.advanceNested(t, "sub", "two\n") // unstaged advance so the new side is a live gitlink
-
-	sub := filepath.Join(repo.root, "sub")
-	ctx := context.Background()
-	runner := scriptedRunner{
-		ExecGit: execRunner(t),
-		intercept: func(root string, args []string) ([]byte, bool, error) {
-			if root == sub && len(args) > 0 && args[0] == "rev-parse" {
-				return []byte("not-a-valid-object-id\n"), true, nil
-			}
-			return nil, false, nil
-		},
-	}
-	scope, err := ResolveScope(ctx, runner, repo.root, PlanRequest{})
 	if err != nil {
 		t.Fatalf("resolve scope: %v", err)
 	}

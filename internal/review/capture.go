@@ -350,13 +350,24 @@ func (s *captureState) workspaceOldSide(ch RawChange, oldPath string) (sideData,
 }
 
 // workspaceNewSide builds the new side of a tracked change: a gitlink resolved
-// from the live submodule worktree HEAD, or a rooted no-follow read of the
-// workspace entry.
+// from the staged index OID, or a rooted no-follow read of the workspace entry.
 func (s *captureState) workspaceNewSide(ch RawChange, newPath string) (sideData, error) {
 	if ch.NewMode == "160000" {
-		return s.gitlinkLiveSide(newPath)
+		return s.gitlinkWorkspaceNewSide(ch, newPath)
 	}
 	return s.readNewSide(newPath, false)
+}
+
+// gitlinkWorkspaceNewSide resolves a workspace gitlink's new side. A nonzero raw
+// status OID means the change is staged, so the full staged id is read from the
+// index; an all-zero raw OID is an unstaged submodule state that v1 does not
+// re-resolve by pathname, so it fails closed. No nested Git process is run
+// against the workspace path.
+func (s *captureState) gitlinkWorkspaceNewSide(ch RawChange, newPath string) (sideData, error) {
+	if isZeroOID(ch.NewOID) {
+		return sideData{}, fmt.Errorf("%w: %q has a zero worktree gitlink OID (unstaged submodule state is unresolved in v1)", ErrGitlinkUnresolved, newPath)
+	}
+	return s.gitlinkIndexSide(newPath)
 }
 
 // untrackedRecord builds one canonical all-addition record for an untracked
@@ -554,28 +565,25 @@ func (s *captureState) gitlinkTreeSide(rev, path string) (sideData, error) {
 	return s.gitlinkSide(oid, path)
 }
 
-// gitlinkLiveSide resolves a workspace gitlink to the submodule worktree's
-// current HEAD, not the possibly-stale index: an unstaged submodule move must
-// change the captured identity. The path is verified through the pinned root as
-// a real (non-symlink) directory before a sanitized rev-parse is run rooted at
-// it, and it fails closed when the live HEAD cannot be resolved.
-func (s *captureState) gitlinkLiveSide(path string) (sideData, error) {
+// gitlinkIndexSide resolves a workspace gitlink to its full staged index id. The
+// path is matched with literal pathspec magic and the NUL output is parsed
+// strictly: exactly one stage-0 160000 entry for the requested path with a
+// full-width id. No nested Git process is run against the workspace path, so
+// there is no pathname re-resolution race.
+func (s *captureState) gitlinkIndexSide(path string) (sideData, error) {
 	if path == "" {
 		return sideData{}, fmt.Errorf("%w: missing gitlink path", ErrGitlinkUnresolved)
 	}
-	info, err := s.root.Lstat(path)
+	out, err := s.c.Runner.Output(s.ctx, s.c.Root, captureGitOutputLimit,
+		"ls-files", "-s", "-z", "--", literalPathspec(path))
 	if err != nil {
-		return sideData{}, fmt.Errorf("%w: %q: %v", ErrGitlinkUnresolved, path, err)
+		return sideData{}, err
 	}
-	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
-		return sideData{}, fmt.Errorf("%w: %q is not a submodule directory", ErrGitlinkUnresolved, path)
-	}
-	out, err := s.c.Runner.Output(s.ctx, filepath.Join(s.c.Root, path), captureGitOutputLimit,
-		"rev-parse", "--verify", "--end-of-options", "HEAD")
+	oid, err := parseGitlinkLsFiles(out, path, s.width)
 	if err != nil {
-		return sideData{}, fmt.Errorf("%w: %q live HEAD: %v", ErrGitlinkUnresolved, path, err)
+		return sideData{}, fmt.Errorf("%w: %q in index: %v", ErrGitlinkUnresolved, path, err)
 	}
-	return s.gitlinkSide(strings.TrimSpace(string(out)), path)
+	return s.gitlinkSide(oid, path)
 }
 
 // gitlinkSide validates a resolved gitlink id to the object-format width and
@@ -918,16 +926,16 @@ func splitUntrackedZ(data []byte) ([]string, error) {
 func literalPathspec(path string) string { return ":(literal)" + path }
 
 // parseGitlinkLsTree strictly parses `git ls-tree -z --full-tree` output for one
-// gitlink: it requires exactly one record whose path equals wantPath, whose mode
-// is 160000, whose type is commit, and whose object id is a full-width hex value,
-// and returns that id. Any other shape (no, multiple, truncated, wrong-path,
-// wrong-mode, wrong-type, or short-id records) is rejected.
+// gitlink: exactly one strictly-framed record whose path equals wantPath, whose
+// mode is 160000, type is commit, and object id is full width. Any other shape
+// (no/multiple/interior-empty/truncated/wrong-path/mode/type/short-id) is
+// rejected with no partial value.
 func parseGitlinkLsTree(out []byte, wantPath string, width int) (string, error) {
-	recs := nonEmptyNULRecords(out)
-	if len(recs) != 1 {
-		return "", fmt.Errorf("expected exactly one tree entry, got %d", len(recs))
+	rec, err := singleNULRecord(out)
+	if err != nil {
+		return "", err
 	}
-	mode, typ, oid, path, err := parseLsTreeRecord(recs[0])
+	mode, typ, oid, path, err := parseLsTreeRecord(rec)
 	if err != nil {
 		return "", err
 	}
@@ -939,6 +947,33 @@ func parseGitlinkLsTree(out []byte, wantPath string, width int) (string, error) 
 	}
 	if typ != "commit" {
 		return "", fmt.Errorf("type %q, want commit", typ)
+	}
+	if !isFullOID(oid, width) {
+		return "", fmt.Errorf("object id %q is not %d hex chars", oid, width*2)
+	}
+	return oid, nil
+}
+
+// parseGitlinkLsFiles strictly parses `git ls-files -s -z` output for one gitlink:
+// exactly one strictly-framed stage-0 160000 entry for wantPath with a full-width
+// id. Any other shape is rejected with no partial value.
+func parseGitlinkLsFiles(out []byte, wantPath string, width int) (string, error) {
+	rec, err := singleNULRecord(out)
+	if err != nil {
+		return "", err
+	}
+	mode, oid, stage, path, err := parseLsFilesRecord(rec)
+	if err != nil {
+		return "", err
+	}
+	if path != wantPath {
+		return "", fmt.Errorf("entry path %q, want %q", path, wantPath)
+	}
+	if mode != "160000" {
+		return "", fmt.Errorf("mode %q, want 160000", mode)
+	}
+	if stage != "0" {
+		return "", fmt.Errorf("stage %q, want 0", stage)
 	}
 	if !isFullOID(oid, width) {
 		return "", fmt.Errorf("object id %q is not %d hex chars", oid, width*2)
@@ -962,13 +997,53 @@ func parseLsTreeRecord(rec []byte) (mode, typ, oid, path string, err error) {
 	return fields[0], fields[1], fields[2], path, nil
 }
 
-// nonEmptyNULRecords splits NUL-delimited output into non-empty records.
-func nonEmptyNULRecords(out []byte) [][]byte {
-	var recs [][]byte
-	for _, rec := range bytes.Split(out, []byte{0}) {
-		if len(rec) > 0 {
-			recs = append(recs, rec)
+// parseLsFilesRecord splits one ls-files -s record "<mode> <oid> <stage>\t<path>"
+// into its fields, requiring the TAB separator and exactly three space-separated
+// metadata fields.
+func parseLsFilesRecord(rec []byte) (mode, oid, stage, path string, err error) {
+	tab := bytes.IndexByte(rec, '\t')
+	if tab < 0 {
+		return "", "", "", "", errors.New("record missing TAB path separator")
+	}
+	path = string(rec[tab+1:])
+	fields := strings.Fields(string(rec[:tab]))
+	if len(fields) != 3 {
+		return "", "", "", "", fmt.Errorf("metadata has %d fields, want 3", len(fields))
+	}
+	return fields[0], fields[1], fields[2], path, nil
+}
+
+// singleNULRecord enforces strict NUL framing: the output must be non-empty, end
+// with exactly one terminal NUL, and contain no interior NUL, so it holds exactly
+// one record. A missing terminator, a truncated final NUL, a leading or double
+// NUL (empty record), or multiple records is rejected.
+func singleNULRecord(out []byte) ([]byte, error) {
+	if len(out) == 0 {
+		return nil, errors.New("empty output")
+	}
+	if out[len(out)-1] != 0 {
+		return nil, errors.New("output missing terminal NUL")
+	}
+	body := out[:len(out)-1]
+	if len(body) == 0 {
+		return nil, errors.New("empty record")
+	}
+	if bytes.IndexByte(body, 0) >= 0 {
+		return nil, errors.New("multiple or empty NUL records")
+	}
+	return body, nil
+}
+
+// isZeroOID reports whether a git object id field is empty or all zeros (the raw
+// status placeholder for an unresolved worktree side).
+func isZeroOID(oid string) bool {
+	if oid == "" {
+		return true
+	}
+	for _, c := range oid {
+		if c != '0' {
+			return false
 		}
 	}
-	return recs
+	return true
 }
