@@ -187,6 +187,24 @@ func (f *gitFixture) initNestedGitlink(t *testing.T, rel, body string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// advanceNested commits a new body into the nested repository at rel and returns
+// its new HEAD id, without staging the change in the super-repo, so the super's
+// index stays stale relative to the live submodule worktree.
+func (f *gitFixture) advanceNested(t *testing.T, rel, body string) string {
+	t.Helper()
+	dir := filepath.Join(f.root, rel)
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rawGit(t, dir, "add", "-A")
+	rawGit(t, dir, "commit", "-qm", "advance")
+	out, err := rawGitEnv(dir, nil, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("nested rev-parse: %v\n%s", err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // recordByNewPath returns the changed-path record whose new path is p.
 func recordByNewPath(t *testing.T, cap Capture, p string) RawPathRecord {
 	t.Helper()

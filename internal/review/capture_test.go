@@ -574,29 +574,35 @@ func gitlinkRangeCapture(t *testing.T, from, to string) Capture {
 	return captureRange(t, repo, g1, repo.revParse(t, "HEAD"))
 }
 
-// TestCaptureWorkspaceGitlinkResolvesFromIndex proves a workspace gitlink's full
-// identity is resolved from the index and that a different submodule commit
-// changes the workspace fingerprint.
-func TestCaptureWorkspaceGitlinkResolvesFromIndex(t *testing.T) {
+// TestCaptureWorkspaceGitlinkUsesLiveSubmoduleHead proves a workspace gitlink is
+// identified by the submodule worktree's live HEAD, not the stale index: an
+// unstaged submodule advance changes the captured identity, and two distinct
+// live commits produce distinct workspace fingerprints.
+func TestCaptureWorkspaceGitlinkUsesLiveSubmoduleHead(t *testing.T) {
 	repo := newGitFixture(t)
 	repo.commitFile(t, "seed.go", "package p\n")
-	oid := repo.initNestedGitlink(t, "sub", "one\n")
+	indexOID := repo.initNestedGitlink(t, "sub", "one\n") // staged at c1
+	repo.commit(t, "track sub")                           // super now tracks sub@c1
 
-	cap := captureWorkspace(t, repo)
-	rec := recordByNewPath(t, cap, "sub")
-	assertRec(t, rec, "A", TextClassBinary, 0, 0)
-	if rec.NewSide.Kind != SideGitOID || hex.EncodeToString(rec.NewSide.Value) != oid {
-		t.Fatalf("new gitlink side=%x, want git_oid %s", rec.NewSide.Value, oid)
+	live2 := repo.advanceNested(t, "sub", "two\n") // advance c1->c2, NOT staged in super
+	capA := captureWorkspace(t, repo)
+	recA := recordByNewPath(t, capA, "sub")
+	assertRec(t, recA, "M", TextClassBinary, 0, 0)
+	got := hex.EncodeToString(recA.NewSide.Value)
+	if got != live2 {
+		t.Fatalf("new gitlink side=%s, want live HEAD %s", got, live2)
+	}
+	if got == indexOID {
+		t.Fatalf("new gitlink side is the stale index/base id %s, not the live HEAD", indexOID)
 	}
 
-	// Advance the submodule and re-stage: the workspace fingerprint must change.
-	sub := filepath.Join(repo.root, "sub")
-	repo.write(t, "sub/file", "two\n")
-	rawGit(t, sub, "commit", "-aqm", "advance")
-	rawGit(t, repo.root, "add", "sub")
-	moved := captureWorkspace(t, repo)
-	if sameFingerprint(cap, moved) {
-		t.Fatalf("advancing the submodule must change the workspace fingerprint")
+	live3 := repo.advanceNested(t, "sub", "three\n") // advance c2->c3, still unstaged
+	capB := captureWorkspace(t, repo)
+	if hex.EncodeToString(recordByNewPath(t, capB, "sub").NewSide.Value) != live3 {
+		t.Fatalf("second capture did not track the live HEAD %s", live3)
+	}
+	if sameFingerprint(capA, capB) {
+		t.Fatalf("two distinct live submodule commits must change the workspace fingerprint")
 	}
 }
 
@@ -651,5 +657,145 @@ func TestCaptureTrackedFileExemptFromUntrackedCap(t *testing.T) {
 	}
 	if rec.Additions != 1 || rec.Deletions != 1 {
 		t.Fatalf("tracked churn add=%d del=%d, want 1/1", rec.Additions, rec.Deletions)
+	}
+}
+
+// TestParseGitlinkLsTreeStrict proves the gitlink tree parser accepts exactly one
+// well-formed 160000 commit record for the requested path and rejects every
+// malformed shape.
+func TestParseGitlinkLsTreeStrict(t *testing.T) {
+	oid := strings.Repeat("a", 40)
+	good := []byte("160000 commit " + oid + "\tsub\x00")
+	got, err := parseGitlinkLsTree(good, "sub", 20)
+	if err != nil || got != oid {
+		t.Fatalf("good record: got %q err %v", got, err)
+	}
+
+	bad := []struct {
+		name string
+		out  string
+	}{
+		{"no records", ""},
+		{"two records", "160000 commit " + oid + "\tsub\x00160000 commit " + strings.Repeat("b", 40) + "\tsubZ\x00"},
+		{"wrong path", "160000 commit " + oid + "\tother\x00"},
+		{"wrong mode", "100644 blob " + oid + "\tsub\x00"},
+		{"wrong type", "160000 blob " + oid + "\tsub\x00"},
+		{"short oid", "160000 commit " + strings.Repeat("a", 7) + "\tsub\x00"},
+		{"non-hex oid", "160000 commit " + strings.Repeat("z", 40) + "\tsub\x00"},
+		{"missing tab", "160000 commit " + oid + " sub\x00"},
+		{"extra field", "160000 commit x " + oid + "\tsub\x00"},
+	}
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := parseGitlinkLsTree([]byte(tc.out), "sub", 20); err == nil {
+				t.Fatalf("want error for %s", tc.name)
+			}
+		})
+	}
+}
+
+// TestCaptureGitlinkLiteralPathspec proves a gitlink whose path contains glob
+// magic is resolved by exact literal match, never a sibling entry, even when a
+// glob-matching decoy exists at the same tree level.
+func TestCaptureGitlinkLiteralPathspec(t *testing.T) {
+	oidStar1 := strings.Repeat("a", 40)
+	oidStar2 := strings.Repeat("b", 40)
+	oidDecoy := strings.Repeat("c", 40)
+
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	// A decoy sibling a glob "s*" would also match, and the real gitlink "s*".
+	rawGit(t, repo.root, "update-index", "--add", "--cacheinfo", "160000,"+oidDecoy+",sZ")
+	rawGit(t, repo.root, "update-index", "--add", "--cacheinfo", "160000,"+oidStar1+",s*")
+	rawGit(t, repo.root, "commit", "-qm", "gitlinks")
+	g1 := repo.revParse(t, "HEAD")
+	rawGit(t, repo.root, "update-index", "--cacheinfo", "160000,"+oidStar2+",s*")
+	rawGit(t, repo.root, "commit", "-qm", "move s*")
+	g2 := repo.revParse(t, "HEAD")
+
+	cap := captureRange(t, repo, g1, g2)
+	rec := recordByNewPath(t, cap, "s*")
+	assertRec(t, rec, "M", TextClassBinary, 0, 0)
+	if hex.EncodeToString(rec.OldSide.Value) != oidStar1 || hex.EncodeToString(rec.NewSide.Value) != oidStar2 {
+		t.Fatalf("literal match failed: old=%x new=%x, want %s/%s", rec.OldSide.Value, rec.NewSide.Value, oidStar1, oidStar2)
+	}
+}
+
+// scriptedRunner is a CaptureRunner that intercepts specific git invocations by
+// (root, subcommand) and returns scripted output, delegating everything else to
+// a real ExecGit. It drives the fail-closed gitlink parsing paths.
+type scriptedRunner struct {
+	ExecGit
+	intercept func(root string, args []string) ([]byte, bool, error)
+}
+
+func (r scriptedRunner) Output(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
+	if r.intercept != nil {
+		if out, handled, err := r.intercept(root, args); handled {
+			return out, err
+		}
+	}
+	return r.ExecGit.Output(ctx, root, limit, args...)
+}
+
+// TestCaptureGitlinkRejectsMalformedTreeOutput proves committed gitlink capture
+// fails closed when ls-tree returns malformed output.
+func TestCaptureGitlinkRejectsMalformedTreeOutput(t *testing.T) {
+	oid1 := strings.Repeat("a", 40)
+	oid2 := strings.Repeat("b", 40)
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	repo.commitGitlink(t, "sub", oid1)
+	g1 := repo.revParse(t, "HEAD")
+	repo.commitGitlink(t, "sub", oid2)
+	g2 := repo.revParse(t, "HEAD")
+
+	ctx := context.Background()
+	runner := scriptedRunner{
+		ExecGit: execRunner(t),
+		intercept: func(_ string, args []string) ([]byte, bool, error) {
+			if len(args) > 0 && args[0] == "ls-tree" {
+				return []byte("garbage-without-tab\x00"), true, nil
+			}
+			return nil, false, nil
+		},
+	}
+	scope, err := ResolveScope(ctx, runner, repo.root, PlanRequest{Base: g1, Head: g2})
+	if err != nil {
+		t.Fatalf("resolve scope: %v", err)
+	}
+	_, err = (&Capturer{Root: repo.root, Runner: runner}).CaptureOnce(ctx, scope)
+	if !errors.Is(err, ErrGitlinkUnresolved) {
+		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
+	}
+}
+
+// TestCaptureWorkspaceGitlinkRejectsBadLiveHead proves a workspace gitlink fails
+// closed when the live submodule rev-parse yields a non-OID.
+func TestCaptureWorkspaceGitlinkRejectsBadLiveHead(t *testing.T) {
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	repo.initNestedGitlink(t, "sub", "one\n")
+	repo.commit(t, "track sub")
+	repo.advanceNested(t, "sub", "two\n") // unstaged advance so the new side is a live gitlink
+
+	sub := filepath.Join(repo.root, "sub")
+	ctx := context.Background()
+	runner := scriptedRunner{
+		ExecGit: execRunner(t),
+		intercept: func(root string, args []string) ([]byte, bool, error) {
+			if root == sub && len(args) > 0 && args[0] == "rev-parse" {
+				return []byte("not-a-valid-object-id\n"), true, nil
+			}
+			return nil, false, nil
+		},
+	}
+	scope, err := ResolveScope(ctx, runner, repo.root, PlanRequest{})
+	if err != nil {
+		t.Fatalf("resolve scope: %v", err)
+	}
+	_, err = (&Capturer{Root: repo.root, Runner: runner}).CaptureOnce(ctx, scope)
+	if !errors.Is(err, ErrGitlinkUnresolved) {
+		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
 	}
 }
