@@ -1,6 +1,8 @@
 package review
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -136,22 +138,64 @@ type Scope struct {
 	Digest       Digest       `json:"-"`
 }
 
-// Validate checks the resolved scope's kind, object format, and tagged
-// base/head identities.
+// Validate checks the resolved scope's kind and object format and binds each
+// tagged identity to them: commit/range require base and head git_oids at the
+// object-format width (20 bytes for sha1, 32 for sha256); workspace requires a
+// base git_oid at that width and a 32-byte workspace_sha256 head. Absent or
+// mismatched identities are rejected.
 func (s Scope) Validate() error {
-	switch s.Kind {
-	case ScopeWorkspace, ScopeCommit, ScopeRange:
+	return validateScopeSides(s.Kind, s.ObjectFormat, s.Base, s.Head, "scope")
+}
+
+// oidWidthFor returns the object-id byte width for a Git object format.
+func oidWidthFor(objectFormat string) (int, bool) {
+	switch objectFormat {
+	case "sha1":
+		return 20, true
+	case "sha256":
+		return 32, true
+	}
+	return 0, false
+}
+
+// requireGitOID enforces that side is a git_oid of exactly width bytes.
+func requireGitOID(side SideIdentity, width int, label string) error {
+	if side.Kind != SideGitOID {
+		return fmt.Errorf("review: %s must be a git_oid, got %q", label, side.Kind)
+	}
+	if len(side.Value) != width {
+		return fmt.Errorf("review: %s git_oid must be %d bytes, got %d", label, width, len(side.Value))
+	}
+	return nil
+}
+
+// validateScopeSides binds base/head identities to the scope kind and object
+// format. It is shared by Scope and Unit, which both carry these fields.
+func validateScopeSides(kind ScopeKind, objectFormat string, base, head SideIdentity, ctx string) error {
+	width, ok := oidWidthFor(objectFormat)
+	if !ok {
+		return fmt.Errorf("review: %s has invalid object_format %q", ctx, objectFormat)
+	}
+	switch kind {
+	case ScopeCommit, ScopeRange:
+		if err := requireGitOID(base, width, ctx+" base"); err != nil {
+			return err
+		}
+		if err := requireGitOID(head, width, ctx+" head"); err != nil {
+			return err
+		}
+	case ScopeWorkspace:
+		if err := requireGitOID(base, width, ctx+" base"); err != nil {
+			return err
+		}
+		if head.Kind != SideWorkspaceSHA256 {
+			return fmt.Errorf("review: %s head must be workspace_sha256, got %q", ctx, head.Kind)
+		}
+		if len(head.Value) != 32 {
+			return fmt.Errorf("review: %s head workspace_sha256 must be 32 bytes, got %d", ctx, len(head.Value))
+		}
 	default:
-		return fmt.Errorf("review: scope has invalid kind %q", s.Kind)
-	}
-	if !validObjectFormat(s.ObjectFormat) {
-		return fmt.Errorf("review: scope has invalid object_format %q", s.ObjectFormat)
-	}
-	if err := s.Base.Validate(); err != nil {
-		return fmt.Errorf("review: scope base: %w", err)
-	}
-	if err := s.Head.Validate(); err != nil {
-		return fmt.Errorf("review: scope head: %w", err)
+		return fmt.Errorf("review: %s has invalid kind %q", ctx, kind)
 	}
 	return nil
 }
@@ -363,13 +407,18 @@ func (p Plan) Validate() error {
 				return fmt.Errorf("review: structured plan missing required audit %s", id)
 			}
 		}
-		for _, u := range p.PrimaryUnits {
-			if err := u.Validate(); err != nil {
-				return err
-			}
+	} else if len(p.Cohorts) != 0 || len(p.RequiredAudits) != 0 {
+		// Direct plans may carry bounded primary units, but never the
+		// structured-only cohort/layer and required-audit collections.
+		return errors.New("review: direct plan must not carry cohorts or required audits")
+	}
+	// Primary units are validated in both modes: a direct plan may return a
+	// single bounded unit, or partition-respecting units when one partition
+	// does not fit.
+	for _, u := range p.PrimaryUnits {
+		if err := u.Validate(); err != nil {
+			return err
 		}
-	} else if len(p.Cohorts) != 0 || len(p.RequiredAudits) != 0 || len(p.PrimaryUnits) != 0 {
-		return errors.New("review: direct plan must not carry cohorts, primary units, or required audits")
 	}
 	return nil
 }
@@ -377,7 +426,7 @@ func (p Plan) Validate() error {
 // UnitHunk is one owned hunk in a review.unit.v1 mandatory object.
 type UnitHunk struct {
 	PathID            string `json:"path_id"`
-	OldPath           string `json:"old_path,omitempty"`
+	OldPath           string `json:"old_path"`
 	NewPath           string `json:"new_path"`
 	Status            string `json:"status"`
 	Ordinal           int    `json:"ordinal"`
@@ -424,19 +473,8 @@ func (u Unit) Validate() error {
 	if u.LayerID == "" {
 		return fmt.Errorf("review: unit %s missing layer_id", u.UnitID)
 	}
-	switch u.ScopeKind {
-	case ScopeWorkspace, ScopeCommit, ScopeRange:
-	default:
-		return fmt.Errorf("review: unit %s has invalid scope_kind %q", u.UnitID, u.ScopeKind)
-	}
-	if !validObjectFormat(u.ObjectFormat) {
-		return fmt.Errorf("review: unit %s has invalid object_format %q", u.UnitID, u.ObjectFormat)
-	}
-	if err := u.Base.Validate(); err != nil {
-		return fmt.Errorf("review: unit %s base: %w", u.UnitID, err)
-	}
-	if err := u.Head.Validate(); err != nil {
-		return fmt.Errorf("review: unit %s head: %w", u.UnitID, err)
+	if err := validateScopeSides(u.ScopeKind, u.ObjectFormat, u.Base, u.Head, "unit "+u.UnitID); err != nil {
+		return err
 	}
 	if len(u.Hunks) == 0 {
 		return fmt.Errorf("review: unit %s owns no hunks", u.UnitID)
@@ -456,6 +494,23 @@ func (u Unit) Validate() error {
 		}
 	}
 	return nil
+}
+
+// CanonicalMandatoryJSON serializes the unit as CanonicalUnitMandatoryJSONV1:
+// compact UTF-8 JSON emitted from the fixed-field struct in declaration order,
+// with HTML escaping disabled, standard padded base64 for tagged identity
+// values, no optional context, and exactly one trailing LF. Because every
+// identity field is fixed-length, replacing zero-filled placeholder IDs with
+// real IDs of the same length never changes the serialized size.
+func (u Unit) CanonicalMandatoryJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(u); err != nil {
+		return nil, err
+	}
+	// json.Encoder.Encode writes exactly one trailing newline.
+	return buf.Bytes(), nil
 }
 
 // Recommendation is the reviewer's overall recommendation.
@@ -593,15 +648,34 @@ func (l Location) Validate() error {
 	default:
 		return fmt.Errorf("location has invalid side %q", l.Side)
 	}
+	isRange := LocationKind(l.Kind) == LocationRange
 	contentBacked := l.ContentHash != ""
 	if contentBacked {
+		// Content-backed proof: reject every non-content proof field.
 		if l.Identity != nil {
-			return errors.New("content-backed location must not also carry a tagged side identity")
+			return errors.New("content-backed location must not carry a tagged side identity")
+		}
+		if l.Mode != 0 {
+			return errors.New("content-backed location must not carry a mode")
+		}
+		if l.EntryType != "" {
+			return errors.New("content-backed location must not carry an entry type")
 		}
 		if !isCanonicalDigestHex(l.ContentHash) {
 			return fmt.Errorf("location content hash %q is not a canonical 32-byte digest", l.ContentHash)
 		}
+		if isRange {
+			if l.Start < 1 || l.End < l.Start {
+				return fmt.Errorf("range location requires 1 <= start <= end, got start=%d end=%d", l.Start, l.End)
+			}
+		} else if l.Start != 0 || l.End != 0 {
+			return errors.New("content-backed path location must not carry range coordinates")
+		}
 	} else {
+		// Non-content proof: reject the content hash and range coordinates.
+		if isRange {
+			return errors.New("range location must be text and content-backed")
+		}
 		if l.Identity == nil {
 			return errors.New("non-content location needs a tagged side identity proof")
 		}
@@ -611,13 +685,8 @@ func (l Location) Validate() error {
 		if l.EntryType == "" {
 			return errors.New("non-content location needs an entry type")
 		}
-	}
-	if LocationKind(l.Kind) == LocationRange {
-		if !contentBacked {
-			return errors.New("range location must be text and content-backed")
-		}
-		if l.Start < 1 || l.End < l.Start {
-			return fmt.Errorf("range location requires 1 <= start <= end, got start=%d end=%d", l.Start, l.End)
+		if l.Start != 0 || l.End != 0 {
+			return errors.New("non-content location must not carry range coordinates")
 		}
 	}
 	return nil
@@ -629,6 +698,28 @@ type Citation struct {
 	ID   string `json:"id,omitempty"`
 	Path string `json:"path,omitempty"`
 	Note string `json:"note,omitempty"`
+}
+
+// Validate checks that a citation names a kind and references a concrete
+// target: an id (e.g. a hunk or path id) or a repository path.
+func (c Citation) Validate() error {
+	if c.Kind == "" {
+		return errors.New("review: citation missing kind")
+	}
+	if c.ID == "" && c.Path == "" {
+		return errors.New("review: citation must reference an id or path")
+	}
+	return nil
+}
+
+// validateCitations validates each citation in a slice, labeling failures.
+func validateCitations(cites []Citation, label string) error {
+	for i, c := range cites {
+		if err := c.Validate(); err != nil {
+			return fmt.Errorf("review: %s citation %d: %w", label, i, err)
+		}
+	}
+	return nil
 }
 
 // Uncertainty is a structured statement of remaining reviewer uncertainty.
@@ -681,6 +772,12 @@ func (f Finding) Validate() error {
 		if err := loc.Validate(); err != nil {
 			return fmt.Errorf("review: finding %s: %w", f.ID, err)
 		}
+	}
+	if err := validateCitations(f.Citations, fmt.Sprintf("finding %s supporting", f.ID)); err != nil {
+		return err
+	}
+	if err := validateCitations(f.VerifierEvidence, fmt.Sprintf("finding %s verifier", f.ID)); err != nil {
+		return err
 	}
 	if f.Summary == "" {
 		return fmt.Errorf("review: finding %s missing summary", f.ID)
@@ -738,6 +835,9 @@ func (r PrimaryReceipt) Validate() error {
 	if r.Reviewer == "" {
 		return fmt.Errorf("review: primary receipt for %s missing reviewer identity", r.UnitID)
 	}
+	if err := validateCitations(r.ContextCitations, fmt.Sprintf("primary receipt %s context", r.UnitID)); err != nil {
+		return err
+	}
 	for _, u := range r.Uncertainties {
 		if u.Summary == "" {
 			return fmt.Errorf("review: primary receipt for %s has an empty uncertainty summary", r.UnitID)
@@ -765,6 +865,9 @@ func (r AuditReceipt) Validate() error {
 	}
 	if r.Reviewer == "" {
 		return fmt.Errorf("review: audit receipt for %s missing reviewer identity", r.AuditID)
+	}
+	if err := validateCitations(r.ContextCitations, fmt.Sprintf("audit receipt %s context", r.AuditID)); err != nil {
+		return err
 	}
 	for _, u := range r.Uncertainties {
 		if u.Summary == "" {

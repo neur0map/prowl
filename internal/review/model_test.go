@@ -1,6 +1,9 @@
 package review
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 const (
 	testReviewID   = "rvw_0123456789abcdef0123456789abcdef01234567"
@@ -169,6 +172,19 @@ func TestFindingValidateRequiresDetailAndRejectionEvidence(t *testing.T) {
 	if err := f.Validate(); err == nil {
 		t.Fatal("rejected finding without supporting citations accepted")
 	}
+	// Rejected finding whose citation/evidence structs are empty must fail and
+	// cannot silently unlock approve.
+	f = validRejectedFinding()
+	f.Severity = "critical"
+	f.Citations = []Citation{{}}
+	if err := f.Validate(); err == nil {
+		t.Fatal("rejected finding with empty citation struct accepted")
+	}
+	f = validRejectedFinding()
+	f.VerifierEvidence = []Citation{{}}
+	if err := f.Validate(); err == nil {
+		t.Fatal("rejected finding with empty verifier evidence struct accepted")
+	}
 	if err := validRejectedFinding().Validate(); err != nil {
 		t.Fatalf("fully-evidenced rejected finding rejected: %v", err)
 	}
@@ -185,14 +201,23 @@ func TestLocationValidateProofVariants(t *testing.T) {
 	if err := np.Validate(); err != nil {
 		t.Fatalf("non-content path proof rejected: %v", err)
 	}
+	// Content-backed path (no range coordinates).
+	cbp := Location{Kind: "path", Path: "a.go", Side: "head", ContentHash: testPlanDigest}
+	if err := cbp.Validate(); err != nil {
+		t.Fatalf("content-backed path rejected: %v", err)
+	}
 	bad := []Location{
-		{Kind: "range", Path: "a.go", Side: "head", ContentHash: "deadbeef", Start: 1, End: 2},                                               // short content hash
-		{Kind: "path", Path: "a.go", Side: "head", ContentHash: testPlanDigest, Identity: &SideIdentity{Kind: SideAbsent}},                   // two proof forms
-		{Kind: "path", Path: "sub", Side: "base", Identity: &SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}},                        // non-content missing entry type
-		{Kind: "range", Path: "sub", Side: "base", Identity: &SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}, EntryType: "gitlink"}, // range must be content-backed
-		{Kind: "range", Path: "a.go", Side: "head", ContentHash: testPlanDigest, Start: 0, End: 2},                                           // bad range bounds
-		{Kind: "path", Path: "", Side: "head", ContentHash: testPlanDigest},                                                                  // missing path
-		{Kind: "sideways", Path: "a.go", Side: "head", ContentHash: testPlanDigest},                                                          // bad kind
+		{Kind: "range", Path: "a.go", Side: "head", ContentHash: "deadbeef", Start: 1, End: 2},                                                                // short content hash
+		{Kind: "path", Path: "a.go", Side: "head", ContentHash: testPlanDigest, Identity: &SideIdentity{Kind: SideAbsent}},                                    // two proof forms
+		{Kind: "path", Path: "sub", Side: "base", Identity: &SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}},                                         // non-content missing entry type
+		{Kind: "range", Path: "sub", Side: "base", Identity: &SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}, EntryType: "gitlink"},                  // range must be content-backed
+		{Kind: "range", Path: "a.go", Side: "head", ContentHash: testPlanDigest, Start: 0, End: 2},                                                            // bad range bounds
+		{Kind: "path", Path: "", Side: "head", ContentHash: testPlanDigest},                                                                                   // missing path
+		{Kind: "sideways", Path: "a.go", Side: "head", ContentHash: testPlanDigest},                                                                           // bad kind
+		{Kind: "path", Path: "a.go", Side: "head", ContentHash: testPlanDigest, Mode: 0o100644},                                                               // content-backed with mode
+		{Kind: "path", Path: "a.go", Side: "head", ContentHash: testPlanDigest, EntryType: "gitlink"},                                                         // content-backed with entry type
+		{Kind: "path", Path: "a.go", Side: "head", ContentHash: testPlanDigest, Start: 1, End: 2},                                                             // content-backed path with range coords
+		{Kind: "path", Path: "sub", Side: "base", Identity: &SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}, EntryType: "gitlink", Start: 1, End: 2}, // non-content with range coords
 	}
 	for i, l := range bad {
 		if err := l.Validate(); err == nil {
@@ -363,6 +388,18 @@ func TestPlanValidate(t *testing.T) {
 	if err := validStructuredPlan().Validate(); err != nil {
 		t.Fatalf("valid structured plan rejected: %v", err)
 	}
+	// direct plan may carry bounded primary units (a single or partition-respecting set)
+	du := validPlan()
+	du.PrimaryUnits = []Unit{validUnit()}
+	if err := du.Validate(); err != nil {
+		t.Fatalf("direct plan with a bounded primary unit rejected: %v", err)
+	}
+	// direct plan must not carry required audits
+	da := validPlan()
+	da.RequiredAudits = allRequiredAudits()
+	if err := da.Validate(); err == nil {
+		t.Fatal("direct plan carrying required audits accepted")
+	}
 	// direct plan must not carry structured collections
 	p := validPlan()
 	p.Cohorts = []PlanCohort{{CohortID: "c_1"}}
@@ -437,5 +474,154 @@ func TestCheckResultValidate(t *testing.T) {
 		if err := c.Validate(); err == nil {
 			t.Fatalf("bad check result %d accepted", i)
 		}
+	}
+}
+
+func TestCitationValidate(t *testing.T) {
+	good := []Citation{
+		{Kind: "hunk", ID: "h_1"},
+		{Kind: "code", Path: "internal/x/y.go"},
+	}
+	for _, c := range good {
+		if err := c.Validate(); err != nil {
+			t.Fatalf("valid citation %+v rejected: %v", c, err)
+		}
+	}
+	bad := []Citation{
+		{},                         // empty
+		{Kind: "hunk"},             // no reference target
+		{ID: "h_1"},                // no kind
+		{Path: "a.go", Note: "hi"}, // no kind
+	}
+	for i, c := range bad {
+		if err := c.Validate(); err == nil {
+			t.Fatalf("bad citation %d accepted: %+v", i, c)
+		}
+	}
+}
+
+func TestReceiptValidatesCitations(t *testing.T) {
+	pr := PrimaryReceipt{UnitID: "u_1", Reviewer: "a", ContextCitations: []Citation{{}}}
+	if err := pr.Validate(); err == nil {
+		t.Fatal("primary receipt with empty citation accepted")
+	}
+	ar := AuditReceipt{AuditID: AuditRemovedBehaviorV1, Reviewer: "a", ContextCitations: []Citation{{Kind: "x"}}}
+	if err := ar.Validate(); err == nil {
+		t.Fatal("audit receipt with malformed citation accepted")
+	}
+}
+
+func TestScopeValidateBindsIdentities(t *testing.T) {
+	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
+	oid32 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 32)}
+	ws32 := SideIdentity{Kind: SideWorkspaceSHA256, Value: make([]byte, 32)}
+
+	good := []Scope{
+		{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20},
+		{Kind: ScopeRange, ObjectFormat: "sha256", Base: oid32, Head: oid32},
+		{Kind: ScopeWorkspace, ObjectFormat: "sha1", Base: oid20, Head: ws32},
+		{Kind: ScopeWorkspace, ObjectFormat: "sha256", Base: oid32, Head: ws32},
+	}
+	for _, s := range good {
+		if err := s.Validate(); err != nil {
+			t.Fatalf("valid scope %+v rejected: %v", s.Kind, err)
+		}
+	}
+	bad := []Scope{
+		{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid32, Head: oid20},                          // base width mismatch
+		{Kind: ScopeCommit, ObjectFormat: "sha256", Base: oid20, Head: oid32},                        // base width mismatch
+		{Kind: ScopeCommit, ObjectFormat: "sha1", Base: SideIdentity{Kind: SideAbsent}, Head: oid20}, // absent base
+		{Kind: ScopeRange, ObjectFormat: "sha1", Base: oid20, Head: ws32},                            // head must be git_oid
+		{Kind: ScopeWorkspace, ObjectFormat: "sha1", Base: oid20, Head: oid20},                       // head must be workspace_sha256
+		{Kind: ScopeWorkspace, ObjectFormat: "sha256", Base: oid20, Head: ws32},                      // base width mismatch for sha256
+		{Kind: ScopeWorkspace, ObjectFormat: "sha1", Base: ws32, Head: ws32},                         // base must be git_oid
+	}
+	for i, s := range bad {
+		if err := s.Validate(); err == nil {
+			t.Fatalf("bad scope %d accepted: %+v", i, s.Kind)
+		}
+	}
+}
+
+func TestUnitHunkFieldsAlwaysPresent(t *testing.T) {
+	// A pure-addition hunk (empty old side) must still serialize every fixed
+	// field, including old_path/old_start/old_count.
+	addition := validUnit()
+	addition.Hunks = []UnitHunk{{
+		PathID: "p_1", OldPath: "", NewPath: "a.go", Status: "A", Ordinal: 0,
+		OldStart: 0, OldCount: 0, NewStart: 1, NewCount: 3, PatchBase64: "K3gK",
+	}}
+	// A pure-deletion hunk (empty new side).
+	deletion := validUnit()
+	deletion.Hunks = []UnitHunk{{
+		PathID: "p_1", OldPath: "a.go", NewPath: "", Status: "D", Ordinal: 0,
+		OldStart: 1, OldCount: 3, NewStart: 0, NewCount: 0, PatchBase64: "LXgK",
+	}}
+	required := []string{
+		`"path_id"`, `"old_path"`, `"new_path"`, `"status"`, `"ordinal"`,
+		`"old_start"`, `"old_count"`, `"new_start"`, `"new_count"`,
+		`"old_no_final_newline"`, `"new_no_final_newline"`, `"patch_base64"`,
+	}
+	for _, u := range []Unit{addition, deletion} {
+		js, err := u.CanonicalMandatoryJSON()
+		if err != nil {
+			t.Fatalf("marshal unit: %v", err)
+		}
+		s := string(js)
+		for _, key := range required {
+			if !strings.Contains(s, key) {
+				t.Fatalf("mandatory unit hunk key %s missing from %s", key, s)
+			}
+		}
+	}
+}
+
+func TestUnitCanonicalMandatoryJSON(t *testing.T) {
+	u := validUnit()
+	u.Hunks[0].NewPath = "a&b<c>.go" // HTML-special characters
+	js, err := u.CanonicalMandatoryJSON()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// Exactly one trailing LF and no interior newline.
+	if len(js) == 0 || js[len(js)-1] != '\n' {
+		t.Fatal("canonical JSON must end with one trailing LF")
+	}
+	if strings.Contains(string(js[:len(js)-1]), "\n") {
+		t.Fatal("canonical JSON must be single-line before the trailing LF")
+	}
+	// HTML escaping is disabled: special characters appear verbatim.
+	if !strings.Contains(string(js), "a&b<c>.go") {
+		t.Fatalf("HTML escaping should be disabled: %s", js)
+	}
+	// Compact: no ", " or ": " spacing.
+	if strings.Contains(string(js), ", ") || strings.Contains(string(js), ": ") {
+		t.Fatalf("canonical JSON must be compact: %s", js)
+	}
+	// Size invariance: replacing fixed-length placeholder IDs with real IDs of
+	// the same length must not change the serialized size.
+	placeholder := validUnit()
+	placeholder.ReviewID = ReviewIDPrefixV1 + strings.Repeat("0", 40)
+	placeholder.UnitID = UnitIDPrefixV1 + strings.Repeat("0", 32)
+	placeholder.CohortID = CohortIDPrefixV1 + strings.Repeat("0", 32)
+	placeholder.LayerID = LayerIDPrefixV1 + strings.Repeat("0", 32)
+	placeholder.Hunks[0].PathID = PathIDPrefixV1 + strings.Repeat("0", 32)
+	real := placeholder
+	real.ReviewID = ReviewIDPrefixV1 + strings.Repeat("a", 40)
+	real.UnitID = UnitIDPrefixV1 + strings.Repeat("b", 32)
+	real.CohortID = CohortIDPrefixV1 + strings.Repeat("c", 32)
+	real.LayerID = LayerIDPrefixV1 + strings.Repeat("d", 32)
+	real.Hunks = []UnitHunk{placeholder.Hunks[0]}
+	real.Hunks[0].PathID = PathIDPrefixV1 + strings.Repeat("e", 32)
+	pj, err := placeholder.CanonicalMandatoryJSON()
+	if err != nil {
+		t.Fatalf("marshal placeholder: %v", err)
+	}
+	rj, err := real.CanonicalMandatoryJSON()
+	if err != nil {
+		t.Fatalf("marshal real: %v", err)
+	}
+	if len(pj) != len(rj) {
+		t.Fatalf("canonical size not invariant under equal-length id swap: %d vs %d", len(pj), len(rj))
 	}
 }
