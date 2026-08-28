@@ -872,3 +872,163 @@ func TestCaptureGitlinkRejectsMalformedTreeOutput(t *testing.T) {
 		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
 	}
 }
+
+// TestGitlinkRawOIDValidation proves the raw-status gitlink OID validator accepts
+// a full-width or abbreviated hex id and rejects empty, non-hex, and over-width
+// values before any index lookup.
+func TestGitlinkRawOIDValidation(t *testing.T) {
+	full := strings.Repeat("a", 40)
+	cases := []struct {
+		name string
+		oid  string
+		want bool
+	}{
+		{"full width", full, true},
+		{"abbreviated", "a1b2c3d", true},
+		{"single hex", "a", true},
+		{"uppercase hex", "ABCDEF0", true},
+		{"empty", "", false},
+		{"non-hex", "abcdefg", false},
+		{"over width", full + "a", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isHexOID(tc.oid, 20); got != tc.want {
+				t.Fatalf("isHexOID(%q)=%v, want %v", tc.oid, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGitlinkOIDMatchesRawStatus proves the staged index OID must equal a
+// full-width raw OID exactly and must have an abbreviated raw OID as a valid,
+// case-insensitive prefix; any other relationship is a mismatch.
+func TestGitlinkOIDMatchesRawStatus(t *testing.T) {
+	full := strings.Repeat("a", 39) + "b" // ...aaab
+	cases := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{"full width exact", full, true},
+		{"full width mismatch", strings.Repeat("a", 40), false},
+		{"valid prefix", strings.Repeat("a", 7), true},
+		{"non-prefix", "abcdef0", false},
+		{"case-insensitive prefix", strings.Repeat("A", 7), true},
+		{"over-width raw", full + "a", false},
+		{"empty raw", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := gitlinkOIDMatches(tc.raw, full, 20); got != tc.want {
+				t.Fatalf("gitlinkOIDMatches(%q,%q)=%v, want %v", tc.raw, full, got, tc.want)
+			}
+		})
+	}
+}
+
+// gitlinkScriptRunner overrides the raw status and the staged `ls-files -s`
+// output so the workspace gitlink OID-integrity checks can be driven
+// deterministically, delegating every other invocation to a real ExecGit.
+type gitlinkScriptRunner struct {
+	ExecGit
+	rawStatus []byte // returned for RawStatus when non-nil
+	lsFiles   []byte // returned for `ls-files -s ...` when non-nil
+}
+
+func (r gitlinkScriptRunner) RawStatus(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
+	if r.rawStatus != nil {
+		return r.rawStatus, nil
+	}
+	return r.ExecGit.RawStatus(ctx, root, limit, args...)
+}
+
+func (r gitlinkScriptRunner) Output(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
+	if r.lsFiles != nil && len(args) > 1 && args[0] == "ls-files" && args[1] == "-s" {
+		return r.lsFiles, nil
+	}
+	return r.ExecGit.Output(ctx, root, limit, args...)
+}
+
+// captureWithGitlinkScript runs one workspace capture on a minimal committed
+// repo, forcing the raw status and the staged `ls-files -s` output to the given
+// bytes so a workspace gitlink new side is resolved from exactly those.
+func captureWithGitlinkScript(t *testing.T, rawStatus, lsFiles []byte) (Capture, error) {
+	t.Helper()
+	repo := newGitFixture(t)
+	repo.commitFile(t, "seed.go", "package p\n")
+	ctx := context.Background()
+	runner := gitlinkScriptRunner{ExecGit: execRunner(t), rawStatus: rawStatus, lsFiles: lsFiles}
+	scope, err := ResolveScope(ctx, runner, repo.root, PlanRequest{})
+	if err != nil {
+		t.Fatalf("resolve scope: %v", err)
+	}
+	return (&Capturer{Root: repo.root, Runner: runner}).CaptureOnce(ctx, scope)
+}
+
+// TestCaptureWorkspaceGitlinkMalformedRawOIDFailsClosed proves a nonzero raw
+// gitlink OID that is not valid hex within the object-format width fails closed
+// before any index lookup, never resolving to whatever the index happens to hold.
+func TestCaptureWorkspaceGitlinkMalformedRawOIDFailsClosed(t *testing.T) {
+	raw := []byte(":000000 160000 0000000 zzzzzzz A\x00sub\x00")
+	ls := []byte("160000 " + strings.Repeat("a", 40) + " 0\tsub\x00")
+	if _, err := captureWithGitlinkScript(t, raw, ls); !errors.Is(err, ErrGitlinkUnresolved) {
+		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
+	}
+}
+
+// TestCaptureWorkspaceGitlinkOverWidthRawOIDFailsClosed proves a raw gitlink OID
+// wider than the object format fails closed rather than being truncated to match.
+func TestCaptureWorkspaceGitlinkOverWidthRawOIDFailsClosed(t *testing.T) {
+	full := strings.Repeat("a", 40)
+	raw := []byte(":000000 160000 0000000 " + full + "a A\x00sub\x00") // 41 hex chars
+	ls := []byte("160000 " + full + " 0\tsub\x00")
+	if _, err := captureWithGitlinkScript(t, raw, ls); !errors.Is(err, ErrGitlinkUnresolved) {
+		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
+	}
+}
+
+// TestCaptureWorkspaceGitlinkIndexMismatchFailsClosed proves a staged index OID
+// that does not match the raw status OID (e.g. a concurrent index update between
+// the two reads) fails closed rather than silently replacing one identity with
+// the other.
+func TestCaptureWorkspaceGitlinkIndexMismatchFailsClosed(t *testing.T) {
+	raw := []byte(":000000 160000 0000000 aaaaaaa A\x00sub\x00")
+	ls := []byte("160000 " + strings.Repeat("b", 40) + " 0\tsub\x00") // differs from raw prefix
+	if _, err := captureWithGitlinkScript(t, raw, ls); !errors.Is(err, ErrGitlinkUnresolved) {
+		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
+	}
+}
+
+// TestCaptureWorkspaceGitlinkFullWidthOIDMatches proves a full-width raw status
+// OID equal to the staged index OID resolves to that exact identity.
+func TestCaptureWorkspaceGitlinkFullWidthOIDMatches(t *testing.T) {
+	full := strings.Repeat("a", 40)
+	raw := []byte(":000000 160000 0000000 " + full + " A\x00sub\x00")
+	ls := []byte("160000 " + full + " 0\tsub\x00")
+	cap, err := captureWithGitlinkScript(t, raw, ls)
+	if err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	rec := recordByNewPath(t, cap, "sub")
+	if hex.EncodeToString(rec.NewSide.Value) != full {
+		t.Fatalf("new gitlink side=%x, want %s", rec.NewSide.Value, full)
+	}
+}
+
+// TestCaptureWorkspaceGitlinkAbbreviatedOIDMatches proves an abbreviated raw
+// status OID that is a valid prefix of the staged index OID resolves to the full
+// index identity.
+func TestCaptureWorkspaceGitlinkAbbreviatedOIDMatches(t *testing.T) {
+	full := strings.Repeat("a", 40)
+	raw := []byte(":000000 160000 0000000 aaaaaaa A\x00sub\x00")
+	ls := []byte("160000 " + full + " 0\tsub\x00")
+	cap, err := captureWithGitlinkScript(t, raw, ls)
+	if err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	rec := recordByNewPath(t, cap, "sub")
+	if hex.EncodeToString(rec.NewSide.Value) != full {
+		t.Fatalf("new gitlink side=%x, want %s", rec.NewSide.Value, full)
+	}
+}
