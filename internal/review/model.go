@@ -15,6 +15,7 @@ const (
 	ReportSchemaV1     = "review.report.v1"
 	EvalOutputSchemaV1 = "review.eval-output.v1"
 	ScopeSchemaV1      = "review.scope.v1"
+	CheckSchemaV1      = "review.check.v1"
 
 	// StructuredThresholdV1 is the strict raw-churn threshold: structured
 	// review is mandatory when raw churn exceeds this value.
@@ -41,12 +42,15 @@ const (
 	AuditIntegrationGapV1    = "audit_integration_gap_v1"
 )
 
-// RequiredAuditsV1 lists the four mandatory structured-mode audits in order.
-var RequiredAuditsV1 = [...]string{
-	AuditRemovedBehaviorV1,
-	AuditContractMigrationV1,
-	AuditTestMatrixV1,
-	AuditIntegrationGapV1,
+// RequiredAuditsV1 returns a fresh copy of the four mandatory structured-mode
+// audit identifiers in order. It never exposes shared mutable state.
+func RequiredAuditsV1() []string {
+	return []string{
+		AuditRemovedBehaviorV1,
+		AuditContractMigrationV1,
+		AuditTestMatrixV1,
+		AuditIntegrationGapV1,
+	}
 }
 
 // Mode is the review execution mode.
@@ -132,6 +136,26 @@ type Scope struct {
 	Digest       Digest       `json:"-"`
 }
 
+// Validate checks the resolved scope's kind, object format, and tagged
+// base/head identities.
+func (s Scope) Validate() error {
+	switch s.Kind {
+	case ScopeWorkspace, ScopeCommit, ScopeRange:
+	default:
+		return fmt.Errorf("review: scope has invalid kind %q", s.Kind)
+	}
+	if !validObjectFormat(s.ObjectFormat) {
+		return fmt.Errorf("review: scope has invalid object_format %q", s.ObjectFormat)
+	}
+	if err := s.Base.Validate(); err != nil {
+		return fmt.Errorf("review: scope base: %w", err)
+	}
+	if err := s.Head.Validate(); err != nil {
+		return fmt.Errorf("review: scope head: %w", err)
+	}
+	return nil
+}
+
 // Capture is the deterministic raw change capture that precedes planning.
 type Capture struct {
 	Scope           Scope           `json:"scope"`
@@ -144,33 +168,294 @@ type Capture struct {
 	CanonicalPatch  Digest          `json:"-"`
 }
 
-// Plan is the persisted review plan: scope, mode, statistics, and the ordered
-// review structure a host agent consumes. Later tasks populate the structured
-// collections.
-type Plan struct {
-	Schema             string   `json:"schema"`
-	ReviewID           string   `json:"review_id"`
-	PlanDigest         string   `json:"plan_digest"`
-	Mode               Mode     `json:"mode"`
-	StructuredRequired bool     `json:"structured_required"`
-	Scope              Scope    `json:"scope"`
-	RawAdditions       int      `json:"raw_additions"`
-	RawDeletions       int      `json:"raw_deletions"`
-	RawChurn           int      `json:"raw_churn"`
-	ReviewableChurn    int      `json:"reviewable_churn"`
-	ChangedPaths       int      `json:"changed_paths"`
-	Units              []Unit   `json:"units,omitempty"`
-	PrimaryUnitIDs     []string `json:"primary_unit_ids,omitempty"`
-	RequiredAuditIDs   []string `json:"required_audit_ids,omitempty"`
+// ReviewClass is a changed path's review class.
+type ReviewClass string
+
+const (
+	ReviewClassFull         ReviewClass = "full"
+	ReviewClassMechanical   ReviewClass = "mechanical"
+	ReviewClassUnreviewable ReviewClass = "unreviewable"
+)
+
+// PathCoverage is a changed path's aggregate reviewable-coverage state.
+type PathCoverage string
+
+const (
+	PathCoverageFull    PathCoverage = "full"
+	PathCoveragePartial PathCoverage = "partial"
+	PathCoverageNone    PathCoverage = "none"
+)
+
+// HunkReviewability is a single hunk's reviewability.
+type HunkReviewability string
+
+const (
+	HunkReviewable            HunkReviewability = "reviewable"
+	HunkUnreviewableLargeText HunkReviewability = "unreviewable_large_text"
+)
+
+// PlanStats holds the deterministic churn accounting for a plan.
+type PlanStats struct {
+	RawAdditions    int `json:"raw_additions"`
+	RawDeletions    int `json:"raw_deletions"`
+	RawChurn        int `json:"raw_churn"`
+	ReviewableChurn int `json:"reviewable_churn"`
+	ChangedPaths    int `json:"changed_paths"`
 }
 
-// Unit is the smallest bounded review territory a host agent acknowledges.
+// PlanPath is a plan-level changed-path record. Every tracked and untracked
+// changed path appears here with its class, coverage, roles, and reason.
+type PlanPath struct {
+	PathID      string   `json:"path_id"`
+	OldPath     string   `json:"old_path,omitempty"`
+	NewPath     string   `json:"new_path"`
+	Status      string   `json:"status"`
+	ReviewClass string   `json:"review_class"`
+	Coverage    string   `json:"coverage"`
+	Roles       []string `json:"roles"`
+	Reason      string   `json:"reason,omitempty"`
+}
+
+// Validate checks a plan changed-path record's shape.
+func (p PlanPath) Validate() error {
+	if p.PathID == "" {
+		return errors.New("review: plan path missing path_id")
+	}
+	if p.NewPath == "" && p.OldPath == "" {
+		return fmt.Errorf("review: plan path %s missing old and new path", p.PathID)
+	}
+	if p.Status == "" {
+		return fmt.Errorf("review: plan path %s missing status", p.PathID)
+	}
+	if !validReviewClass(p.ReviewClass) {
+		return fmt.Errorf("review: plan path %s has invalid review class %q", p.PathID, p.ReviewClass)
+	}
+	if !validPathCoverage(p.Coverage) {
+		return fmt.Errorf("review: plan path %s has invalid coverage %q", p.PathID, p.Coverage)
+	}
+	return nil
+}
+
+// PlanLayer is a dependency-ordered review layer within a cohort.
+type PlanLayer struct {
+	LayerID string   `json:"layer_id"`
+	Ordinal int      `json:"ordinal"`
+	UnitIDs []string `json:"unit_ids"`
+}
+
+// PlanCohort is a logically related group of changed files and its ordered
+// layers.
+type PlanCohort struct {
+	CohortID string      `json:"cohort_id"`
+	Label    string      `json:"label"`
+	Layers   []PlanLayer `json:"layers"`
+	UnitIDs  []string    `json:"unit_ids"`
+}
+
+// Validate checks a cohort's shape and layer ordering.
+func (c PlanCohort) Validate() error {
+	if c.CohortID == "" {
+		return errors.New("review: cohort missing cohort_id")
+	}
+	if len(c.Layers) == 0 {
+		return fmt.Errorf("review: cohort %s has no layers", c.CohortID)
+	}
+	for _, l := range c.Layers {
+		if l.LayerID == "" {
+			return fmt.Errorf("review: cohort %s has a layer without layer_id", c.CohortID)
+		}
+	}
+	return nil
+}
+
+// PlanAudit is a required cross-cutting audit and its exact target set.
+type PlanAudit struct {
+	AuditID   string   `json:"audit_id"`
+	TargetIDs []string `json:"target_ids"`
+}
+
+// AttentionSignal is a transparent, deterministically-derived attention marker.
+type AttentionSignal struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	Fact string `json:"fact"`
+}
+
+// NextCommand is one exact progressive-disclosure command the plan ends with.
+type NextCommand struct {
+	Label   string `json:"label"`
+	Command string `json:"command"`
+}
+
+// Plan is the persisted review plan: scope, mode, statistics, the complete
+// changed-path table, and - in structured mode - cohorts/layers, primary units,
+// required audits with exact target sets, and the ordered next commands.
+type Plan struct {
+	Schema             string            `json:"schema"`
+	ReviewID           string            `json:"review_id"`
+	PlanDigest         string            `json:"plan_digest"`
+	Mode               Mode              `json:"mode"`
+	StructuredRequired bool              `json:"structured_required"`
+	Scope              Scope             `json:"scope"`
+	Stats              PlanStats         `json:"stats"`
+	ChangedPaths       []PlanPath        `json:"changed_paths"`
+	AttentionSignals   []AttentionSignal `json:"attention_signals,omitempty"`
+	Cohorts            []PlanCohort      `json:"cohorts,omitempty"`
+	PrimaryUnits       []Unit            `json:"primary_units,omitempty"`
+	RequiredAudits     []PlanAudit       `json:"required_audits,omitempty"`
+	NextCommands       []NextCommand     `json:"next_commands"`
+}
+
+// Validate checks the plan's structural contract: schema/identity, mode
+// consistency, a non-empty changed-path table, exact next commands, and - in
+// structured mode - cohorts plus all four required audits with well-formed
+// primary units. Direct plans must not carry structured collections.
+func (p Plan) Validate() error {
+	if p.Schema != PlanSchemaV1 {
+		return fmt.Errorf("review: plan schema %q is not %s", p.Schema, PlanSchemaV1)
+	}
+	if !validReviewID(p.ReviewID) {
+		return fmt.Errorf("review: plan has malformed review id %q", p.ReviewID)
+	}
+	if !isCanonicalDigestHex(p.PlanDigest) {
+		return fmt.Errorf("review: plan has non-canonical plan digest %q", p.PlanDigest)
+	}
+	switch p.Mode {
+	case ModeDirect, ModeStructured:
+	default:
+		return fmt.Errorf("review: plan has invalid mode %q", p.Mode)
+	}
+	if p.Mode == ModeDirect && p.StructuredRequired {
+		return errors.New("review: direct plan cannot be structured_required")
+	}
+	if err := p.Scope.Validate(); err != nil {
+		return err
+	}
+	if len(p.ChangedPaths) == 0 {
+		return errors.New("review: plan has no changed paths")
+	}
+	for _, cp := range p.ChangedPaths {
+		if err := cp.Validate(); err != nil {
+			return err
+		}
+	}
+	if len(p.NextCommands) == 0 {
+		return errors.New("review: plan missing next commands")
+	}
+	if p.Mode == ModeStructured {
+		if len(p.Cohorts) == 0 {
+			return errors.New("review: structured plan has no cohorts")
+		}
+		for _, c := range p.Cohorts {
+			if err := c.Validate(); err != nil {
+				return err
+			}
+		}
+		present := make(map[string]struct{}, len(p.RequiredAudits))
+		for _, a := range p.RequiredAudits {
+			if !validAuditID(a.AuditID) {
+				return fmt.Errorf("review: plan has unknown required audit %q", a.AuditID)
+			}
+			present[a.AuditID] = struct{}{}
+		}
+		for _, id := range RequiredAuditsV1() {
+			if _, ok := present[id]; !ok {
+				return fmt.Errorf("review: structured plan missing required audit %s", id)
+			}
+		}
+		for _, u := range p.PrimaryUnits {
+			if err := u.Validate(); err != nil {
+				return err
+			}
+		}
+	} else if len(p.Cohorts) != 0 || len(p.RequiredAudits) != 0 || len(p.PrimaryUnits) != 0 {
+		return errors.New("review: direct plan must not carry cohorts, primary units, or required audits")
+	}
+	return nil
+}
+
+// UnitHunk is one owned hunk in a review.unit.v1 mandatory object.
+type UnitHunk struct {
+	PathID            string `json:"path_id"`
+	OldPath           string `json:"old_path,omitempty"`
+	NewPath           string `json:"new_path"`
+	Status            string `json:"status"`
+	Ordinal           int    `json:"ordinal"`
+	OldStart          int    `json:"old_start"`
+	OldCount          int    `json:"old_count"`
+	NewStart          int    `json:"new_start"`
+	NewCount          int    `json:"new_count"`
+	NoFinalNewlineOld bool   `json:"old_no_final_newline"`
+	NoFinalNewlineNew bool   `json:"new_no_final_newline"`
+	PatchBase64       string `json:"patch_base64"`
+}
+
+// Unit is the review.unit.v1 mandatory object: the smallest bounded review
+// territory a host agent acknowledges. It carries the fixed identity/scope
+// fields and its ordered owned hunks with exact base64 patch bytes. Plan-derived
+// metadata (kind, roles, signals, symbols, context) is excluded from this object.
 type Unit struct {
-	Schema       string   `json:"schema"`
-	ID           string   `json:"id"`
-	Kind         string   `json:"kind"`
-	HunkIDs      []string `json:"hunk_ids"`
-	ChangedLines int      `json:"changed_lines"`
+	Schema       string       `json:"schema"`
+	ReviewID     string       `json:"review_id"`
+	UnitID       string       `json:"unit_id"`
+	CohortID     string       `json:"cohort_id"`
+	LayerID      string       `json:"layer_id"`
+	ScopeKind    ScopeKind    `json:"scope_kind"`
+	ObjectFormat string       `json:"object_format"`
+	Base         SideIdentity `json:"base"`
+	Head         SideIdentity `json:"head"`
+	Hunks        []UnitHunk   `json:"hunks"`
+}
+
+// Validate checks the mandatory unit object's shape.
+func (u Unit) Validate() error {
+	if u.Schema != UnitSchemaV1 {
+		return fmt.Errorf("review: unit schema %q is not %s", u.Schema, UnitSchemaV1)
+	}
+	if !validReviewID(u.ReviewID) {
+		return fmt.Errorf("review: unit has malformed review id %q", u.ReviewID)
+	}
+	if u.UnitID == "" {
+		return errors.New("review: unit missing unit_id")
+	}
+	if u.CohortID == "" {
+		return fmt.Errorf("review: unit %s missing cohort_id", u.UnitID)
+	}
+	if u.LayerID == "" {
+		return fmt.Errorf("review: unit %s missing layer_id", u.UnitID)
+	}
+	switch u.ScopeKind {
+	case ScopeWorkspace, ScopeCommit, ScopeRange:
+	default:
+		return fmt.Errorf("review: unit %s has invalid scope_kind %q", u.UnitID, u.ScopeKind)
+	}
+	if !validObjectFormat(u.ObjectFormat) {
+		return fmt.Errorf("review: unit %s has invalid object_format %q", u.UnitID, u.ObjectFormat)
+	}
+	if err := u.Base.Validate(); err != nil {
+		return fmt.Errorf("review: unit %s base: %w", u.UnitID, err)
+	}
+	if err := u.Head.Validate(); err != nil {
+		return fmt.Errorf("review: unit %s head: %w", u.UnitID, err)
+	}
+	if len(u.Hunks) == 0 {
+		return fmt.Errorf("review: unit %s owns no hunks", u.UnitID)
+	}
+	for i, h := range u.Hunks {
+		if h.PathID == "" {
+			return fmt.Errorf("review: unit %s hunk %d missing path_id", u.UnitID, i)
+		}
+		if h.NewPath == "" && h.OldPath == "" {
+			return fmt.Errorf("review: unit %s hunk %d missing old and new path", u.UnitID, i)
+		}
+		if h.Status == "" {
+			return fmt.Errorf("review: unit %s hunk %d missing status", u.UnitID, i)
+		}
+		if h.PatchBase64 == "" {
+			return fmt.Errorf("review: unit %s hunk %d missing patch_base64", u.UnitID, i)
+		}
+	}
+	return nil
 }
 
 // Recommendation is the reviewer's overall recommendation.
@@ -288,8 +573,12 @@ type Location struct {
 	End         int           `json:"end,omitempty"`
 }
 
-// Validate checks the location's shape and side proof. It cannot resolve the
-// location against a tree; that is the checker's job in a later task.
+// Validate checks the location's shape and its canonical side proof. Exactly
+// one proof form is allowed: a content-backed location carries a canonical
+// 32-byte content hash (64 lowercase hex), while a non-content location
+// (gitlink/special) carries a tagged side identity plus an entry type. Range
+// locations must be content-backed with 1 <= start <= end. It cannot resolve
+// the location against a tree; that is the checker's job in a later task.
 func (l Location) Validate() error {
 	switch LocationKind(l.Kind) {
 	case LocationRange, LocationPath:
@@ -304,10 +593,29 @@ func (l Location) Validate() error {
 	default:
 		return fmt.Errorf("location has invalid side %q", l.Side)
 	}
-	if l.ContentHash == "" && l.Identity == nil {
-		return errors.New("location missing a content hash or tagged side identity proof")
+	contentBacked := l.ContentHash != ""
+	if contentBacked {
+		if l.Identity != nil {
+			return errors.New("content-backed location must not also carry a tagged side identity")
+		}
+		if !isCanonicalDigestHex(l.ContentHash) {
+			return fmt.Errorf("location content hash %q is not a canonical 32-byte digest", l.ContentHash)
+		}
+	} else {
+		if l.Identity == nil {
+			return errors.New("non-content location needs a tagged side identity proof")
+		}
+		if err := l.Identity.Validate(); err != nil {
+			return fmt.Errorf("location identity: %w", err)
+		}
+		if l.EntryType == "" {
+			return errors.New("non-content location needs an entry type")
+		}
 	}
 	if LocationKind(l.Kind) == LocationRange {
+		if !contentBacked {
+			return errors.New("range location must be text and content-backed")
+		}
 		if l.Start < 1 || l.End < l.Start {
 			return fmt.Errorf("range location requires 1 <= start <= end, got start=%d end=%d", l.Start, l.End)
 		}
@@ -380,6 +688,9 @@ func (f Finding) Validate() error {
 	if f.Scenario == "" {
 		return fmt.Errorf("review: finding %s missing a concrete failure scenario", f.ID)
 	}
+	if f.Detail == "" {
+		return fmt.Errorf("review: finding %s missing a detailed explanation", f.ID)
+	}
 	if !validCategory(f.Category) {
 		return fmt.Errorf("review: finding %s has invalid category %q", f.ID, f.Category)
 	}
@@ -395,6 +706,12 @@ func (f Finding) Validate() error {
 	if f.Verifier == string(DispositionRejected) {
 		if !validRejectionReason(f.RejectionReason) {
 			return fmt.Errorf("review: rejected finding %s needs a typed rejection reason", f.ID)
+		}
+		if len(f.VerifierEvidence) == 0 {
+			return fmt.Errorf("review: rejected finding %s needs verifier evidence citations", f.ID)
+		}
+		if len(f.Citations) == 0 {
+			return fmt.Errorf("review: rejected finding %s needs supporting citations", f.ID)
 		}
 	} else if f.RejectionReason != "" {
 		return fmt.Errorf("review: finding %s has a rejection reason without a rejected disposition", f.ID)
@@ -479,11 +796,17 @@ func (r Report) Validate() error {
 	if r.Schema != ReportSchemaV1 {
 		return fmt.Errorf("review: report schema %q is not %s", r.Schema, ReportSchemaV1)
 	}
-	if r.ReviewID == "" {
-		return errors.New("review: report missing review id")
+	if !validReviewID(r.ReviewID) {
+		return fmt.Errorf("review: report has malformed review id %q", r.ReviewID)
 	}
-	if r.PlanDigest == "" {
-		return errors.New("review: report missing plan digest")
+	if !isCanonicalDigestHex(r.PlanDigest) {
+		return fmt.Errorf("review: report has non-canonical plan digest %q", r.PlanDigest)
+	}
+	if err := r.Base.Validate(); err != nil {
+		return fmt.Errorf("review: report base: %w", err)
+	}
+	if err := r.Head.Validate(); err != nil {
+		return fmt.Errorf("review: report head: %w", err)
 	}
 	if !validRecommendation(r.Recommendation) {
 		return fmt.Errorf("review: report has invalid recommendation %q", r.Recommendation)
@@ -533,25 +856,51 @@ func (r Report) checkRecommendationConsistency() error {
 	return nil
 }
 
+// CheckStatus is the checker's overall verdict. Non-complete states exit
+// non-zero at the CLI boundary.
+type CheckStatus string
+
+const (
+	CheckComplete   CheckStatus = "complete"
+	CheckIncomplete CheckStatus = "incomplete"
+	CheckStale      CheckStatus = "stale"
+	CheckInvalid    CheckStatus = "invalid"
+)
+
 // CheckResult is the status review check emits after validating a report.
 type CheckResult struct {
-	Schema         string   `json:"schema"`
-	ReviewID       string   `json:"review_id"`
-	Mode           Mode     `json:"mode"`
-	Coverage       Coverage `json:"coverage"`
-	Recommendation string   `json:"recommendation"`
-	OK             bool     `json:"ok"`
-	Problems       []string `json:"problems,omitempty"`
+	Schema         string      `json:"schema"`
+	ReviewID       string      `json:"review_id"`
+	Mode           Mode        `json:"mode"`
+	Status         CheckStatus `json:"status"`
+	Coverage       Coverage    `json:"coverage"`
+	Recommendation string      `json:"recommendation"`
+	Problems       []string    `json:"problems,omitempty"`
 }
 
-// Validate checks the internal consistency of a check status: valid enums, a
-// direct check records not_required_direct coverage, an ok check cannot
-// recommend incomplete, and an ok check carries no problems.
+// Complete reports whether the check verdict is a clean pass.
+func (c CheckResult) Complete() bool { return c.Status == CheckComplete }
+
+// Validate enforces the exact mode/status/coverage/recommendation/problem
+// combinations: direct checks carry not_required_direct coverage and structured
+// checks carry complete/incomplete coverage; a complete verdict has complete
+// coverage (structured), no problems, and never recommends incomplete; and
+// incomplete, stale, and invalid verdicts must list problems and recommend
+// incomplete.
 func (c CheckResult) Validate() error {
+	if c.Schema != CheckSchemaV1 {
+		return fmt.Errorf("review: check schema %q is not %s", c.Schema, CheckSchemaV1)
+	}
+	if !validReviewID(c.ReviewID) {
+		return fmt.Errorf("review: check has malformed review id %q", c.ReviewID)
+	}
 	switch c.Mode {
 	case ModeDirect, ModeStructured:
 	default:
 		return fmt.Errorf("review: check result has invalid mode %q", c.Mode)
+	}
+	if !validCheckStatus(c.Status) {
+		return fmt.Errorf("review: check result has invalid status %q", c.Status)
 	}
 	switch c.Coverage {
 	case CoverageNotRequiredDirect, CoverageComplete, CoverageIncomplete:
@@ -561,14 +910,32 @@ func (c CheckResult) Validate() error {
 	if !validRecommendation(c.Recommendation) {
 		return fmt.Errorf("review: check result has invalid recommendation %q", c.Recommendation)
 	}
+	// Mode fixes the coverage domain.
 	if c.Mode == ModeDirect && c.Coverage != CoverageNotRequiredDirect {
 		return fmt.Errorf("review: direct check must record coverage %s", CoverageNotRequiredDirect)
 	}
-	if c.OK && c.Recommendation == string(RecommendIncomplete) {
-		return errors.New("review: check cannot be ok while recommending incomplete")
+	if c.Mode == ModeStructured && c.Coverage == CoverageNotRequiredDirect {
+		return errors.New("review: structured check must record complete or incomplete coverage")
 	}
-	if c.OK && len(c.Problems) > 0 {
-		return errors.New("review: an ok check must report no problems")
+	// Status governs recommendation and problems.
+	switch c.Status {
+	case CheckComplete:
+		if len(c.Problems) != 0 {
+			return errors.New("review: complete check must report no problems")
+		}
+		if c.Recommendation == string(RecommendIncomplete) {
+			return errors.New("review: complete check cannot recommend incomplete")
+		}
+		if c.Mode == ModeStructured && c.Coverage != CoverageComplete {
+			return errors.New("review: complete structured check requires complete coverage")
+		}
+	case CheckIncomplete, CheckStale, CheckInvalid:
+		if len(c.Problems) == 0 {
+			return fmt.Errorf("review: %s check must list problems", c.Status)
+		}
+		if c.Recommendation != string(RecommendIncomplete) {
+			return fmt.Errorf("review: %s check requires recommendation incomplete", c.Status)
+		}
 	}
 	return nil
 }
@@ -632,10 +999,62 @@ func validCauseKind(s string) bool {
 }
 
 func validAuditID(s string) bool {
-	for _, id := range RequiredAuditsV1 {
-		if s == id {
-			return true
-		}
+	switch s {
+	case AuditRemovedBehaviorV1, AuditContractMigrationV1, AuditTestMatrixV1, AuditIntegrationGapV1:
+		return true
 	}
 	return false
+}
+
+func validObjectFormat(s string) bool { return s == "sha1" || s == "sha256" }
+
+func validReviewClass(s string) bool {
+	switch ReviewClass(s) {
+	case ReviewClassFull, ReviewClassMechanical, ReviewClassUnreviewable:
+		return true
+	}
+	return false
+}
+
+func validPathCoverage(s string) bool {
+	switch PathCoverage(s) {
+	case PathCoverageFull, PathCoveragePartial, PathCoverageNone:
+		return true
+	}
+	return false
+}
+
+func validCheckStatus(s CheckStatus) bool {
+	switch s {
+	case CheckComplete, CheckIncomplete, CheckStale, CheckInvalid:
+		return true
+	}
+	return false
+}
+
+// isLowerHex reports whether s is exactly n lowercase hex characters.
+func isLowerHex(s string, n int) bool {
+	if len(s) != n {
+		return false
+	}
+	for i := range len(s) {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
+}
+
+// isCanonicalDigestHex reports whether s is a canonical 32-byte digest rendered
+// as 64 lowercase hex characters.
+func isCanonicalDigestHex(s string) bool { return isLowerHex(s, 64) }
+
+// validReviewID reports whether s is a canonical public review ID: the rvw_
+// prefix plus 40 lowercase hex characters (the first 20 digest bytes).
+func validReviewID(s string) bool {
+	if !strings.HasPrefix(s, ReviewIDPrefixV1) {
+		return false
+	}
+	return isLowerHex(s[len(ReviewIDPrefixV1):], 40)
 }

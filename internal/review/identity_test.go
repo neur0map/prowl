@@ -76,22 +76,25 @@ func TestHunkIDIncludesOwningPath(t *testing.T) {
 // vector below. Keeping one canonical fixture makes the locked digests and
 // public IDs auditable against a single set of inputs.
 type identityFixture struct {
-	scope       Digest
-	sha1side    SideIdentity
-	sha256side  SideIdentity
-	wtree       []WorkspaceTreeRecord
-	rec         RawPathRecord
-	recWithHunk RawPathRecord
-	hunk        RawHunk
-	cpd         Digest
-	pathDigest  Digest
-	hunkless    StableID
-	hid         StableID
-	unit        StableID
-	cohort      StableID
-	layer       StableID
-	target      StableID
-	plan        PlanIdentity
+	scope            Digest
+	sha1side         SideIdentity
+	sha256side       SideIdentity
+	wtree            []WorkspaceTreeRecord
+	rec              RawPathRecord
+	recWithHunk      RawPathRecord
+	hunk             RawHunk
+	cpd              Digest
+	pathDigest       Digest
+	hunkless         StableID
+	hid              StableID
+	unit             StableID
+	cohort           StableID
+	layer            StableID
+	target           StableID
+	sha256gitoid     SideIdentity
+	targetChangedSig StableID
+	targetAddedField StableID
+	plan             PlanIdentity
 }
 
 func newIdentityFixture(t *testing.T) identityFixture {
@@ -141,6 +144,18 @@ func newIdentityFixture(t *testing.T) identityFixture {
 		Kind: "removed_symbol", PathID: f.pathDigest, Side: "base",
 		SymbolKind: "func", SymbolName: "OldFunc", Start: 10, End: 20, SignatureDigest: &sig,
 	})
+	sig256 := d("git-oid-256")
+	f.sha256gitoid = SideIdentity{Kind: SideGitOID, Value: sig256[:]}
+	sigChanged := d("changed-signature")
+	f.targetChangedSig = TargetID(RawTarget{
+		Kind: "changed_signature", PathID: f.pathDigest, Side: "head",
+		SymbolKind: "func", SymbolName: "DoThing", Start: 5, End: 25, SignatureDigest: &sigChanged,
+	})
+	sigAdded := d("added-field")
+	f.targetAddedField = TargetID(RawTarget{
+		Kind: "added_field", PathID: f.pathDigest, Side: "head",
+		SymbolKind: "field", SymbolName: "NewOpt", Start: 30, End: 30, SignatureDigest: &sigAdded,
+	})
 
 	trusted := d("trusted")
 	untrusted := d("untrusted")
@@ -148,7 +163,7 @@ func newIdentityFixture(t *testing.T) identityFixture {
 		PlannerVersion: "1", ScopeDigest: f.scope,
 		IndexSchema: "index.v1", IndexVersion: "7",
 		HeadIndexSignature: []byte{0xde, 0xad, 0xbe, 0xef},
-		Paths:              []PlanPathEntry{{PathID: f.hunkless, ReviewClass: "full", Coverage: "full", RoleID: "role_core"}},
+		Paths:              []PlanPathEntry{{PathID: f.hunkless, ReviewClass: "full", Coverage: "full", RoleIDs: []string{"role_core", "role_impl"}}},
 		Hunks:              []PlanHunkEntry{{HunkID: f.hid, Reviewability: "reviewable"}},
 		Units:              []PlanUnitEntry{{UnitID: f.unit, Kind: "behavior", HunkIDs: []StableID{f.hid}, AttentionSignalIDs: []string{"sig_changed_signature"}}},
 		Cohorts:            []PlanCohortEntry{{CohortID: f.cohort, LayerID: f.layer, UnitIDs: []StableID{f.unit}}},
@@ -180,6 +195,7 @@ func TestIdentityNormativeVectors(t *testing.T) {
 			"00046b696e6400000000000000076769745f6f6964000576616c75650000000000000014da39a3ee5e6b4b0d3255bfef95601890afd80709"},
 		{"side_sha256_bytes", hx(f.sha256side.Frame()),
 			"00046b696e640000000000000010776f726b73706163655f736861323536000576616c75650000000000000020cbda520a024a318658ff6b09846e69eface74f1a3fc6319918a7d283c3024da5"},
+		{"side_sha256_gitoid_bytes", hx(f.sha256gitoid.Frame()), "00046b696e6400000000000000076769745f6f6964000576616c756500000000000000207f8d00f140419115894e411cf85c3015e3a9b8421a37671c643da01d38d3c21b"},
 
 		// WorkspaceTreeV1 head identity digest.
 		{"workspace_tree_v1_head", hx(WorkspaceHeadIdentity(f.wtree).Value),
@@ -207,14 +223,16 @@ func TestIdentityNormativeVectors(t *testing.T) {
 		{"cohort_id_public", f.cohort.Public, "c_462a1b1d2909a6b580903d2fe9c1a6db"},
 		{"layer_id_public", f.layer.Public, "l_d5e3fadeed73dd4518309651110cba29"},
 		{"semantic_target_id_public", f.target.Public, "t_aa8aee5a74f8470a5a28c4db2a9a2aef"},
+		{"target_changed_signature_public", f.targetChangedSig.Public, "t_a09075c6db51efb7254549d79d45f5d8"},
+		{"target_added_field_public", f.targetAddedField.Public, "t_8a9ba90f181259bbe20155dbfe3c57a4"},
 
 		// ReviewPlanIdentityV1 digest and public review ID.
 		{"review_plan_v1_digest", func() string {
 			pd := ReviewPlanDigest(f.plan)
 			return hx(pd[:])
 		}(),
-			"2f4ebfc21389083824eba72f49ebf43ee007997562b2f147f70317dda81937f0"},
-		{"review_id_public", ReviewID(f.plan).Public, "rvw_2f4ebfc21389083824eba72f49ebf43ee0079975"},
+			"416e35408e7b2fe037e974ccdaaa49ddb4945c1d7259fd791bdccb081462323b"},
+		{"review_id_public", ReviewID(f.plan).Public, "rvw_416e35408e7b2fe037e974ccdaaa49ddb4945c1d"},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
@@ -258,5 +276,32 @@ func TestIdentityWorkspaceHeadIsSHA256(t *testing.T) {
 	}
 	if len(head.Value) != 32 {
 		t.Fatalf("workspace head value length %d", len(head.Value))
+	}
+}
+
+// TestSideIdentityValidate enforces the allowed kinds and exact byte widths.
+func TestSideIdentityValidate(t *testing.T) {
+	good := []SideIdentity{
+		{Kind: SideGitOID, Value: make([]byte, 20)},
+		{Kind: SideGitOID, Value: make([]byte, 32)},
+		{Kind: SideWorkspaceSHA256, Value: make([]byte, 32)},
+		{Kind: SideAbsent},
+	}
+	for _, s := range good {
+		if err := s.Validate(); err != nil {
+			t.Fatalf("valid side %+v rejected: %v", s, err)
+		}
+	}
+	bad := []SideIdentity{
+		{}, // zero value: empty kind
+		{Kind: SideGitOID, Value: make([]byte, 16)},          // wrong oid width
+		{Kind: SideWorkspaceSHA256, Value: make([]byte, 20)}, // workspace must be 32
+		{Kind: SideAbsent, Value: make([]byte, 1)},           // absent must be empty
+		{Kind: "bogus", Value: make([]byte, 32)},             // unknown kind
+	}
+	for i, s := range bad {
+		if err := s.Validate(); err == nil {
+			t.Fatalf("bad side %d accepted: %+v", i, s)
+		}
 	}
 }

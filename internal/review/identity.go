@@ -154,6 +154,30 @@ func (s SideIdentity) Frame() []byte {
 // AbsentSide is the identity of a missing revision side.
 func AbsentSide() SideIdentity { return SideIdentity{Kind: SideAbsent} }
 
+// Validate enforces the allowed kinds and their exact value widths: a git_oid
+// is a 20-byte (sha1) or 32-byte (sha256) object id, a workspace_sha256 is a
+// 32-byte digest, and an absent side carries no value. A zero-value identity
+// (empty kind) is invalid.
+func (s SideIdentity) Validate() error {
+	switch s.Kind {
+	case SideGitOID:
+		if len(s.Value) != 20 && len(s.Value) != 32 {
+			return fmt.Errorf("review: git_oid identity must be 20 or 32 bytes, got %d", len(s.Value))
+		}
+	case SideWorkspaceSHA256:
+		if len(s.Value) != 32 {
+			return fmt.Errorf("review: workspace_sha256 identity must be 32 bytes, got %d", len(s.Value))
+		}
+	case SideAbsent:
+		if len(s.Value) != 0 {
+			return fmt.Errorf("review: absent identity must carry no value, got %d bytes", len(s.Value))
+		}
+	default:
+		return fmt.Errorf("review: side identity has invalid kind %q", s.Kind)
+	}
+	return nil
+}
+
 // RawHunk is a canonical raw hunk record within an owning path.
 type RawHunk struct {
 	Ordinal           uint64
@@ -405,7 +429,7 @@ type PlanPathEntry struct {
 	ReviewClass string
 	Coverage    string
 	Reason      string
-	RoleID      string
+	RoleIDs     []string
 }
 
 // PlanHunkEntry is one ordered path-qualified hunk row in the plan identity.
@@ -474,7 +498,7 @@ func ReviewPlanIdentityV1(p PlanIdentity) []byte {
 			Field{Name: "review_class", Value: []byte(e.ReviewClass)},
 			Field{Name: "coverage", Value: []byte(e.Coverage)},
 			Field{Name: "reason", Value: []byte(e.Reason)},
-			Field{Name: "role_id", Value: []byte(e.RoleID)},
+			Field{Name: "role_ids", Value: stringList(e.RoleIDs)},
 		)
 	}
 	hunkItems := make([][]byte, len(p.Hunks))
