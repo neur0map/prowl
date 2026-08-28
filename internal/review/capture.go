@@ -360,27 +360,26 @@ func (s *captureState) workspaceNewSide(ch RawChange, newPath string) (sideData,
 
 // gitlinkWorkspaceNewSide resolves a workspace gitlink's new side and binds it to
 // the raw status identity. A nonzero raw status OID means the change is staged;
-// its hex and object-format width are validated, the full stage-0 id is read
-// strictly from the index, and the two must match: exactly when the raw OID is
-// full-width, or as a valid prefix when Git raw status abbreviated it. An
-// all-zero raw OID is an unstaged submodule state that v1 does not re-resolve by
-// pathname. A zero/malformed raw OID, a no-entry index, or any mismatch (a
-// concurrent index update between the two reads) fails closed rather than
-// silently replacing one identity with the other. No nested Git process is run
-// against the workspace path.
+// it is required to be a full object-format-width hex id (RawStatus pins
+// --no-abbrev), the full stage-0 id is read strictly from the index, and the two
+// must be exactly equal (case-insensitively). An all-zero raw OID is an unstaged
+// submodule state that v1 does not re-resolve by pathname. A zero/malformed raw
+// OID, a no-entry index, or any mismatch (a concurrent index update between the
+// two reads) fails closed rather than silently replacing one identity with the
+// other. No nested Git process is run against the workspace path.
 func (s *captureState) gitlinkWorkspaceNewSide(ch RawChange, newPath string) (sideData, error) {
 	if isZeroOID(ch.NewOID) {
 		return sideData{}, fmt.Errorf("%w: %q has a zero worktree gitlink OID (unstaged submodule state is unresolved in v1)", ErrGitlinkUnresolved, newPath)
 	}
-	if !isHexOID(ch.NewOID, s.width) {
-		return sideData{}, fmt.Errorf("%w: %q has a malformed raw gitlink OID %q", ErrGitlinkUnresolved, newPath, ch.NewOID)
+	if !isFullOID(ch.NewOID, s.width) {
+		return sideData{}, fmt.Errorf("%w: %q raw gitlink OID %q is not a full %d-hex object id", ErrGitlinkUnresolved, newPath, ch.NewOID, s.width*2)
 	}
 	side, err := s.gitlinkIndexSide(newPath)
 	if err != nil {
 		return sideData{}, err
 	}
-	if !gitlinkOIDMatches(ch.NewOID, side.oidHex, s.width) {
-		return sideData{}, fmt.Errorf("%w: %q staged index OID %s does not match raw status OID %s (concurrent index update?)", ErrGitlinkUnresolved, newPath, side.oidHex, ch.NewOID)
+	if !gitlinkOIDMatches(ch.NewOID, side.oidHex) {
+		return sideData{}, fmt.Errorf("%w: %q staged index OID %s does not equal raw status OID %s (concurrent index update?)", ErrGitlinkUnresolved, newPath, side.oidHex, ch.NewOID)
 	}
 	return side, nil
 }
@@ -912,37 +911,14 @@ func isFullOID(oid string, width int) bool {
 	return !zero
 }
 
-// isHexOID reports whether oid is a nonempty hexadecimal object id no wider than
-// the object format's full width (width*2). A full id is exactly width*2 chars;
-// an abbreviated raw-status id is shorter. A non-hex or over-wide value is
-// malformed.
-func isHexOID(oid string, width int) bool {
-	if oid == "" || len(oid) > width*2 {
-		return false
-	}
-	for _, c := range oid {
-		isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-		if !isHex {
-			return false
-		}
-	}
-	return true
-}
-
-// gitlinkOIDMatches reports whether the full stage-0 index OID matches the raw
-// status OID: exact (case-insensitive) equality when the raw OID is full-width,
-// otherwise the raw OID must be a valid case-insensitive hex prefix of the full
-// index id. This binds the staged identity to the raw status so a differing
-// index entry (for example a concurrent index update between the two reads) is
-// never silently substituted. full is a validated full-width object id.
-func gitlinkOIDMatches(raw, full string, width int) bool {
-	if len(raw) == width*2 {
-		return strings.EqualFold(raw, full)
-	}
-	if len(raw) == 0 || len(raw) >= len(full) {
-		return false
-	}
-	return strings.EqualFold(full[:len(raw)], raw)
+// gitlinkOIDMatches reports whether the full stage-0 index OID equals the raw
+// status OID, case-insensitively. RawStatus pins --no-abbrev, so the raw gitlink
+// OID is full width; the staged identity is bound to it by exact equality with
+// no abbreviated-prefix acceptance, so a differing index entry (for example a
+// concurrent index update between the raw status and index reads) is never
+// silently substituted. Both ids are validated full-width object ids.
+func gitlinkOIDMatches(raw, full string) bool {
+	return strings.EqualFold(raw, full)
 }
 
 // splitUntrackedZ splits git's NUL-delimited untracked enumeration, rejecting a

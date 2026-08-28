@@ -174,13 +174,18 @@ func (g ExecGit) Pipe(ctx context.Context, root string, limit int64, stdin io.Re
 }
 
 // RawStatus captures NUL-delimited raw diff status with rename detection pinned
-// to 50% (no copies, unlimited rename limit) and textconv/external diff
-// neutralized centrally; callers supply only revisions and pathspecs.
+// to 50% (no copies, unlimited rename limit), full-width object ids, and
+// textconv/external diff neutralized centrally; callers supply only revisions
+// and pathspecs. --no-abbrev forces every raw old/new object id (including
+// gitlink submodule commits) to full object-format width so an identity is never
+// lost to abbreviation; --full-index pins full index-line ids for the same
+// reason. Both are pinned here and, like every other pinned control, rejected
+// when a caller tries to supply them.
 func (g ExecGit) RawStatus(ctx context.Context, root string, limit int64, args ...string) ([]byte, error) {
 	if err := rejectUnsafeDiffArgs(args); err != nil {
 		return nil, err
 	}
-	fixed := []string{"diff", "--raw", "-z", "--no-textconv", "--no-ext-diff", "--find-renames=50%", "--no-color"}
+	fixed := []string{"diff", "--raw", "-z", "--no-textconv", "--no-ext-diff", "--find-renames=50%", "--no-color", "--full-index", "--no-abbrev"}
 	return g.diffCapture(ctx, root, limit, false, append(fixed, args...)...)
 }
 
@@ -822,8 +827,10 @@ type RawChange struct {
 }
 
 // ParseRawStatusZ parses NUL-delimited raw diff status. Well-formed input
-// terminates every path with NUL; a missing terminal NUL, a truncated record,
-// or a malformed field yields a typed error and no records.
+// terminates every path with NUL and carries full object-format-width old/new
+// object ids (RawStatus pins --no-abbrev); a missing terminal NUL, a truncated
+// record, a malformed field, or an abbreviated/non-hex nonzero object id yields
+// a typed error and no records.
 func ParseRawStatusZ(data []byte) ([]RawChange, error) {
 	if len(data) == 0 {
 		return nil, nil
@@ -843,6 +850,9 @@ func ParseRawStatusZ(data []byte) ([]RawChange, error) {
 			return nil, fmt.Errorf("%w: metadata %q has %d fields, want 5", ErrMalformedRawStatus, meta, len(fields))
 		}
 		status := fields[4]
+		if !rawStatusOIDValid(fields[2]) || !rawStatusOIDValid(fields[3]) {
+			return nil, fmt.Errorf("%w: metadata %q has an abbreviated or malformed object id", ErrMalformedRawStatus, meta)
+		}
 		wantPaths := 1
 		if status != "" && (status[0] == 'R' || status[0] == 'C') {
 			wantPaths = 2
@@ -864,6 +874,26 @@ func ParseRawStatusZ(data []byte) ([]RawChange, error) {
 		i += 1 + wantPaths
 	}
 	return changes, nil
+}
+
+// rawStatusOIDValid reports whether a raw diff-status object id field is
+// acceptable: the all-zero unresolved-side placeholder, or a full-width hex id
+// of a recognized object format (40 hex for SHA-1, 64 for SHA-256). RawStatus
+// pins --no-abbrev, so real output is always full width; an abbreviated or
+// non-hex nonzero id is rejected rather than accepted as a truncated identity.
+func rawStatusOIDValid(oid string) bool {
+	if isZeroOID(oid) {
+		return true
+	}
+	if len(oid) != 40 && len(oid) != 64 {
+		return false
+	}
+	for _, c := range oid {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // DiffHunk is one unified-diff hunk with its ranges and payload line counts.

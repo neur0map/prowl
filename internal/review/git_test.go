@@ -722,6 +722,7 @@ func TestExecGitDiffHelpersRejectOverridingOptions(t *testing.T) {
 		{"--binary"},
 		{"--full-index"},
 		{"--abbrev=8"},
+		{"--no-abbrev"},
 		{"--relative=sub"},
 		{"--output=/tmp/x"},
 		// Output/canonicalization overrides the round-3 denylist missed:
@@ -908,30 +909,83 @@ func TestExecGitPipeStreamsCatFileBatch(t *testing.T) {
 // ---- finding 8: parser framing & overflow --------------------------------
 
 func TestExecGitParseRawStatus(t *testing.T) {
-	valid := []byte(":100644 100644 aaaa bbbb M\x00f1.txt\x00" +
-		":100644 100644 cccc dddd R100\x00old.txt\x00new.txt\x00")
+	oidA := strings.Repeat("a", 40)
+	oidB := strings.Repeat("b", 40)
+	oidC := strings.Repeat("c", 40)
+	oidD := strings.Repeat("d", 40)
+	zero := strings.Repeat("0", 40)
+	valid := []byte(":100644 100644 " + oidA + " " + oidB + " M\x00f1.txt\x00" +
+		":100644 100644 " + oidC + " " + oidD + " R100\x00old.txt\x00new.txt\x00")
 	changes, err := ParseRawStatusZ(valid)
 	if err != nil {
 		t.Fatalf("valid parse: %v", err)
 	}
-	if len(changes) != 2 || changes[0].Path != "f1.txt" || changes[1].Status != "R100" ||
-		changes[1].OldPath != "old.txt" || changes[1].Path != "new.txt" {
+	if len(changes) != 2 || changes[0].Path != "f1.txt" || changes[0].NewOID != oidB ||
+		changes[1].Status != "R100" || changes[1].OldPath != "old.txt" || changes[1].Path != "new.txt" {
 		t.Fatalf("unexpected records: %+v", changes)
 	}
 
+	// The all-zero placeholder for an unresolved (unstaged) worktree side parses.
+	if _, err := ParseRawStatusZ([]byte(":100644 100644 " + oidA + " " + zero + " M\x00f1.txt\x00")); err != nil {
+		t.Fatalf("zero placeholder new OID: %v", err)
+	}
+	// An abbreviated nonzero object id is rejected: RawStatus pins --no-abbrev so
+	// a short id means lost identity, never a truncated-but-acceptable value.
+	if got, err := ParseRawStatusZ([]byte(":100644 100644 ce01362 " + oidB + " M\x00f1.txt\x00")); !errors.Is(err, ErrMalformedRawStatus) || got != nil {
+		t.Fatalf("abbreviated OID err=%v got=%v, want ErrMalformedRawStatus", err, got)
+	}
+	// A nonzero object id that is not hex within a recognized width is rejected.
+	if got, err := ParseRawStatusZ([]byte(":100644 100644 " + strings.Repeat("z", 40) + " " + oidB + " M\x00f1.txt\x00")); !errors.Is(err, ErrMalformedRawStatus) || got != nil {
+		t.Fatalf("non-hex OID err=%v got=%v, want ErrMalformedRawStatus", err, got)
+	}
+
 	// Missing terminal NUL is malformed framing.
-	if got, err := ParseRawStatusZ([]byte(":100644 100644 a b M\x00f1.txt")); !errors.Is(err, ErrMalformedRawStatus) || got != nil {
+	if got, err := ParseRawStatusZ([]byte(":100644 100644 " + oidA + " " + oidB + " M\x00f1.txt")); !errors.Is(err, ErrMalformedRawStatus) || got != nil {
 		t.Fatalf("missing terminal NUL err=%v got=%v", err, got)
 	}
-	// Truncated record fed through a fake runner.
-	r := fakeRunner{out: []byte(":100644 100644 a b M\x00")}
+	// Truncated record (metadata with no path token) fed through a fake runner.
+	r := fakeRunner{out: []byte(":100644 100644 " + oidA + " " + oidB + " M\x00")}
 	out, _ := r.Output(context.Background(), "", 1<<20, "diff", "--raw", "-z")
 	if got, err := ParseRawStatusZ(out); !errors.Is(err, ErrMalformedRawStatus) || got != nil {
 		t.Fatalf("truncated err=%v got=%v", err, got)
 	}
 	// Missing leading colon.
-	if _, err := ParseRawStatusZ([]byte("100644 100644 a b M\x00f1\x00")); !errors.Is(err, ErrMalformedRawStatus) {
+	if _, err := ParseRawStatusZ([]byte("100644 100644 " + oidA + " " + oidB + " M\x00f1\x00")); !errors.Is(err, ErrMalformedRawStatus) {
 		t.Fatalf("missing colon err=%v", err)
+	}
+}
+
+// TestExecGitRawStatusEmitsFullWidthOIDs proves RawStatus pins --no-abbrev so
+// every nonzero object id in raw diff status is full object-format width; the
+// zero placeholder for the unstaged worktree side is full width too.
+func TestExecGitRawStatusEmitsFullWidthOIDs(t *testing.T) {
+	gitBin(t)
+	ctx := context.Background()
+	root, _ := initRepo(t)
+	// Modify the committed file so the base side carries a real (nonzero) blob
+	// OID while the unstaged worktree side is the zero placeholder.
+	if err := os.WriteFile(filepath.Join(root, "payload.txt"), []byte("changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	g := ExecGit{HooksDir: t.TempDir(), Timeout: 30 * time.Second, MaxStderr: 1 << 20}
+	out, err := g.RawStatus(ctx, root, 1<<20, "HEAD")
+	if err != nil {
+		t.Fatalf("RawStatus: %v", err)
+	}
+	changes, err := ParseRawStatusZ(out)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(changes) == 0 {
+		t.Fatal("expected at least one change")
+	}
+	for _, c := range changes {
+		if len(c.OldOID) != 40 {
+			t.Fatalf("old OID %q is not full 40-hex width", c.OldOID)
+		}
+		if len(c.NewOID) != 40 {
+			t.Fatalf("new OID %q is not full 40-hex width", c.NewOID)
+		}
 	}
 }
 

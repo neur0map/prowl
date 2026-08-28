@@ -873,55 +873,62 @@ func TestCaptureGitlinkRejectsMalformedTreeOutput(t *testing.T) {
 	}
 }
 
-// TestGitlinkRawOIDValidation proves the raw-status gitlink OID validator accepts
-// a full-width or abbreviated hex id and rejects empty, non-hex, and over-width
-// values before any index lookup.
+// TestGitlinkRawOIDValidation proves the full-width object-id validator accepts
+// only a full SHA-1 (40 hex) or SHA-256 (64 hex) id for its format width and
+// rejects an abbreviated, empty, non-hex, all-zero, or wrong-width value, so a
+// gitlink identity can never be bound to a truncated raw status OID.
 func TestGitlinkRawOIDValidation(t *testing.T) {
-	full := strings.Repeat("a", 40)
+	sha1 := strings.Repeat("a", 40)
+	sha256 := strings.Repeat("a", 64)
 	cases := []struct {
-		name string
-		oid  string
-		want bool
+		name  string
+		oid   string
+		width int
+		want  bool
 	}{
-		{"full width", full, true},
-		{"abbreviated", "a1b2c3d", true},
-		{"single hex", "a", true},
-		{"uppercase hex", "ABCDEF0", true},
-		{"empty", "", false},
-		{"non-hex", "abcdefg", false},
-		{"over width", full + "a", false},
+		{"sha1 full", sha1, 20, true},
+		{"sha1 uppercase", strings.Repeat("AB", 20), 20, true},
+		{"sha256 full", sha256, 32, true},
+		{"sha1 abbreviated", "a1b2c3d", 20, false},
+		{"sha256 short", sha1, 32, false}, // 40 hex is short for sha256
+		{"sha1 over width", sha1 + "a", 20, false},
+		{"sha1 non-hex", strings.Repeat("z", 40), 20, false},
+		{"all zero", strings.Repeat("0", 40), 20, false},
+		{"empty", "", 20, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isHexOID(tc.oid, 20); got != tc.want {
-				t.Fatalf("isHexOID(%q)=%v, want %v", tc.oid, got, tc.want)
+			if got := isFullOID(tc.oid, tc.width); got != tc.want {
+				t.Fatalf("isFullOID(%q,%d)=%v, want %v", tc.oid, tc.width, got, tc.want)
 			}
 		})
 	}
 }
 
-// TestGitlinkOIDMatchesRawStatus proves the staged index OID must equal a
-// full-width raw OID exactly and must have an abbreviated raw OID as a valid,
-// case-insensitive prefix; any other relationship is a mismatch.
+// TestGitlinkOIDMatchesRawStatus proves the staged index OID is bound to the raw
+// status OID by exact, case-insensitive equality across both object formats: two
+// ids sharing a long prefix but differing anywhere are a mismatch, and no
+// abbreviated prefix is ever accepted.
 func TestGitlinkOIDMatchesRawStatus(t *testing.T) {
-	full := strings.Repeat("a", 39) + "b" // ...aaab
+	sha1 := strings.Repeat("a", 40)
+	sha256 := strings.Repeat("a", 64)
 	cases := []struct {
-		name string
-		raw  string
-		want bool
+		name      string
+		raw, full string
+		want      bool
 	}{
-		{"full width exact", full, true},
-		{"full width mismatch", strings.Repeat("a", 40), false},
-		{"valid prefix", strings.Repeat("a", 7), true},
-		{"non-prefix", "abcdef0", false},
-		{"case-insensitive prefix", strings.Repeat("A", 7), true},
-		{"over-width raw", full + "a", false},
-		{"empty raw", "", false},
+		{"sha1 equal", sha1, sha1, true},
+		{"sha1 case-insensitive", strings.Repeat("A", 40), sha1, true},
+		{"sha1 shared-prefix mismatch", strings.Repeat("a", 39) + "b", strings.Repeat("a", 39) + "c", false},
+		{"sha256 equal", sha256, sha256, true},
+		{"sha256 shared-prefix mismatch", strings.Repeat("a", 63) + "b", strings.Repeat("a", 63) + "c", false},
+		{"abbreviated prefix rejected", strings.Repeat("a", 7), sha1, false},
+		{"empty rejected", "", sha1, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := gitlinkOIDMatches(tc.raw, full, 20); got != tc.want {
-				t.Fatalf("gitlinkOIDMatches(%q,%q)=%v, want %v", tc.raw, full, got, tc.want)
+			if got := gitlinkOIDMatches(tc.raw, tc.full); got != tc.want {
+				t.Fatalf("gitlinkOIDMatches(%q,%q)=%v, want %v", tc.raw, tc.full, got, tc.want)
 			}
 		})
 	}
@@ -966,35 +973,39 @@ func captureWithGitlinkScript(t *testing.T, rawStatus, lsFiles []byte) (Capture,
 	return (&Capturer{Root: repo.root, Runner: runner}).CaptureOnce(ctx, scope)
 }
 
-// TestCaptureWorkspaceGitlinkMalformedRawOIDFailsClosed proves a nonzero raw
-// gitlink OID that is not valid hex within the object-format width fails closed
-// before any index lookup, never resolving to whatever the index happens to hold.
-func TestCaptureWorkspaceGitlinkMalformedRawOIDFailsClosed(t *testing.T) {
-	raw := []byte(":000000 160000 0000000 zzzzzzz A\x00sub\x00")
+// TestCaptureWorkspaceGitlinkWrongWidthRawOIDFailsClosed proves a raw gitlink OID
+// that is valid hex but not the repository object-format width (a 64-hex id in a
+// SHA-1 repo) fails closed before any identity is bound, rather than resolving to
+// whatever the index happens to hold.
+func TestCaptureWorkspaceGitlinkWrongWidthRawOIDFailsClosed(t *testing.T) {
+	wide := strings.Repeat("a", 64) // full sha256 width, wrong for a sha1 repo
+	raw := []byte(":000000 160000 0000000 " + wide + " A\x00sub\x00")
 	ls := []byte("160000 " + strings.Repeat("a", 40) + " 0\tsub\x00")
 	if _, err := captureWithGitlinkScript(t, raw, ls); !errors.Is(err, ErrGitlinkUnresolved) {
 		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
 	}
 }
 
-// TestCaptureWorkspaceGitlinkOverWidthRawOIDFailsClosed proves a raw gitlink OID
-// wider than the object format fails closed rather than being truncated to match.
-func TestCaptureWorkspaceGitlinkOverWidthRawOIDFailsClosed(t *testing.T) {
-	full := strings.Repeat("a", 40)
-	raw := []byte(":000000 160000 0000000 " + full + "a A\x00sub\x00") // 41 hex chars
-	ls := []byte("160000 " + full + " 0\tsub\x00")
-	if _, err := captureWithGitlinkScript(t, raw, ls); !errors.Is(err, ErrGitlinkUnresolved) {
-		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
+// TestCaptureWorkspaceGitlinkAbbreviatedRawOIDFailsClosed proves an abbreviated
+// raw gitlink OID is rejected end-to-end: RawStatus pins --no-abbrev, so the
+// parser refuses an abbreviated nonzero id (ErrMalformedRawStatus) and capture
+// never falls back to prefix-matching it against the index.
+func TestCaptureWorkspaceGitlinkAbbreviatedRawOIDFailsClosed(t *testing.T) {
+	raw := []byte(":000000 160000 0000000 aaaaaaa A\x00sub\x00") // 7-hex abbreviated new OID
+	ls := []byte("160000 " + strings.Repeat("a", 40) + " 0\tsub\x00")
+	if _, err := captureWithGitlinkScript(t, raw, ls); !errors.Is(err, ErrMalformedRawStatus) {
+		t.Fatalf("err=%v, want ErrMalformedRawStatus", err)
 	}
 }
 
-// TestCaptureWorkspaceGitlinkIndexMismatchFailsClosed proves a staged index OID
-// that does not match the raw status OID (e.g. a concurrent index update between
-// the two reads) fails closed rather than silently replacing one identity with
-// the other.
+// TestCaptureWorkspaceGitlinkIndexMismatchFailsClosed proves a full-width staged
+// index OID that does not exactly equal the raw status OID (two ids sharing a
+// long prefix but differing, as a concurrent index update between the raw status
+// and index reads would produce) fails closed rather than silently replacing one
+// identity with the other.
 func TestCaptureWorkspaceGitlinkIndexMismatchFailsClosed(t *testing.T) {
-	raw := []byte(":000000 160000 0000000 aaaaaaa A\x00sub\x00")
-	ls := []byte("160000 " + strings.Repeat("b", 40) + " 0\tsub\x00") // differs from raw prefix
+	raw := []byte(":000000 160000 0000000 " + strings.Repeat("a", 39) + "b A\x00sub\x00")
+	ls := []byte("160000 " + strings.Repeat("a", 39) + "c 0\tsub\x00") // shares 39-char prefix, differs
 	if _, err := captureWithGitlinkScript(t, raw, ls); !errors.Is(err, ErrGitlinkUnresolved) {
 		t.Fatalf("err=%v, want ErrGitlinkUnresolved", err)
 	}
@@ -1005,23 +1016,6 @@ func TestCaptureWorkspaceGitlinkIndexMismatchFailsClosed(t *testing.T) {
 func TestCaptureWorkspaceGitlinkFullWidthOIDMatches(t *testing.T) {
 	full := strings.Repeat("a", 40)
 	raw := []byte(":000000 160000 0000000 " + full + " A\x00sub\x00")
-	ls := []byte("160000 " + full + " 0\tsub\x00")
-	cap, err := captureWithGitlinkScript(t, raw, ls)
-	if err != nil {
-		t.Fatalf("capture: %v", err)
-	}
-	rec := recordByNewPath(t, cap, "sub")
-	if hex.EncodeToString(rec.NewSide.Value) != full {
-		t.Fatalf("new gitlink side=%x, want %s", rec.NewSide.Value, full)
-	}
-}
-
-// TestCaptureWorkspaceGitlinkAbbreviatedOIDMatches proves an abbreviated raw
-// status OID that is a valid prefix of the staged index OID resolves to the full
-// index identity.
-func TestCaptureWorkspaceGitlinkAbbreviatedOIDMatches(t *testing.T) {
-	full := strings.Repeat("a", 40)
-	raw := []byte(":000000 160000 0000000 aaaaaaa A\x00sub\x00")
 	ls := []byte("160000 " + full + " 0\tsub\x00")
 	cap, err := captureWithGitlinkScript(t, raw, ls)
 	if err != nil {
