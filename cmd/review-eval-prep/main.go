@@ -16,6 +16,8 @@ func main() {
 	config := revieweval.PrepareConfig{}
 	flag.StringVar(&config.SourcesPath, "sources", "testdata/review-eval/sources.json", "frozen source manifest")
 	flag.StringVar(&config.CandidatePoolPath, "candidate-pool", "testdata/review-eval/candidate_pool.json", "canonical multi-source candidate pool")
+	flag.StringVar(&config.RejectionsPath, "rejections", "testdata/review-eval/candidate_rejections.json", "evidenced immutable candidate rejections")
+	flag.StringVar(&config.AuditPacketsPath, "audit-packets", "testdata/review-eval/audit_packets.json", "canonical candidate audit packets")
 	flag.StringVar(&config.TuningPath, "tuning", "testdata/review-eval/tuning.json", "frozen tuning corpus")
 	flag.StringVar(&config.HeldOutPath, "held-out", "testdata/review-eval/held_out.json", "frozen held-out corpus")
 	flag.StringVar(&config.SmallPath, "small", "testdata/review-eval/small_non_regression.json", "frozen SWR small-change corpus")
