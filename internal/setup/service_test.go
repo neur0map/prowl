@@ -575,6 +575,45 @@ func TestSetupApplyInstallsAndRemovesEmbeddedSkills(t *testing.T) {
 	}
 }
 
+func TestReviewSkillInstallsForEveryProjectHost(t *testing.T) {
+	root := t.TempDir()
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	integrations := []string{IntegrationOMP, IntegrationClaude, IntegrationAgentSkills}
+	plan, err := service.Plan(context.Background(), integrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Apply(context.Background(), ApplyRequest{
+		Integrations: plan.Integrations, PlanHash: plan.Hash,
+		ExpectedProjectConfigVersion: plan.ProjectConfigVersion, Approved: true, IdempotencyKey: "review-skill-hosts",
+	}); err != nil {
+		t.Fatalf("apply review skill integrations: %v", err)
+	}
+
+	const skill = "prowl-pr-review"
+	want, ok := skillContent(skill)
+	if !ok || want == "" {
+		t.Fatalf("embedded skill %q missing", skill)
+	}
+	for _, rel := range []string{
+		".agents/skills/prowl-pr-review/SKILL.md",
+		".claude/skills/prowl-pr-review/SKILL.md",
+		".omp/skills/prowl-pr-review/SKILL.md",
+	} {
+		got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Errorf("read installed review skill %s: %v", rel, err)
+			continue
+		}
+		if string(got) != want {
+			t.Errorf("installed review skill %s differs from embedded portable skill", rel)
+		}
+	}
+}
+
 // Migration must move a repository off the retired prowl-repo-exploration skill
 // without ever destroying user work: an exact Prowl-owned copy is removed, a
 // locally edited copy is preserved and reported as a conflict, and the new
