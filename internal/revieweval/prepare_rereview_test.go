@@ -176,7 +176,7 @@ func TestCanonicalPositionUsesNativeHunksForDeletedQuotedPath(t *testing.T) {
 }
 
 func TestPreparedTripleRejectsRawChurnAndSizeToleranceDrift(t *testing.T) {
-	padding := cleanPaddingCase()
+	padding := cleanPaddingCase(t)
 	variants := []PreparedCase{metamorphicCase("begin", "beginning"), metamorphicCase("middle", "middle"), metamorphicCase("end", "end")}
 	for i := range variants {
 		variants[i].RawAdditions, variants[i].RawDeletions = 250, 250
@@ -235,14 +235,15 @@ func TestCandidatePoolVerifiesEverySourceSpecificFrozenRow(t *testing.T) {
 		})
 		paths[record.SourceID] = path
 	}
-	digest, err := CanonicalCandidatePoolDigest(records)
+	pool := CandidatePoolManifest{
+		Schema: CandidatePoolSchema, SourcesManifestSHA256: CanonicalSourcesDigest(sources),
+		PartitionSeedSHA256: strings.Repeat("9", 64), Records: records,
+	}
+	digest, err := CanonicalCandidatePoolDigest(pool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pool := CandidatePoolManifest{
-		Schema: CandidatePoolSchema, SourcesManifestSHA256: CanonicalSourcesDigest(sources),
-		SHA256: digest, PartitionSeedSHA256: digest, Records: records,
-	}
+	pool.SHA256 = digest
 	if err := ValidateCandidatePoolSources(pool, sources, paths); err != nil {
 		t.Fatal(err)
 	}

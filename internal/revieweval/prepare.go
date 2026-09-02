@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,7 +29,7 @@ import (
 
 const (
 	SourcesSchema       = "review.eval-sources.v1"
-	CandidatePoolSchema = "review.eval-candidate-pool.v1"
+	CandidatePoolSchema = "review.eval-candidate-pool.v2"
 	CorpusSchema        = "review.eval-corpus.v1"
 	SmallCorpusSchema   = "review.eval-small-corpus.v1"
 	ScoringFreezeSchema = "review.eval-scoring-freeze.v1"
@@ -103,23 +104,57 @@ type ChangedRange struct {
 	EndLine   int    `json:"end_line"`
 }
 
+const AuditEvidenceRecordSchema = "review.eval-audit-evidence-record.v2"
+const AuditEvidenceOutputSchema = "review.eval-audit-evidence-output.v1"
+
+type AuditEvidenceSpec struct {
+	ID           string `json:"id"`
+	RecordPath   string `json:"record_path"`
+	RecordSHA256 string `json:"record_sha256"`
+	OutputPath   string `json:"output_path"`
+	OutputSHA256 string `json:"output_sha256"`
+}
+
+type AuditEvidenceRecord struct {
+	Schema           string        `json:"schema"`
+	CaseID           string        `json:"case_id"`
+	ActorID          string        `json:"actor_id"`
+	ActorRole        string        `json:"actor_role"`
+	Decision         string        `json:"decision"`
+	Findings         []GroundTruth `json:"findings"`
+	Toolchain        string        `json:"toolchain"`
+	ToolchainVersion string        `json:"toolchain_version"`
+	ToolchainSHA256  string        `json:"toolchain_sha256"`
+	SourceRowSHA256  string        `json:"source_row_sha256"`
+	PatchSHA256      string        `json:"patch_sha256"`
+	BuildStateSHA256 string        `json:"build_state_sha256"`
+	OutputSHA256     string        `json:"output_sha256"`
+}
+
+type AuditEvidenceOutput struct {
+	Schema           string        `json:"schema"`
+	CaseID           string        `json:"case_id"`
+	ActorID          string        `json:"actor_id"`
+	ActorRole        string        `json:"actor_role"`
+	Decision         string        `json:"decision"`
+	Findings         []GroundTruth `json:"findings"`
+	SourceRowSHA256  string        `json:"source_row_sha256"`
+	PatchSHA256      string        `json:"patch_sha256"`
+	BuildStateSHA256 string        `json:"build_state_sha256"`
+}
+
+type loadedAuditEvidence struct {
+	Record AuditEvidenceRecord
+	Output AuditEvidenceOutput
+}
+
 type AuditDecision struct {
-	Slot             string   `json:"slot"`
-	ReviewerID       string   `json:"reviewer_id"`
-	Toolchain        string   `json:"toolchain"`
-	ToolchainVersion string   `json:"toolchain_version"`
-	ToolchainSHA256  string   `json:"toolchain_sha256"`
-	Decision         string   `json:"decision"`
-	EvidenceRefs     []string `json:"evidence_refs"`
+	Slot       string `json:"slot"`
+	EvidenceID string `json:"evidence_id"`
 }
 
 type AuditAdjudication struct {
-	AdjudicatorID    string   `json:"adjudicator_id"`
-	Toolchain        string   `json:"toolchain"`
-	ToolchainVersion string   `json:"toolchain_version"`
-	ToolchainSHA256  string   `json:"toolchain_sha256"`
-	Decision         string   `json:"decision"`
-	EvidenceRefs     []string `json:"evidence_refs"`
+	EvidenceID string `json:"evidence_id"`
 }
 
 type AuditProvenance struct {
@@ -194,6 +229,7 @@ type PreparedCase struct {
 	CausalPatchSHA256       string                `json:"causal_patch_sha256,omitempty"`
 	CanonicalDiffSHA256     string                `json:"canonical_diff_sha256,omitempty"`
 	DiffPosition            CanonicalDiffPosition `json:"diff_position,omitempty"`
+	auditEvidence           map[string]loadedAuditEvidence
 }
 
 type PreparedTriple struct {
@@ -222,20 +258,35 @@ type GitFetchSpec struct {
 	OID       string `json:"oid"`
 }
 
+type CandidateClaim struct {
+	RawRecordSHA256 string `json:"raw_record_sha256"`
+	SourceOrdinal   int    `json:"source_ordinal"`
+	Path            string `json:"path"`
+	Side            string `json:"side"`
+	FromLine        int    `json:"from_line"`
+	ToLine          int    `json:"to_line"`
+	Category        string `json:"category"`
+	Context         string `json:"context"`
+	Note            string `json:"note"`
+	IsAIComment     bool   `json:"is_ai_comment"`
+}
+
 type CandidateSourceRow struct {
-	CandidateSource     string   `json:"candidate_source"`
-	SourceID            string   `json:"source_id"`
-	SourceRecordID      string   `json:"source_record_id"`
-	Repository          string   `json:"repository"`
-	PullRequestURL      string   `json:"pull_request_url"`
-	BaseSHA             string   `json:"base_sha"`
-	HeadSHA             string   `json:"head_sha"`
-	License             string   `json:"license"`
-	Provenance          string   `json:"provenance"`
-	Language            string   `json:"language"`
-	SourceReportedChurn int      `json:"source_reported_churn,omitempty"`
-	EvidenceRefs        []string `json:"evidence_refs"`
-	RawRecordSHA256     string   `json:"raw_record_sha256"`
+	CandidateSource     string           `json:"candidate_source"`
+	SourceID            string           `json:"source_id"`
+	SourceRecordID      string           `json:"source_record_id"`
+	Repository          string           `json:"repository"`
+	PullRequestURL      string           `json:"pull_request_url"`
+	BaseSHA             string           `json:"base_sha"`
+	HeadSHA             string           `json:"head_sha"`
+	License             string           `json:"license"`
+	Provenance          string           `json:"provenance"`
+	Language            string           `json:"language"`
+	SourceReportedChurn int              `json:"source_reported_churn,omitempty"`
+	EvidenceRefs        []string         `json:"evidence_refs"`
+	RawRecordSHA256     string           `json:"raw_record_sha256,omitempty"`
+	RawRecordSHA256s    []string         `json:"raw_record_sha256s,omitempty"`
+	Claims              []CandidateClaim `json:"claims,omitempty"`
 }
 
 type CandidateSourceRowsManifest struct {
@@ -244,22 +295,32 @@ type CandidateSourceRowsManifest struct {
 }
 
 type CandidatePoolRecord struct {
-	ID                  string             `json:"id"`
-	CandidateSource     string             `json:"candidate_source"`
-	SourceID            string             `json:"source_id"`
-	SourceRecordID      string             `json:"source_record_id"`
-	SourceType          string             `json:"source_type"`
-	Repository          string             `json:"repository"`
-	BaseSHA             string             `json:"base_sha"`
-	HeadSHA             string             `json:"head_sha"`
-	SelectionKey        string             `json:"selection_key"`
-	Language            string             `json:"language"`
-	SourceReportedChurn int                `json:"source_reported_churn,omitempty"`
-	SourceRow           CandidateSourceRow `json:"source_row"`
-	SourceRowSHA256     string             `json:"source_row_sha256"`
-	EvidenceRefs        []string           `json:"evidence_refs"`
-	BaseFetch           GitFetchSpec       `json:"base_fetch"`
-	HeadFetch           GitFetchSpec       `json:"head_fetch"`
+	ID                   string             `json:"id"`
+	CandidateSource      string             `json:"candidate_source"`
+	SourceID             string             `json:"source_id"`
+	SourceRecordID       string             `json:"source_record_id"`
+	SourceType           string             `json:"source_type"`
+	Repository           string             `json:"repository"`
+	SourceBaseSHA        string             `json:"source_base_sha,omitempty"`
+	SourceBaseFetch      GitFetchSpec       `json:"source_base_fetch,omitempty"`
+	EligibleClaimSHA256s []string           `json:"eligible_claim_sha256s,omitempty"`
+	BaseSHA              string             `json:"base_sha"`
+	HeadSHA              string             `json:"head_sha"`
+	RangeSemantics       string             `json:"range_semantics,omitempty"`
+	SelectionKey         string             `json:"selection_key"`
+	Language             string             `json:"language"`
+	SourceReportedChurn  int                `json:"source_reported_churn,omitempty"`
+	RawAdditions         int                `json:"raw_additions"`
+	RawDeletions         int                `json:"raw_deletions"`
+	SizeBin              string             `json:"size_bin,omitempty"`
+	ChangedRanges        []ChangedRange     `json:"changed_ranges,omitempty"`
+	PatchSHA256          string             `json:"patch_sha256,omitempty"`
+	BuildStateSHA256     string             `json:"build_state_sha256,omitempty"`
+	SourceRow            CandidateSourceRow `json:"source_row"`
+	SourceRowSHA256      string             `json:"source_row_sha256"`
+	EvidenceRefs         []string           `json:"evidence_refs"`
+	BaseFetch            GitFetchSpec       `json:"base_fetch"`
+	HeadFetch            GitFetchSpec       `json:"head_fetch"`
 }
 
 type CandidatePoolManifest struct {
@@ -271,32 +332,43 @@ type CandidatePoolManifest struct {
 }
 
 type AuditQueueItem struct {
-	CaseID              string       `json:"case_id"`
-	CandidateSource     string       `json:"candidate_source"`
-	SourceID            string       `json:"source_id,omitempty"`
-	SourceRecordID      string       `json:"source_record_id,omitempty"`
-	SourceType          string       `json:"source_type,omitempty"`
-	Repository          string       `json:"repository,omitempty"`
-	BaseSHA             string       `json:"base_sha,omitempty"`
-	HeadSHA             string       `json:"head_sha,omitempty"`
-	SelectionKey        string       `json:"selection_key,omitempty"`
-	Language            string       `json:"language,omitempty"`
-	SourceReportedChurn int          `json:"source_reported_churn,omitempty"`
-	SourceRowSHA256     string       `json:"source_row_sha256,omitempty"`
-	EvidenceRefs        []string     `json:"evidence_refs,omitempty"`
-	BaseFetch           GitFetchSpec `json:"base_fetch"`
-	HeadFetch           GitFetchSpec `json:"head_fetch"`
-	Reasons             []string     `json:"reasons"`
+	CaseID               string         `json:"case_id"`
+	CandidateSource      string         `json:"candidate_source"`
+	SourceID             string         `json:"source_id,omitempty"`
+	SourceRecordID       string         `json:"source_record_id,omitempty"`
+	SourceType           string         `json:"source_type,omitempty"`
+	Repository           string         `json:"repository,omitempty"`
+	SourceBaseSHA        string         `json:"source_base_sha,omitempty"`
+	SourceBaseFetch      GitFetchSpec   `json:"source_base_fetch,omitempty"`
+	EligibleClaimSHA256s []string       `json:"eligible_claim_sha256s,omitempty"`
+	BaseSHA              string         `json:"base_sha,omitempty"`
+	HeadSHA              string         `json:"head_sha,omitempty"`
+	RangeSemantics       string         `json:"range_semantics,omitempty"`
+	SelectionKey         string         `json:"selection_key,omitempty"`
+	Language             string         `json:"language,omitempty"`
+	SourceReportedChurn  int            `json:"source_reported_churn,omitempty"`
+	RawAdditions         int            `json:"raw_additions"`
+	RawDeletions         int            `json:"raw_deletions"`
+	SizeBin              string         `json:"size_bin,omitempty"`
+	ChangedRanges        []ChangedRange `json:"changed_ranges,omitempty"`
+	PatchSHA256          string         `json:"patch_sha256,omitempty"`
+	BuildStateSHA256     string         `json:"build_state_sha256,omitempty"`
+	SourceRowSHA256      string         `json:"source_row_sha256,omitempty"`
+	EvidenceRefs         []string       `json:"evidence_refs,omitempty"`
+	BaseFetch            GitFetchSpec   `json:"base_fetch"`
+	HeadFetch            GitFetchSpec   `json:"head_fetch"`
+	Reasons              []string       `json:"reasons"`
 }
 
 type FrozenCorpus struct {
-	Schema                string           `json:"schema"`
-	Set                   string           `json:"set"`
-	SourcesManifestSHA256 string           `json:"sources_manifest_sha256"`
-	CandidatePoolSHA256   string           `json:"candidate_pool_sha256,omitempty"`
-	Cases                 []PreparedCase   `json:"cases"`
-	Triples               []PreparedTriple `json:"triples,omitempty"`
-	AuditQueue            []AuditQueueItem `json:"audit_queue"`
+	Schema                string              `json:"schema"`
+	Set                   string              `json:"set"`
+	SourcesManifestSHA256 string              `json:"sources_manifest_sha256"`
+	CandidatePoolSHA256   string              `json:"candidate_pool_sha256,omitempty"`
+	Cases                 []PreparedCase      `json:"cases"`
+	Triples               []PreparedTriple    `json:"triples,omitempty"`
+	AuditQueue            []AuditQueueItem    `json:"audit_queue"`
+	AuditEvidence         []AuditEvidenceSpec `json:"audit_evidence,omitempty"`
 }
 
 type FrozenClient struct {
@@ -385,6 +457,8 @@ type PrepareConfig struct {
 	CachePath           string
 	RepositoryCachePath string
 	Offline             bool
+	RejectionsPath      string
+	AuditPacketsPath    string
 }
 
 type PreparationReport struct {
@@ -394,6 +468,13 @@ type PreparationReport struct {
 	SmallCount        int
 	MetamorphicCount  int
 	AuditQueueCount   int
+	TuningDeficit     int
+	HeldOutDeficit    int
+	CountsBySource    map[string]int
+	CountsByType      map[string]int
+	CountsByLanguage  map[string]int
+	CountsBySizeBin   map[string]int
+	CoverageDeficits  []string
 	SourcePayloadHash string
 }
 
@@ -421,7 +502,109 @@ func LoadFrozenCorpus(path string) (FrozenCorpus, error) {
 	if err := decodeStrictFile(path, &corpus); err != nil {
 		return FrozenCorpus{}, err
 	}
+	records, err := loadAuditEvidenceFiles(filepath.Dir(path), corpus.AuditEvidence)
+	if err != nil {
+		return FrozenCorpus{}, err
+	}
+	if err := bindAuditEvidence(&corpus, records); err != nil {
+		return FrozenCorpus{}, err
+	}
 	return corpus, nil
+}
+
+func loadAuditEvidenceFiles(baseDir string, specs []AuditEvidenceSpec) (map[string]loadedAuditEvidence, error) {
+	records := make(map[string]loadedAuditEvidence, len(specs))
+	paths := map[string]bool{}
+	for index, spec := range specs {
+		if spec.ID == "" || !safeRelativeAuditArtifactPath(spec.RecordPath) || !safeRelativeAuditArtifactPath(spec.OutputPath) ||
+			!sha256Hex.MatchString(spec.RecordSHA256) || !sha256Hex.MatchString(spec.OutputSHA256) ||
+			spec.RecordPath == spec.OutputPath || paths[spec.RecordPath] || paths[spec.OutputPath] ||
+			index > 0 && specs[index-1].ID >= spec.ID {
+			return nil, errors.New("audit evidence artifact specs are incomplete, duplicated, or noncanonical")
+		}
+		recordPath := filepath.Join(baseDir, spec.RecordPath)
+		recordPayload, err := os.ReadFile(recordPath)
+		if err != nil {
+			return nil, fmt.Errorf("read audit evidence metadata %s: %w", spec.ID, err)
+		}
+		if digestBytes(recordPayload) != spec.RecordSHA256 {
+			return nil, fmt.Errorf("audit evidence metadata %s byte hash mismatch", spec.ID)
+		}
+		var record AuditEvidenceRecord
+		if err := decodeStrictFile(recordPath, &record); err != nil {
+			return nil, err
+		}
+		canonicalRecord, err := canonicalIndentedJSON(record)
+		if err != nil || !bytes.Equal(recordPayload, canonicalRecord) {
+			return nil, fmt.Errorf("audit evidence metadata %s is not canonical JSON", spec.ID)
+		}
+
+		outputPath := filepath.Join(baseDir, spec.OutputPath)
+		outputPayload, err := os.ReadFile(outputPath)
+		if err != nil {
+			return nil, fmt.Errorf("read audit evidence output %s: %w", spec.ID, err)
+		}
+		if digestBytes(outputPayload) != spec.OutputSHA256 {
+			return nil, fmt.Errorf("audit evidence output %s byte hash mismatch", spec.ID)
+		}
+		var output AuditEvidenceOutput
+		if err := decodeStrictFile(outputPath, &output); err != nil {
+			return nil, err
+		}
+		canonicalOutput, err := canonicalIndentedJSON(output)
+		if err != nil || !bytes.Equal(outputPayload, canonicalOutput) {
+			return nil, fmt.Errorf("audit evidence output %s is not canonical JSON", spec.ID)
+		}
+		if record.Schema != AuditEvidenceRecordSchema || output.Schema != AuditEvidenceOutputSchema ||
+			record.OutputSHA256 != spec.OutputSHA256 || !auditEvidenceOutputMatchesRecord(output, record) {
+			return nil, fmt.Errorf("audit evidence %s metadata does not exactly bind its canonical output", spec.ID)
+		}
+		records[spec.ID] = loadedAuditEvidence{Record: record, Output: output}
+		paths[spec.RecordPath], paths[spec.OutputPath] = true, true
+	}
+	return records, nil
+}
+
+func safeRelativeAuditArtifactPath(path string) bool {
+	return path != "" && !filepath.IsAbs(path) && filepath.Clean(path) == path && path != "." &&
+		!strings.HasPrefix(path, ".."+string(filepath.Separator))
+}
+
+func auditEvidenceOutputMatchesRecord(output AuditEvidenceOutput, record AuditEvidenceRecord) bool {
+	return output.CaseID == record.CaseID && output.ActorID == record.ActorID &&
+		output.ActorRole == record.ActorRole && output.Decision == record.Decision &&
+		output.SourceRowSHA256 == record.SourceRowSHA256 && output.PatchSHA256 == record.PatchSHA256 &&
+		output.BuildStateSHA256 == record.BuildStateSHA256 && reflect.DeepEqual(output.Findings, record.Findings)
+}
+
+func bindAuditEvidence(corpus *FrozenCorpus, records map[string]loadedAuditEvidence) error {
+	used := map[string]bool{}
+	for index := range corpus.Cases {
+		c := &corpus.Cases[index]
+		c.auditEvidence = records
+		for _, decision := range c.Audit.Decisions {
+			evidence, ok := records[decision.EvidenceID]
+			if !ok || used[decision.EvidenceID] || !validAuditEvidenceRecord(*c, evidence.Record, "reviewer") {
+				return fmt.Errorf("case %s reviewer evidence %s is absent, reused, or mismatched", c.ID, decision.EvidenceID)
+			}
+			used[decision.EvidenceID] = true
+		}
+		if c.Audit.Adjudication != nil {
+			evidenceID := c.Audit.Adjudication.EvidenceID
+			evidence, ok := records[evidenceID]
+			if !ok || used[evidenceID] || !validAuditEvidenceRecord(*c, evidence.Record, "adjudicator") {
+				return fmt.Errorf("case %s adjudication evidence %s is absent, reused, or mismatched", c.ID, evidenceID)
+			}
+			used[evidenceID] = true
+		}
+		if len(c.Audit.Decisions) != 0 && !auditApproved(*c) {
+			return fmt.Errorf("case %s audit evidence does not resolve to two independent approvals", c.ID)
+		}
+	}
+	if len(used) != len(records) {
+		return errors.New("audit evidence contains unconsumed artifact outputs")
+	}
+	return nil
 }
 
 func LoadScoringFreeze(path string) (ScoringFreeze, error) {
@@ -835,8 +1018,11 @@ func CanonicalCandidateSourceRowDigest(row CandidateSourceRow) (string, error) {
 	if row.CandidateSource == "" || row.SourceID == "" || row.SourceRecordID == "" || row.Repository == "" ||
 		!fullSHA.MatchString(row.BaseSHA) || !fullSHA.MatchString(row.HeadSHA) ||
 		row.BaseSHA == row.HeadSHA || strings.TrimSpace(row.License) == "" || strings.TrimSpace(row.Provenance) == "" ||
-		row.Language == "" || !nonemptyStrings(row.EvidenceRefs) || !sha256Hex.MatchString(row.RawRecordSHA256) {
+		row.Language == "" || !nonemptyStrings(row.EvidenceRefs) {
 		return "", errors.New("candidate source row has incomplete canonical provenance")
+	}
+	if err := validateCandidateRawRecords(row); err != nil {
+		return "", err
 	}
 	switch row.CandidateSource {
 	case CandidateSourceAACR, CandidateSourceCodeReviewBench, CandidateSourceQodoInjected:
@@ -858,8 +1044,36 @@ func CanonicalCandidateSourceRowDigest(row CandidateSourceRow) (string, error) {
 	return digestBytes(payload), nil
 }
 
-func CanonicalCandidatePoolDigest(records []CandidatePoolRecord) (string, error) {
-	ordered := append([]CandidatePoolRecord(nil), records...)
+func validateCandidateRawRecords(row CandidateSourceRow) error {
+	if row.CandidateSource != CandidateSourceAACR {
+		if !sha256Hex.MatchString(row.RawRecordSHA256) || len(row.RawRecordSHA256s) != 0 || len(row.Claims) != 0 {
+			return errors.New("candidate source row has incomplete canonical raw-record provenance")
+		}
+		return nil
+	}
+	if row.RawRecordSHA256 != "" || len(row.RawRecordSHA256s) == 0 || len(row.Claims) != len(row.RawRecordSHA256s) {
+		return errors.New("AACR candidate must bind every accepted raw row and claim")
+	}
+	for index, digest := range row.RawRecordSHA256s {
+		claim := row.Claims[index]
+		outOfOrder := index > 0 && (row.Claims[index-1].RawRecordSHA256 > digest ||
+			row.Claims[index-1].RawRecordSHA256 == digest && row.Claims[index-1].SourceOrdinal >= claim.SourceOrdinal)
+		if !sha256Hex.MatchString(digest) || claim.RawRecordSHA256 != digest || claim.SourceOrdinal <= 0 || outOfOrder ||
+			strings.TrimSpace(claim.Path) == "" || (claim.Side != "left" && claim.Side != "right") ||
+			claim.FromLine <= 0 || claim.ToLine <= 0 || strings.TrimSpace(claim.Note) == "" ||
+			strings.TrimSpace(claim.Category) == "" || strings.TrimSpace(claim.Context) == "" {
+			return errors.New("AACR candidate has incomplete or noncanonical grouped claims")
+		}
+	}
+	return nil
+}
+
+func CanonicalCandidatePoolDigest(pool CandidatePoolManifest) (string, error) {
+	if pool.Schema != CandidatePoolSchema || !sha256Hex.MatchString(pool.SourcesManifestSHA256) ||
+		!sha256Hex.MatchString(pool.PartitionSeedSHA256) {
+		return "", errors.New("candidate pool digest envelope has invalid schema, source binding, or partition seed")
+	}
+	ordered := append([]CandidatePoolRecord(nil), pool.Records...)
 	seenIDs, seenIdentities := map[string]bool{}, map[string]bool{}
 	for _, record := range ordered {
 		if err := validateCandidatePoolRecord(record); err != nil {
@@ -872,7 +1086,16 @@ func CanonicalCandidatePoolDigest(records []CandidatePoolRecord) (string, error)
 		seenIDs[record.ID], seenIdentities[identity] = true, true
 	}
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
-	payload, err := json.Marshal(ordered)
+	envelope := struct {
+		Schema                string                `json:"schema"`
+		SourcesManifestSHA256 string                `json:"sources_manifest_sha256"`
+		PartitionSeedSHA256   string                `json:"partition_seed_sha256"`
+		Records               []CandidatePoolRecord `json:"records"`
+	}{
+		Schema: pool.Schema, SourcesManifestSHA256: pool.SourcesManifestSHA256,
+		PartitionSeedSHA256: pool.PartitionSeedSHA256, Records: ordered,
+	}
+	payload, err := json.Marshal(envelope)
 	if err != nil {
 		return "", err
 	}
@@ -883,7 +1106,7 @@ func ValidateCandidatePool(pool CandidatePoolManifest) error {
 	if pool.Schema != CandidatePoolSchema || !sha256Hex.MatchString(pool.SourcesManifestSHA256) || !sha256Hex.MatchString(pool.PartitionSeedSHA256) {
 		return errors.New("candidate pool has invalid schema, source-manifest binding, or partition seed")
 	}
-	digest, err := CanonicalCandidatePoolDigest(pool.Records)
+	digest, err := CanonicalCandidatePoolDigest(pool)
 	if err != nil {
 		return err
 	}
@@ -971,7 +1194,13 @@ func validateCandidatePoolRecord(record CandidatePoolRecord) error {
 		return fmt.Errorf("candidate %s has incomplete canonical provenance", record.ID)
 	}
 	switch record.CandidateSource {
-	case CandidateSourceAACR, CandidateSourceCodeReviewBench:
+	case CandidateSourceAACR:
+		if record.SourceType != SourceHumanCaught || record.RangeSemantics != "github_merge_base_to_head" ||
+			record.SourceBaseSHA != record.SourceRow.BaseSHA || !fullSHA.MatchString(record.SourceBaseSHA) ||
+			!hasHumanClaim(record.SourceRow.Claims) {
+			return fmt.Errorf("candidate %s has incompatible AACR source or range semantics", record.ID)
+		}
+	case CandidateSourceCodeReviewBench:
 		if record.SourceType != SourceHumanCaught {
 			return fmt.Errorf("candidate %s has incompatible human-caught source type", record.ID)
 		}
@@ -986,20 +1215,92 @@ func validateCandidatePoolRecord(record CandidatePoolRecord) error {
 	default:
 		return fmt.Errorf("candidate %s has unsupported candidate source %q", record.ID, record.CandidateSource)
 	}
+	if err := validateEligibleClaimDigests(record); err != nil {
+		return fmt.Errorf("candidate %s: %w", record.ID, err)
+	}
 	rowDigest, err := CanonicalCandidateSourceRowDigest(record.SourceRow)
 	if err != nil || rowDigest != record.SourceRowSHA256 ||
 		record.SourceRow.CandidateSource != record.CandidateSource || record.SourceRow.SourceID != record.SourceID ||
 		record.SourceRow.SourceRecordID != record.SourceRecordID || record.SourceRow.Repository != record.Repository ||
-		record.SourceRow.BaseSHA != record.BaseSHA || record.SourceRow.HeadSHA != record.HeadSHA ||
+		record.SourceRow.HeadSHA != record.HeadSHA ||
 		record.SourceRow.Language != record.Language || record.SourceRow.SourceReportedChurn != record.SourceReportedChurn ||
 		!equalStringSets(record.SourceRow.EvidenceRefs, record.EvidenceRefs) {
 		return fmt.Errorf("candidate %s is not bound to its canonical frozen source row", record.ID)
+	}
+	if record.CandidateSource != CandidateSourceAACR && record.SourceRow.BaseSHA != record.BaseSHA {
+		return fmt.Errorf("candidate %s source base does not match its native range", record.ID)
+	}
+	if err := validateCandidateGitFacts(record); err != nil {
+		return fmt.Errorf("candidate %s: %w", record.ID, err)
+	}
+	if record.CandidateSource == CandidateSourceAACR {
+		if err := validateGitFetchBinding(record.Repository, record.SourceBaseSHA, record.SourceBaseFetch); err != nil {
+			return fmt.Errorf("candidate %s source base fetch: %w", record.ID, err)
+		}
 	}
 	if err := validateGitFetchBinding(record.Repository, record.BaseSHA, record.BaseFetch); err != nil {
 		return fmt.Errorf("candidate %s base fetch: %w", record.ID, err)
 	}
 	if err := validateGitFetchBinding(record.Repository, record.HeadSHA, record.HeadFetch); err != nil {
 		return fmt.Errorf("candidate %s head fetch: %w", record.ID, err)
+	}
+	return nil
+}
+
+func hasHumanClaim(claims []CandidateClaim) bool {
+	for _, claim := range claims {
+		if !claim.IsAIComment {
+			return true
+		}
+	}
+	return false
+}
+
+func validateEligibleClaimDigests(record CandidatePoolRecord) error {
+	if record.CandidateSource != CandidateSourceAACR {
+		if len(record.EligibleClaimSHA256s) != 0 {
+			return errors.New("non-AACR candidate has AACR eligible-claim bindings")
+		}
+		return nil
+	}
+	humanClaims := make(map[string]bool, len(record.SourceRow.Claims))
+	for _, claim := range record.SourceRow.Claims {
+		if !claim.IsAIComment {
+			humanClaims[claim.RawRecordSHA256] = true
+		}
+	}
+	if len(record.EligibleClaimSHA256s) == 0 {
+		return errors.New("AACR candidate has no mechanically eligible human claim")
+	}
+	for index, digest := range record.EligibleClaimSHA256s {
+		if !sha256Hex.MatchString(digest) || !humanClaims[digest] ||
+			index > 0 && record.EligibleClaimSHA256s[index-1] >= digest {
+			return errors.New("AACR candidate has invalid or noncanonical eligible-claim bindings")
+		}
+	}
+	return nil
+}
+
+func validateCandidateGitFacts(record CandidatePoolRecord) error {
+	churn := record.RawAdditions + record.RawDeletions
+	if record.RawAdditions < 0 || record.RawDeletions < 0 || churn <= 300 ||
+		!sha256Hex.MatchString(record.PatchSHA256) || !sha256Hex.MatchString(record.BuildStateSHA256) ||
+		len(record.ChangedRanges) == 0 {
+		return errors.New("candidate lacks exact native Git hydration")
+	}
+	wantBin := Size301To1000
+	if churn > 3000 {
+		wantBin = SizeOver3000
+	} else if churn > 1000 {
+		wantBin = Size1001To3000
+	}
+	if record.SizeBin != wantBin {
+		return errors.New("candidate has noncanonical native churn bin")
+	}
+	for _, changed := range record.ChangedRanges {
+		if strings.TrimSpace(changed.Path) == "" || changed.StartLine <= 0 || changed.EndLine < changed.StartLine {
+			return errors.New("candidate has invalid native changed ranges")
+		}
 	}
 	return nil
 }
@@ -1019,6 +1320,9 @@ func ValidateGitFetchSpec(spec GitFetchSpec) error {
 		return errors.New("Git fetch metadata has an unsafe repository path")
 	}
 	if fullSHA.MatchString(spec.Ref) {
+		if spec.Ref != spec.OID {
+			return errors.New("Git fetch metadata full-SHA ref must equal its pinned OID")
+		}
 		return nil
 	}
 	refParts := strings.Split(spec.Ref, "/")
@@ -1074,10 +1378,13 @@ func ValidateCorpusPartitions(tuning, heldOut, small FrozenCorpus, pool Candidat
 	}
 	tuningCount := primaryCaseCount(tuning.Cases) + len(tuning.AuditQueue)
 	heldOutCount := primaryCaseCount(heldOut.Cases) + len(heldOut.AuditQueue)
-	if tuningCount < 12 || heldOutCount < 30 {
-		return errors.New("candidate partitions require at least 12 tuning and 30 held-out primary cases")
+	wantTuningCount := min(12, len(pool.Records))
+	wantHeldOutCount := min(30, len(pool.Records)-wantTuningCount)
+	if tuningCount != wantTuningCount || heldOutCount != wantHeldOutCount {
+		return fmt.Errorf("candidate partitions have tuning=%d held-out=%d; expected tuning=%d held-out=%d from the complete qualified pool",
+			tuningCount, heldOutCount, wantTuningCount, wantHeldOutCount)
 	}
-	wantTuning, wantHeldOut, err := PartitionCandidatePool(pool, tuningCount, heldOutCount)
+	wantTuning, wantHeldOut, err := PartitionCandidatePool(pool, wantTuningCount, wantHeldOutCount)
 	if err != nil {
 		return err
 	}
@@ -1145,20 +1452,63 @@ func candidateQueueMatchesRecord(candidate AuditQueueItem, record CandidatePoolR
 	return candidate.CaseID == record.ID && candidate.CandidateSource == record.CandidateSource &&
 		candidate.SourceID == record.SourceID && candidate.SourceRecordID == record.SourceRecordID &&
 		candidate.SourceType == record.SourceType && candidate.Repository == record.Repository &&
+		candidate.SourceBaseSHA == record.SourceBaseSHA && candidate.SourceBaseFetch == record.SourceBaseFetch &&
+		equalStringSlices(candidate.EligibleClaimSHA256s, record.EligibleClaimSHA256s) &&
 		candidate.BaseSHA == record.BaseSHA && candidate.HeadSHA == record.HeadSHA &&
-		candidate.SelectionKey == record.SelectionKey && candidate.Language == record.Language &&
-		candidate.SourceReportedChurn == record.SourceReportedChurn && candidate.SourceRowSHA256 == record.SourceRowSHA256 &&
-		equalStringSets(candidate.EvidenceRefs, record.EvidenceRefs) &&
+		candidate.RangeSemantics == record.RangeSemantics && candidate.SelectionKey == record.SelectionKey &&
+		candidate.Language == record.Language &&
+		candidate.SourceReportedChurn == record.SourceReportedChurn && candidate.RawAdditions == record.RawAdditions &&
+		candidate.RawDeletions == record.RawDeletions && candidate.SizeBin == record.SizeBin &&
+		equalChangedRanges(candidate.ChangedRanges, record.ChangedRanges) &&
+		candidate.PatchSHA256 == record.PatchSHA256 && candidate.BuildStateSHA256 == record.BuildStateSHA256 &&
+		candidate.SourceRowSHA256 == record.SourceRowSHA256 && equalStringSets(candidate.EvidenceRefs, record.EvidenceRefs) &&
 		candidate.BaseFetch == record.BaseFetch && candidate.HeadFetch == record.HeadFetch
 }
 
 func preparedCaseMatchesRecord(c PreparedCase, record CandidatePoolRecord) bool {
-	return c.ID == record.ID && c.CandidateSource == record.CandidateSource &&
-		c.SourceID == record.SourceID && c.SourceRecordID == record.SourceRecordID &&
-		c.SourceRowSHA256 == record.SourceRowSHA256 && c.SourceType == record.SourceType && c.Repository == record.Repository &&
-		c.BaseSHA == record.BaseSHA && c.BaseFetch == record.BaseFetch &&
-		c.HeadSHA == record.HeadSHA && c.HeadFetch == record.HeadFetch &&
-		c.SelectionKey == record.SelectionKey && c.Language == record.Language
+	if c.ID != record.ID || c.CandidateSource != record.CandidateSource ||
+		c.SourceID != record.SourceID || c.SourceRecordID != record.SourceRecordID ||
+		c.SourceRowSHA256 != record.SourceRowSHA256 || c.SourceType != record.SourceType || c.Repository != record.Repository ||
+		c.BaseSHA != record.BaseSHA || c.BaseFetch != record.BaseFetch ||
+		c.HeadSHA != record.HeadSHA || c.HeadFetch != record.HeadFetch ||
+		c.SelectionKey != record.SelectionKey || c.Language != record.Language ||
+		c.RawAdditions != record.RawAdditions || c.RawDeletions != record.RawDeletions || c.SizeBin != record.SizeBin ||
+		!equalChangedRanges(c.ChangedRanges, record.ChangedRanges) || c.PatchSHA256 != record.PatchSHA256 ||
+		c.BuildStateSHA256 != record.BuildStateSHA256 {
+		return false
+	}
+	return validatePreparedCase(&c, true) == nil && auditApproved(c) && validateSourceClaimBinding(c, record) == nil
+}
+
+func validateSourceClaimBinding(c PreparedCase, record CandidatePoolRecord) error {
+	if record.CandidateSource != CandidateSourceAACR {
+		return nil
+	}
+	eligible := make(map[string]bool, len(record.EligibleClaimSHA256s))
+	for _, digest := range record.EligibleClaimSHA256s {
+		eligible[digest] = true
+	}
+	claims := make(map[string]CandidateClaim, len(record.EligibleClaimSHA256s))
+	for _, claim := range record.SourceRow.Claims {
+		if !claim.IsAIComment && eligible[claim.RawRecordSHA256] {
+			claims[claim.RawRecordSHA256] = claim
+		}
+	}
+	for _, truth := range c.GroundTruth {
+		if truth.Provenance == nil {
+			return fmt.Errorf("case %s ground truth %s lacks source provenance", c.ID, truth.ID)
+		}
+		claim, ok := claims[truth.Provenance.SourceDigest]
+		if !ok || truth.Provenance.SourceID != record.SourceID ||
+			truth.Provenance.SourceRecordID != record.SourceRecordID || len(truth.Locations) != 1 {
+			return fmt.Errorf("case %s ground truth %s is not bound to an AACR human claim", c.ID, truth.ID)
+		}
+		location := truth.Locations[0]
+		if location.Path != claim.Path || location.StartLine != claim.FromLine || location.EndLine != claim.ToLine {
+			return fmt.Errorf("case %s ground truth %s does not preserve the source claim range", c.ID, truth.ID)
+		}
+	}
+	return nil
 }
 
 func recordGlobalIdentity(id, identity, set string, seenIDs, seenIdentities map[string]string) error {
@@ -1224,7 +1574,7 @@ func ValidateLargeCorpus(cases []PreparedCase, minimum int, requireAudit bool) e
 		if c.MetamorphicFamily == "" {
 			categories[c.DefectCategory], languages[c.Language], bins[c.SizeBin], sourceTypes[c.SourceType] = true, true, true, true
 		}
-		if requireAudit && !auditApproved(c.Audit) {
+		if requireAudit && !auditApproved(*c) {
 			return fmt.Errorf("case %s lacks two resolved independent audit decisions", c.ID)
 		}
 	}
@@ -1301,14 +1651,12 @@ func validatePreparedCase(c *PreparedCase, large bool) error {
 			if truth.DefectClass != c.DefectCategory || truth.ID == "" || len(truth.Locations) == 0 {
 				return fmt.Errorf("case %s has incomplete ground truth", c.ID)
 			}
-			if c.SourceID == "swr" || truth.CanonicalDigest != "" {
-				if strings.TrimSpace(truth.Severity) == "" || strings.TrimSpace(truth.Summary) == "" ||
-					strings.TrimSpace(truth.Scenario) == "" || strings.TrimSpace(truth.Verifier) == "" ||
-					truth.Provenance == nil || truth.Provenance.SourceID != c.SourceID || truth.Provenance.SourceRecordID != c.SourceRecordID ||
-					!sha256Hex.MatchString(truth.Provenance.SourceDigest) || !nonemptyStrings(truth.Provenance.EvidenceRefs) ||
-					truth.CanonicalDigest != groundTruthDigest(truth) {
-					return fmt.Errorf("case %s has incomplete or noncanonical ground truth %s", c.ID, truth.ID)
-				}
+			if strings.TrimSpace(truth.Severity) == "" || strings.TrimSpace(truth.Summary) == "" ||
+				strings.TrimSpace(truth.Scenario) == "" || strings.TrimSpace(truth.Verifier) == "" ||
+				truth.Provenance == nil || truth.Provenance.SourceID != c.SourceID || truth.Provenance.SourceRecordID != c.SourceRecordID ||
+				!sha256Hex.MatchString(truth.Provenance.SourceDigest) || !nonemptyStrings(truth.Provenance.EvidenceRefs) ||
+				truth.CanonicalDigest != groundTruthDigest(truth) {
+				return fmt.Errorf("case %s has incomplete or noncanonical ground truth %s", c.ID, truth.ID)
 			}
 			for _, location := range truth.Locations {
 				if err := validateLocation(location); err != nil {
@@ -1324,6 +1672,9 @@ func validatePreparedCase(c *PreparedCase, large bool) error {
 }
 
 func locationInChangedRange(location Location, ranges []ChangedRange) bool {
+	if validateLocation(location) != nil {
+		return false
+	}
 	for _, changed := range ranges {
 		if changed.Path == location.Path && location.StartLine >= changed.StartLine && location.EndLine <= changed.EndLine && changed.StartLine > 0 && changed.EndLine >= changed.StartLine {
 			return true
@@ -1332,31 +1683,47 @@ func locationInChangedRange(location Location, ranges []ChangedRange) bool {
 	return false
 }
 
-func auditApproved(audit AuditProvenance) bool {
-	if len(audit.Decisions) != 2 {
+func auditApproved(c PreparedCase) bool {
+	audit := c.Audit
+	if len(audit.Decisions) != 2 || len(c.auditEvidence) == 0 {
 		return false
 	}
-	seenSlots, seenReviewers := map[string]bool{}, map[string]bool{}
+	seenSlots, seenReviewers, seenEvidence := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	decisions := make([]string, 0, 2)
 	for _, decision := range audit.Decisions {
-		if (decision.Slot != "reviewer_1" && decision.Slot != "reviewer_2") || seenSlots[decision.Slot] ||
-			seenReviewers[decision.ReviewerID] || !validAuditActor(decision.ReviewerID, decision.Toolchain, decision.ToolchainVersion, decision.ToolchainSHA256, decision.EvidenceRefs) ||
-			(decision.Decision != "approved" && decision.Decision != "rejected") {
+		evidence, ok := c.auditEvidence[decision.EvidenceID]
+		record := evidence.Record
+		if !ok || seenEvidence[decision.EvidenceID] ||
+			(decision.Slot != "reviewer_1" && decision.Slot != "reviewer_2") || seenSlots[decision.Slot] ||
+			seenReviewers[record.ActorID] || !validAuditEvidenceRecord(c, record, "reviewer") {
 			return false
 		}
-		seenSlots[decision.Slot], seenReviewers[decision.ReviewerID] = true, true
+		seenSlots[decision.Slot], seenReviewers[record.ActorID], seenEvidence[decision.EvidenceID] = true, true, true
+		decisions = append(decisions, record.Decision)
 	}
-	first, second := audit.Decisions[0].Decision, audit.Decisions[1].Decision
-	if first == second {
-		return first == "approved" && audit.Adjudication == nil
+	if decisions[0] == decisions[1] {
+		return decisions[0] == "approved" && audit.Adjudication == nil
 	}
-	adjudication := audit.Adjudication
-	return adjudication != nil && adjudication.Decision == "approved" && !seenReviewers[adjudication.AdjudicatorID] &&
-		validAuditActor(adjudication.AdjudicatorID, adjudication.Toolchain, adjudication.ToolchainVersion, adjudication.ToolchainSHA256, adjudication.EvidenceRefs)
+	if audit.Adjudication == nil || seenEvidence[audit.Adjudication.EvidenceID] {
+		return false
+	}
+	evidence, ok := c.auditEvidence[audit.Adjudication.EvidenceID]
+	record := evidence.Record
+	return ok && record.Decision == "approved" && !seenReviewers[record.ActorID] &&
+		validAuditEvidenceRecord(c, record, "adjudicator")
 }
 
-func validAuditActor(identity, toolchain, version, toolchainSHA string, evidence []string) bool {
-	return strings.TrimSpace(identity) != "" && strings.TrimSpace(toolchain) != "" && strings.TrimSpace(version) != "" &&
-		sha256Hex.MatchString(toolchainSHA) && nonemptyStrings(evidence)
+func validAuditEvidenceRecord(c PreparedCase, record AuditEvidenceRecord, role string) bool {
+	return record.Schema == AuditEvidenceRecordSchema && record.CaseID == c.ID &&
+		strings.TrimSpace(record.ActorID) != "" && record.ActorRole == role &&
+		(record.Decision == "approved" || record.Decision == "rejected") &&
+		reflect.DeepEqual(record.Findings, c.GroundTruth) &&
+		strings.TrimSpace(record.Toolchain) != "" && strings.TrimSpace(record.ToolchainVersion) != "" &&
+		sha256Hex.MatchString(record.ToolchainSHA256) &&
+		record.SourceRowSHA256 == c.SourceRowSHA256 && sha256Hex.MatchString(record.SourceRowSHA256) &&
+		record.PatchSHA256 == c.PatchSHA256 && sha256Hex.MatchString(record.PatchSHA256) &&
+		record.BuildStateSHA256 == c.BuildStateSHA256 && sha256Hex.MatchString(record.BuildStateSHA256) &&
+		sha256Hex.MatchString(record.OutputSHA256)
 }
 
 func nonemptyStrings(values []string) bool {
@@ -1516,7 +1883,7 @@ func ValidatePreparedTriples(cases []PreparedCase, triples []PreparedTriple) err
 			padding, ok := byID[paddingID]
 			if !ok || padding.MetamorphicFamily != "" || padding.Repository != variantCases[0].Repository ||
 				padding.SourceType != SourceClean || padding.DefectCategory != "clean" ||
-				!auditApproved(padding.Audit) || !validVerificationEvidenceSet(padding.CleanProvenance, padding.VerificationStateSHA256) ||
+				!auditApproved(padding) || !validVerificationEvidenceSet(padding.CleanProvenance, padding.VerificationStateSHA256) ||
 				padding.VerificationStateSHA256 != triple.VerificationStateSHA256 {
 				return fmt.Errorf("triple %s padding source %s is not an audited verified portable clean patch", triple.ID, paddingID)
 			}
@@ -1726,19 +2093,14 @@ func RequiredLargeGates() []string {
 	}
 }
 
-func ValidateScoringFreeze(freeze ScoringFreeze, tuning, heldOut, small FrozenCorpus) error {
+func ValidateScoringFreezeIntegrity(freeze ScoringFreeze, sourcesManifestSHA256, candidatePoolSHA256 string) error {
 	if freeze.Schema != ScoringFreezeSchema || freeze.PolicyVersion != EvalPolicyVersion || freeze.ArtifactSchemaVersion != EvalArtifactSchemaVersion {
 		return errors.New("scoring freeze has incompatible schema or policy IDs")
 	}
-	if len(freeze.FreezeBlockers) > 0 {
-		return fmt.Errorf("scoring freeze has %d unresolved blockers", len(freeze.FreezeBlockers))
-	}
-	if !sha256Hex.MatchString(freeze.SourcesManifestSHA256) || freeze.SourcesManifestSHA256 != tuning.SourcesManifestSHA256 ||
-		freeze.SourcesManifestSHA256 != heldOut.SourcesManifestSHA256 || freeze.SourcesManifestSHA256 != small.SourcesManifestSHA256 {
+	if !sha256Hex.MatchString(freeze.SourcesManifestSHA256) || freeze.SourcesManifestSHA256 != sourcesManifestSHA256 {
 		return errors.New("scoring freeze is not bound to the exact source manifest")
 	}
-	if !sha256Hex.MatchString(freeze.CandidatePoolSHA256) || freeze.CandidatePoolSHA256 != tuning.CandidatePoolSHA256 ||
-		freeze.CandidatePoolSHA256 != heldOut.CandidatePoolSHA256 {
+	if !sha256Hex.MatchString(freeze.CandidatePoolSHA256) || freeze.CandidatePoolSHA256 != candidatePoolSHA256 {
 		return errors.New("scoring freeze is not bound to the exact candidate pool")
 	}
 	if len(freeze.Clients) != 2 {
@@ -1746,38 +2108,95 @@ func ValidateScoringFreeze(freeze ScoringFreeze, tuning, heldOut, small FrozenCo
 	}
 	seenClients := map[string]bool{}
 	for _, client := range freeze.Clients {
-		if (client.ID != "claude" && client.ID != "omp") || seenClients[client.ID] || client.Model == "" || client.ExecutableVersion == "" || !sha256Hex.MatchString(client.ExecutableSHA256) {
-			return fmt.Errorf("invalid frozen client %q", client.ID)
+		if (client.ID != "claude" && client.ID != "omp") || seenClients[client.ID] {
+			return fmt.Errorf("invalid frozen client identity %q", client.ID)
 		}
 		seenClients[client.ID] = true
 	}
-	if freeze.Toolchain.PolicyID != EvalPolicyVersion || freeze.Toolchain.SchemaID != EvalOutputSchema || freeze.Toolchain.ProwlVersion == "" || !sha256Hex.MatchString(freeze.Toolchain.ProwlSHA256) {
-		return errors.New("scoring freeze has invalid toolchain identity")
+	if freeze.Toolchain.PolicyID != EvalPolicyVersion || freeze.Toolchain.SchemaID != EvalOutputSchema {
+		return errors.New("scoring freeze has invalid toolchain policy or schema identity")
 	}
-	if err := validateContentPins("prompts", freeze.Prompts); err != nil {
-		return err
+	large := freeze.Large
+	if large.Repetitions != 3 || large.BootstrapReplicates != ProductionBootstrapReplicates || large.ExecutionSeed == 0 || large.BootstrapSeed == 0 {
+		return errors.New("scoring freeze has invalid repetitions or seeds")
 	}
-	if err := validateContentPin("system policy", freeze.SystemPolicy); err != nil {
-		return err
+	if large.MaxModelTokens <= 0 || large.MaxToolCalls <= 0 || large.MaxSubagents <= 0 || large.WallTimeSeconds <= 0 || large.MaxOutputBytes <= 0 || !large.AggregateCaps {
+		return errors.New("scoring freeze must apply positive aggregate caps")
 	}
-	if err := validateContentPins("formulas", freeze.Formulas); err != nil {
-		return err
+	if large.AcceptedFinding == "" || large.Matching == "" || large.Adjudication == "" || large.FailureScoring == "" {
+		return errors.New("scoring protocol is incomplete")
 	}
-	if err := validateContentPins("toolchains", freeze.Toolchains); err != nil {
-		return err
+	if !equalStringSets(large.Gates, RequiredLargeGates()) {
+		return errors.New("scoring freeze does not contain every large shipping gate")
 	}
-	if err := validateContentPins("schemas", freeze.Schemas); err != nil {
-		return err
+	smallProtocol := freeze.Small
+	if smallProtocol.Repetitions != 3 || smallProtocol.TreatmentCompletion != 1 || !smallProtocol.DirectOnly ||
+		smallProtocol.MaximumAbsolutePointDrop != .02 || smallProtocol.StructuredRequiredCount != 0 {
+		return errors.New("scoring freeze has invalid small non-regression gates")
+	}
+	return nil
+}
+func ScoringFreezeReadinessBlockers(freeze ScoringFreeze) []string {
+	blockers := make([]string, 0, len(freeze.FreezeBlockers)+8)
+	for _, blocker := range freeze.FreezeBlockers {
+		if strings.TrimSpace(blocker) == "" {
+			blockers = append(blockers, "scoring freeze contains an empty readiness blocker")
+			continue
+		}
+		blockers = append(blockers, blocker)
+	}
+	for _, client := range freeze.Clients {
+		if client.Model == "" || client.ExecutableVersion == "" || !sha256Hex.MatchString(client.ExecutableSHA256) {
+			blockers = append(blockers, fmt.Sprintf("frozen client %s lacks exact model or executable pins", client.ID))
+		}
+	}
+	if freeze.Toolchain.ProwlVersion == "" || !sha256Hex.MatchString(freeze.Toolchain.ProwlSHA256) {
+		blockers = append(blockers, "frozen Prowl toolchain lacks exact version or executable pins")
+	}
+	for _, check := range []func() error{
+		func() error { return validateContentPins("prompts", freeze.Prompts) },
+		func() error { return validateContentPin("system policy", freeze.SystemPolicy) },
+		func() error { return validateContentPins("formulas", freeze.Formulas) },
+		func() error { return validateContentPins("toolchains", freeze.Toolchains) },
+		func() error { return validateContentPins("schemas", freeze.Schemas) },
+	} {
+		if err := check(); err != nil {
+			blockers = append(blockers, err.Error())
+		}
 	}
 	if len(freeze.MetricWeights) == 0 {
-		return errors.New("scoring freeze has no pinned metric weights")
-	}
-	seenWeights := map[string]bool{}
-	for _, weight := range freeze.MetricWeights {
-		if weight.Weight <= 0 || seenWeights[weight.ID] || validateContentPin("metric weight", ContentPin{ID: weight.ID, Version: weight.Version, SHA256: weight.SHA256}) != nil {
-			return fmt.Errorf("invalid frozen metric weight %q", weight.ID)
+		blockers = append(blockers, "scoring freeze has no pinned metric weights")
+	} else {
+		seenWeights := map[string]bool{}
+		for _, weight := range freeze.MetricWeights {
+			if weight.Weight <= 0 || seenWeights[weight.ID] ||
+				validateContentPin("metric weight", ContentPin{ID: weight.ID, Version: weight.Version, SHA256: weight.SHA256}) != nil {
+				blockers = append(blockers, fmt.Sprintf("invalid frozen metric weight %q", weight.ID))
+			}
+			seenWeights[weight.ID] = true
 		}
-		seenWeights[weight.ID] = true
+	}
+	return blockers
+}
+
+func ValidateScoringFreezeReadiness(freeze ScoringFreeze) error {
+	blockers := ScoringFreezeReadinessBlockers(freeze)
+	if len(blockers) == 0 {
+		return nil
+	}
+	return fmt.Errorf("scoring freeze is not ready: %s", strings.Join(blockers, "; "))
+}
+
+func ValidateScoringFreeze(freeze ScoringFreeze, tuning, heldOut, small FrozenCorpus) error {
+	if err := ValidateScoringFreezeIntegrity(freeze, tuning.SourcesManifestSHA256, tuning.CandidatePoolSHA256); err != nil {
+		return err
+	}
+	if freeze.SourcesManifestSHA256 != heldOut.SourcesManifestSHA256 ||
+		freeze.SourcesManifestSHA256 != small.SourcesManifestSHA256 {
+		return errors.New("scoring freeze is not bound to the exact source manifest")
+	}
+	if freeze.CandidatePoolSHA256 != heldOut.CandidatePoolSHA256 {
+		return errors.New("scoring freeze is not bound to the exact candidate pool")
 	}
 	if err := validateTripleReferences(tuning); err != nil {
 		return err
@@ -1799,25 +2218,7 @@ func ValidateScoringFreeze(freeze ScoringFreeze, tuning, heldOut, small FrozenCo
 		!equalUniqueStringSets(freeze.Small.CaseIDs, wantSmall) {
 		return errors.New("scoring freeze case or triple IDs do not exactly match frozen corpora")
 	}
-	large := freeze.Large
-	if large.Repetitions != 3 || large.BootstrapReplicates != ProductionBootstrapReplicates || large.ExecutionSeed == 0 || large.BootstrapSeed == 0 {
-		return errors.New("scoring freeze has invalid repetitions or seeds")
-	}
-	if large.MaxModelTokens <= 0 || large.MaxToolCalls <= 0 || large.MaxSubagents <= 0 || large.WallTimeSeconds <= 0 || large.MaxOutputBytes <= 0 || !large.AggregateCaps {
-		return errors.New("scoring freeze must apply positive aggregate caps")
-	}
-	if large.AcceptedFinding == "" || large.Matching == "" || large.Adjudication == "" || large.FailureScoring == "" {
-		return errors.New("scoring protocol is incomplete")
-	}
-	if !equalStringSets(large.Gates, RequiredLargeGates()) {
-		return errors.New("scoring freeze does not contain every large shipping gate")
-	}
-	smallProtocol := freeze.Small
-	if smallProtocol.Repetitions != 3 || smallProtocol.TreatmentCompletion != 1 || !smallProtocol.DirectOnly ||
-		smallProtocol.MaximumAbsolutePointDrop != .02 || smallProtocol.StructuredRequiredCount != 0 {
-		return errors.New("scoring freeze has invalid small non-regression gates")
-	}
-	return nil
+	return ValidateScoringFreezeReadiness(freeze)
 }
 
 func validateContentPins(label string, pins []ContentPin) error {
@@ -1932,7 +2333,7 @@ func ValidateFrozenCorpus(corpus FrozenCorpus, minimum int) error {
 	if corpus.Set == "held_out" {
 		cleanCount := 0
 		for _, c := range corpus.Cases {
-			if c.MetamorphicFamily == "" && c.SourceType == SourceClean && auditApproved(c.Audit) {
+			if c.MetamorphicFamily == "" && c.SourceType == SourceClean && auditApproved(c) {
 				cleanCount++
 			}
 		}
@@ -1956,6 +2357,17 @@ func Prepare(ctx context.Context, config PrepareConfig) (PreparationReport, erro
 	if err != nil {
 		return PreparationReport{}, err
 	}
+	rejectionsPath := config.RejectionsPath
+	if rejectionsPath == "" {
+		rejectionsPath = filepath.Join(filepath.Dir(config.SourcesPath), "candidate_rejections.json")
+	}
+	rejections, err := LoadCandidateRejections(rejectionsPath)
+	if err != nil {
+		return PreparationReport{}, err
+	}
+	if err := ValidateCandidatePoolRejections(pool, rejections); err != nil {
+		return PreparationReport{}, err
+	}
 	payloadHashes := make([]string, 0, len(sources.Sources))
 	sourcePaths := map[string]string{}
 	for _, source := range sources.Sources {
@@ -1965,6 +2377,14 @@ func Prepare(ctx context.Context, config PrepareConfig) (PreparationReport, erro
 		}
 		sourcePaths[source.ID] = path
 		payloadHashes = append(payloadHashes, source.ID+"="+source.SHA256)
+	}
+	auditPacketsPath := config.AuditPacketsPath
+	if auditPacketsPath == "" {
+		auditPacketsPath = filepath.Join(filepath.Dir(config.SourcesPath), "audit_packets.json")
+	}
+	auditPackets, err := LoadAuditPackets(auditPacketsPath)
+	if err != nil {
+		return PreparationReport{}, err
 	}
 	sort.Strings(payloadHashes)
 	tuning, err := LoadFrozenCorpus(config.TuningPath)
@@ -1981,21 +2401,36 @@ func Prepare(ctx context.Context, config PrepareConfig) (PreparationReport, erro
 	}
 	sourceManifestDigest := CanonicalSourcesDigest(sources)
 	if sourceManifestDigest == "" || pool.SourcesManifestSHA256 != sourceManifestDigest ||
+		rejections.SourcesManifestSHA256 != sourceManifestDigest ||
 		tuning.SourcesManifestSHA256 != sourceManifestDigest || heldOut.SourcesManifestSHA256 != sourceManifestDigest ||
-		small.SourcesManifestSHA256 != sourceManifestDigest {
-		return PreparationReport{}, errors.New("frozen pool or corpora do not match the canonical sources manifest")
+		small.SourcesManifestSHA256 != sourceManifestDigest ||
+		auditPackets.SourcesManifestSHA256 != sourceManifestDigest {
+		return PreparationReport{}, errors.New("frozen pool, rejections, or corpora do not match the canonical sources manifest")
 	}
 	if err := ValidateCandidatePoolSources(pool, sources, sourcePaths); err != nil {
 		return PreparationReport{}, err
 	}
-	aacrQueue, err := ImportAACRAuditQueue(sourcePaths["aacr-bench"])
+	freeze, err := LoadScoringFreeze(config.ScoringPath)
 	if err != nil {
 		return PreparationReport{}, err
 	}
-	if err := validateAACRPoolRecords(pool, aacrQueue); err != nil {
+	if err := ValidateScoringFreezeIntegrity(freeze, sourceManifestDigest, pool.SHA256); err != nil {
+		return PreparationReport{}, err
+	}
+	aacrRows, err := ImportAACRSourceRows(sourcePaths["aacr-bench"], "Apache-2.0", "47be1d6df1e7faf222cf531587772d92f79fe6b2")
+	if err != nil {
+		return PreparationReport{}, err
+	}
+	if err := ValidateCandidateRejectionsAgainstAACR(rejections, aacrRows); err != nil {
+		return PreparationReport{}, err
+	}
+	if err := validateAACRPoolRecords(pool, aacrRows); err != nil {
 		return PreparationReport{}, err
 	}
 	if err := ValidateCorpusPartitions(tuning, heldOut, small, pool); err != nil {
+		return PreparationReport{}, err
+	}
+	if err := ValidateAuditPackets(auditPackets, aacrRows, rejections, pool, tuning, heldOut); err != nil {
 		return PreparationReport{}, err
 	}
 	swrCandidates, err := ImportSWR(sourcePaths["swr"])
@@ -2009,12 +2444,30 @@ func Prepare(ctx context.Context, config PrepareConfig) (PreparationReport, erro
 	if repositoryCachePath == "" {
 		repositoryCachePath = filepath.Join(filepath.Dir(config.CachePath), "repos")
 	}
-	if err := verifyFrozenCasesGit(ctx, repositoryCachePath, config.Offline, tuning, heldOut, small); err != nil {
+	if err := regenerateAndCompareCandidateArtifacts(ctx, CandidateDiscoveryConfig{
+		SourcesPath: config.SourcesPath, RejectionsPath: rejectionsPath,
+		CachePath: config.CachePath, RepositoryCachePath: repositoryCachePath,
+		PartitionSeedSHA256: pool.PartitionSeedSHA256, Offline: config.Offline,
+	}, pool, auditPackets); err != nil {
+		return PreparationReport{}, err
+	}
+	if err := verifyFrozenCasesGit(ctx, repositoryCachePath, config.Offline, pool, tuning, heldOut, small); err != nil {
 		return PreparationReport{}, err
 	}
 	queueCount := len(tuning.AuditQueue) + len(heldOut.AuditQueue) + len(small.AuditQueue)
+	report := preparationReport(sources, pool, tuning, heldOut, small, payloadHashes)
+	readinessBlockers := ScoringFreezeReadinessBlockers(freeze)
 	if queueCount > 0 {
-		return PreparationReport{SourceCount: len(sources.Sources), TuningCount: len(tuning.Cases), HeldOutCount: len(heldOut.Cases), SmallCount: len(small.Cases), MetamorphicCount: len(tuning.Triples) + len(heldOut.Triples), AuditQueueCount: queueCount, SourcePayloadHash: digestBytes([]byte(strings.Join(payloadHashes, "\n")))}, fmt.Errorf("preparation blocked by %d unresolved audit queue items", queueCount)
+		readinessBlockers = append(readinessBlockers, fmt.Sprintf("%d unresolved audit items", queueCount))
+	}
+	if report.TuningDeficit > 0 {
+		readinessBlockers = append(readinessBlockers, fmt.Sprintf("tuning candidate deficit %d", report.TuningDeficit))
+	}
+	if report.HeldOutDeficit > 0 {
+		readinessBlockers = append(readinessBlockers, fmt.Sprintf("held-out candidate deficit %d", report.HeldOutDeficit))
+	}
+	if len(readinessBlockers) > 0 {
+		return report, fmt.Errorf("preparation is not ready: %s", strings.Join(readinessBlockers, "; "))
 	}
 	if err := ValidateFrozenCorpus(tuning, 12); err != nil {
 		return PreparationReport{}, fmt.Errorf("tuning: %w", err)
@@ -2025,18 +2478,56 @@ func Prepare(ctx context.Context, config PrepareConfig) (PreparationReport, erro
 	if err := ValidateSmallCorpus(small.Cases, append(append([]PreparedCase(nil), tuning.Cases...), heldOut.Cases...)); err != nil {
 		return PreparationReport{}, fmt.Errorf("small: %w", err)
 	}
-	freeze, err := LoadScoringFreeze(config.ScoringPath)
-	if err != nil {
-		return PreparationReport{}, err
-	}
 	if err := ValidateScoringFreeze(freeze, tuning, heldOut, small); err != nil {
 		return PreparationReport{}, err
 	}
-	return PreparationReport{SourceCount: len(sources.Sources), TuningCount: len(tuning.Cases), HeldOutCount: len(heldOut.Cases), SmallCount: len(small.Cases), MetamorphicCount: len(tuning.Triples) + len(heldOut.Triples), SourcePayloadHash: digestBytes([]byte(strings.Join(payloadHashes, "\n")))}, nil
+	return preparationReport(sources, pool, tuning, heldOut, small, payloadHashes), nil
 }
 
-func verifyFrozenCasesGit(ctx context.Context, cacheRoot string, offline bool, corpora ...FrozenCorpus) error {
+func preparationReport(sources SourcesManifest, pool CandidatePoolManifest, tuning, heldOut, small FrozenCorpus, payloadHashes []string) PreparationReport {
+	tuningAvailable := primaryCaseCount(tuning.Cases) + len(tuning.AuditQueue)
+	heldOutAvailable := primaryCaseCount(heldOut.Cases) + len(heldOut.AuditQueue)
+	bySource, byType, byLanguage, bySize := candidateCounts(pool.Records)
+	return PreparationReport{
+		SourceCount: len(sources.Sources), TuningCount: len(tuning.Cases), HeldOutCount: len(heldOut.Cases),
+		SmallCount: len(small.Cases), MetamorphicCount: len(tuning.Triples) + len(heldOut.Triples),
+		AuditQueueCount: len(tuning.AuditQueue) + len(heldOut.AuditQueue) + len(small.AuditQueue),
+		TuningDeficit:   max(0, 12-tuningAvailable), HeldOutDeficit: max(0, 30-heldOutAvailable),
+		CountsBySource: bySource, CountsByType: byType, CountsByLanguage: byLanguage, CountsBySizeBin: bySize,
+		CoverageDeficits:  preparationCoverageDeficits(pool.Records, tuning, heldOut),
+		SourcePayloadHash: digestBytes([]byte(strings.Join(payloadHashes, "\n"))),
+	}
+}
+func preparationCoverageDeficits(records []CandidatePoolRecord, tuning, heldOut FrozenCorpus) []string {
+	deficits := mechanicalCoverageDeficits(records)
+	categoryCounts := map[string]int{}
+	for _, corpus := range []FrozenCorpus{tuning, heldOut} {
+		for _, prepared := range corpus.Cases {
+			if prepared.MetamorphicFamily == "" {
+				categoryCounts[prepared.DefectCategory]++
+			}
+		}
+	}
+	for _, category := range requiredCategories {
+		if categoryCounts[category] == 0 {
+			deficits = append(deficits, "no approved "+category+" large case")
+		}
+	}
+	if len(tuning.AuditQueue)+len(heldOut.AuditQueue) > 0 {
+		deficits = append(deficits, "defect-category coverage remains unresolved for queued semantic audits")
+	}
+	return deficits
+}
+
+func verifyFrozenCasesGit(ctx context.Context, cacheRoot string, offline bool, pool CandidatePoolManifest, corpora ...FrozenCorpus) error {
 	specsByRepository := map[string][]GitFetchSpec{}
+	for _, record := range pool.Records {
+		specs := []GitFetchSpec{record.BaseFetch, record.HeadFetch}
+		if record.CandidateSource == CandidateSourceAACR {
+			specs = append([]GitFetchSpec{record.SourceBaseFetch}, specs...)
+		}
+		specsByRepository[record.Repository] = append(specsByRepository[record.Repository], specs...)
+	}
 	for _, corpus := range corpora {
 		if err := ValidatePreparedTriples(corpus.Cases, corpus.Triples); err != nil {
 			return err
@@ -2062,6 +2553,35 @@ func verifyFrozenCasesGit(ctx context.Context, cacheRoot string, offline bool, c
 		}
 		repositories[repository] = path
 	}
+	for _, record := range pool.Records {
+		repositoryPath := repositories[record.Repository]
+		frozen := PreparedCase{
+			ID: record.ID, Repository: record.Repository, BaseSHA: record.BaseSHA, HeadSHA: record.HeadSHA,
+			RawAdditions: record.RawAdditions, RawDeletions: record.RawDeletions, SizeBin: record.SizeBin,
+			StructuredRequired: true, ChangedRanges: record.ChangedRanges,
+			PatchSHA256: record.PatchSHA256, BuildStateSHA256: record.BuildStateSHA256,
+		}
+		hydrated, capture, err := hydrateGitCaseWithCapture(ctx, repositoryPath, frozen)
+		if err != nil {
+			return fmt.Errorf("verify candidate-pool record %s: %w", record.ID, err)
+		}
+		if err := verifyHydratedCase(frozen, hydrated); err != nil {
+			return fmt.Errorf("verify candidate-pool record %s: %w", record.ID, err)
+		}
+		if err := verifyCandidateClaimsGit(ctx, repositoryPath, record, capture); err != nil {
+			return err
+		}
+		rangeRepositoryPath := repositoryPath
+		if record.CandidateSource == CandidateSourceAACR {
+			rangeRepositoryPath, err = openCandidateAncestryRepository(ctx, cacheRoot, repositoryPath, record.SourceRow, true)
+			if err != nil {
+				return fmt.Errorf("verify candidate-pool record %s isolated ancestry: %w", record.ID, err)
+			}
+		}
+		if err := verifyCandidateRangeSemanticsGit(ctx, rangeRepositoryPath, record); err != nil {
+			return err
+		}
+	}
 	for _, corpus := range corpora {
 		caseRepository := map[string]string{}
 		for _, c := range corpus.Cases {
@@ -2082,25 +2602,63 @@ func verifyFrozenCasesGit(ctx context.Context, cacheRoot string, offline bool, c
 	}
 	return nil
 }
-
-func validateAACRPoolRecords(pool CandidatePoolManifest, imported []AuditQueueItem) error {
-	byID := make(map[string]AuditQueueItem, len(imported))
-	for _, item := range imported {
-		byID[item.CaseID] = item
+func verifyCandidateRangeSemanticsGit(ctx context.Context, repositoryPath string, record CandidatePoolRecord) error {
+	if record.CandidateSource != CandidateSourceAACR {
+		return nil
 	}
-	count := 0
+	mergeBases, err := runGit(ctx, repositoryPath, "merge-base", "--all", record.SourceBaseSHA, record.HeadSHA)
+	values := strings.Fields(string(mergeBases))
+	if err != nil || len(values) != 1 || values[0] != record.BaseSHA {
+		return fmt.Errorf("candidate-pool record %s does not reproduce its unique source-base/head merge base", record.ID)
+	}
+	return nil
+}
+func verifyCandidateClaimsGit(ctx context.Context, repositoryPath string, record CandidatePoolRecord, capture review.Capture) error {
+	if record.CandidateSource != CandidateSourceAACR {
+		return nil
+	}
+	ranges := map[string][]ChangedRange{
+		"left":  changedRangesFromNativeSide(capture.Paths, "left"),
+		"right": changedRangesFromNativeSide(capture.Paths, "right"),
+	}
+	eligible := []string{}
+	for _, claim := range record.SourceRow.Claims {
+		revision := record.SourceBaseSHA
+		if claim.Side == "right" {
+			revision = record.HeadSHA
+		}
+		location := Location{Path: claim.Path, StartLine: claim.FromLine, EndLine: claim.ToLine}
+		pathExists, err := gitPathExists(ctx, repositoryPath, revision, claim.Path)
+		if err != nil {
+			return fmt.Errorf("candidate-pool record %s verify claim path: %w", record.ID, err)
+		}
+		if !claim.IsAIComment && claimCoordinatesMatchNativeRange(claim.Side, record.SourceBaseSHA, record.BaseSHA) &&
+			validateLocation(location) == nil && pathExists && locationInChangedRange(location, ranges[claim.Side]) {
+			eligible = append(eligible, claim.RawRecordSHA256)
+		}
+	}
+	if !equalStringSlices(eligible, record.EligibleClaimSHA256s) {
+		return fmt.Errorf("candidate-pool record %s does not reproduce its eligible AACR human claims", record.ID)
+	}
+	return nil
+}
+
+func validateAACRPoolRecords(pool CandidatePoolManifest, imported []CandidateSourceRow) error {
+	byRecordID := make(map[string]CandidateSourceRow, len(imported))
+	for _, row := range imported {
+		if _, duplicate := byRecordID[row.SourceRecordID]; duplicate {
+			return fmt.Errorf("AACR source has duplicate grouped identity %s", row.SourceRecordID)
+		}
+		byRecordID[row.SourceRecordID] = row
+	}
 	for _, record := range pool.Records {
 		if record.CandidateSource != CandidateSourceAACR {
 			continue
 		}
-		count++
-		source, ok := byID[record.ID]
-		if !ok || !candidateQueueMatchesRecord(source, record) {
-			return fmt.Errorf("AACR candidate %s does not match pinned source data", record.ID)
+		source, ok := byRecordID[record.SourceRecordID]
+		if !ok || !equalCandidateSourceRow(source, record.SourceRow) {
+			return fmt.Errorf("AACR candidate %s does not match every accepted row in pinned source data", record.ID)
 		}
-	}
-	if count != len(imported) {
-		return fmt.Errorf("candidate pool contains %d of %d canonical AACR records", count, len(imported))
 	}
 	return nil
 }
@@ -2198,6 +2756,10 @@ func ComputeGitChurn(ctx context.Context, repositoryPath, baseSHA, headSHA strin
 }
 
 func changedRangesFromNative(records []review.RawPathRecord) []ChangedRange {
+	return changedRangesFromNativeSide(records, "")
+}
+
+func changedRangesFromNativeSide(records []review.RawPathRecord, side string) []ChangedRange {
 	var ranges []ChangedRange
 	for _, record := range records {
 		for _, hunk := range record.Hunks {
@@ -2211,10 +2773,14 @@ func changedRangesFromNative(records []review.RawPathRecord) []ChangedRange {
 					oldLine++
 					newLine++
 				case '-':
-					ranges = appendChangedRange(ranges, record.OldPath, oldLine)
+					if side == "" || side == "left" {
+						ranges = appendChangedRange(ranges, record.OldPath, oldLine)
+					}
 					oldLine++
 				case '+':
-					ranges = appendChangedRange(ranges, record.NewPath, newLine)
+					if side == "" || side == "right" {
+						ranges = appendChangedRange(ranges, record.NewPath, newLine)
+					}
 					newLine++
 				}
 			}
@@ -2271,6 +2837,8 @@ func runGitCommand(ctx context.Context, dir string, outputLimit int, input []byt
 		"--no-pager",
 		"-c", "core.hooksPath=/dev/null",
 		"-c", "credential.helper=",
+		"-c", "maintenance.auto=false",
+		"-c", "gc.auto=0",
 		"-c", "protocol.file.allow=never",
 		"-c", "protocol.ext.allow=never",
 	}, args...)
@@ -2297,6 +2865,9 @@ func runGitCommand(ctx context.Context, dir string, outputLimit int, input []byt
 			_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
 		}
 		<-done
+		if len(args) > 0 && args[0] == "fetch" {
+			_ = os.Remove(filepath.Join(dir, "shallow.lock"))
+		}
 		return nil, fmt.Errorf("git %s: %w", strings.Join(args, " "), commandContext.Err())
 	}
 	if stdout.exceeded || stderr.exceeded {
@@ -2351,10 +2922,20 @@ func lineCount(data []byte) int {
 type aacrRow struct {
 	Language string `json:"project_main_language"`
 	PRURL    string `json:"pr_url"`
-	HeadSHA  string `json:"pr_source_commit"`
-	BaseSHA  string `json:"pr_target_commit"`
-	Churn    int    `json:"pr_change_line_count"`
-	Label    int    `json:"label"`
+	// AACR names commits from the source dataset's perspective: pr_source_commit
+	// is the GitHub PR base and pr_target_commit is the reviewed PR-side snapshot.
+	SourceCommitSHA string `json:"pr_source_commit"`
+	TargetCommitSHA string `json:"pr_target_commit"`
+	Churn           int    `json:"pr_change_line_count"`
+	Label           int    `json:"label"`
+	Path            string `json:"path"`
+	Side            string `json:"side"`
+	FromLine        int    `json:"from_line"`
+	ToLine          int    `json:"to_line"`
+	Category        string `json:"category"`
+	Context         string `json:"context"`
+	Note            string `json:"note"`
+	IsAIComment     bool   `json:"is_ai_comment"`
 }
 
 func ImportAACRSourceRows(path, license, revision string) ([]CandidateSourceRow, error) {
@@ -2367,15 +2948,16 @@ func ImportAACRSourceRows(path, license, revision string) ([]CandidateSourceRow,
 		return nil, fmt.Errorf("AACR JSON: %w", err)
 	}
 	byIdentity := map[string]CandidateSourceRow{}
-	for _, raw := range rawRows {
-		var row aacrRow
-		if err := json.Unmarshal(raw, &row); err != nil {
+	for ordinal, raw := range rawRows {
+		var source aacrRow
+		if err := json.Unmarshal(raw, &source); err != nil {
 			return nil, fmt.Errorf("AACR row: %w", err)
 		}
-		if row.Label != 1 || row.Churn <= 300 || !fullSHA.MatchString(row.BaseSHA) || !fullSHA.MatchString(row.HeadSHA) || row.BaseSHA == row.HeadSHA {
+		if source.Label != 1 || source.Churn <= 300 || !fullSHA.MatchString(source.SourceCommitSHA) ||
+			!fullSHA.MatchString(source.TargetCommitSHA) || source.SourceCommitSHA == source.TargetCommitSHA {
 			continue
 		}
-		parsed, err := url.Parse(row.PRURL)
+		parsed, err := url.Parse(source.PRURL)
 		if err != nil {
 			continue
 		}
@@ -2383,21 +2965,48 @@ func ImportAACRSourceRows(path, license, revision string) ([]CandidateSourceRow,
 		if parsed.Scheme != "https" || parsed.Host != "github.com" || len(parts) != 4 || parts[2] != "pull" {
 			continue
 		}
-		language := row.Language
+		language := source.Language
 		if language == "TypeScript" || language == "JavaScript" {
 			language = "TypeScript/JavaScript"
 		}
 		repository := parts[0] + "/" + parts[1]
-		evidence := []string{row.PRURL, "aacr-revision:" + revision}
-		byIdentity[immutableIdentity(repository, row.BaseSHA, row.HeadSHA)] = CandidateSourceRow{
-			CandidateSource: CandidateSourceAACR, SourceID: "aacr-bench", SourceRecordID: row.PRURL,
-			Repository: repository, PullRequestURL: row.PRURL, BaseSHA: row.BaseSHA, HeadSHA: row.HeadSHA,
-			License: license, Provenance: revision, Language: language, SourceReportedChurn: row.Churn,
-			EvidenceRefs: evidence, RawRecordSHA256: digestBytes(bytes.TrimSpace(raw)),
+		identity := immutableIdentity(repository, source.SourceCommitSHA, source.TargetCommitSHA)
+		row, exists := byIdentity[identity]
+		if !exists {
+			row = CandidateSourceRow{
+				CandidateSource: CandidateSourceAACR, SourceID: "aacr-bench", SourceRecordID: source.PRURL,
+				Repository: repository, PullRequestURL: source.PRURL,
+				BaseSHA: source.SourceCommitSHA, HeadSHA: source.TargetCommitSHA,
+				License: license, Provenance: revision, Language: language, SourceReportedChurn: source.Churn,
+				EvidenceRefs: []string{source.PRURL, "aacr-revision:" + revision},
+			}
+		} else if row.SourceRecordID != source.PRURL || row.Language != language || row.SourceReportedChurn != source.Churn {
+			return nil, fmt.Errorf("AACR identity %s has conflicting source facts", source.PRURL)
 		}
+		rawDigest := digestBytes(bytes.TrimSpace(raw))
+		row.RawRecordSHA256s = append(row.RawRecordSHA256s, rawDigest)
+		row.Claims = append(row.Claims, CandidateClaim{
+			RawRecordSHA256: rawDigest, SourceOrdinal: ordinal + 1, Path: source.Path, Side: source.Side,
+			FromLine: source.FromLine, ToLine: source.ToLine, Category: source.Category,
+			Context: source.Context, Note: source.Note, IsAIComment: source.IsAIComment,
+		})
+		byIdentity[identity] = row
 	}
 	rows := make([]CandidateSourceRow, 0, len(byIdentity))
 	for _, row := range byIdentity {
+		sort.Slice(row.Claims, func(i, j int) bool {
+			if row.Claims[i].RawRecordSHA256 != row.Claims[j].RawRecordSHA256 {
+				return row.Claims[i].RawRecordSHA256 < row.Claims[j].RawRecordSHA256
+			}
+			return row.Claims[i].SourceOrdinal < row.Claims[j].SourceOrdinal
+		})
+		row.RawRecordSHA256s = row.RawRecordSHA256s[:0]
+		for _, claim := range row.Claims {
+			row.RawRecordSHA256s = append(row.RawRecordSHA256s, claim.RawRecordSHA256)
+		}
+		if _, err := CanonicalCandidateSourceRowDigest(row); err != nil {
+			return nil, fmt.Errorf("AACR candidate %s: %w", row.SourceRecordID, err)
+		}
 		rows = append(rows, row)
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -2409,40 +3018,6 @@ func ImportAACRSourceRows(path, license, revision string) ([]CandidateSourceRow,
 		return rows[i].SourceRecordID < rows[j].SourceRecordID
 	})
 	return rows, nil
-}
-
-// ImportAACRAuditQueue extracts source-verified immutable candidate identities.
-func ImportAACRAuditQueue(path string) ([]AuditQueueItem, error) {
-	rows, err := ImportAACRSourceRows(path, "Apache-2.0", "47be1d6df1e7faf222cf531587772d92f79fe6b2")
-	if err != nil {
-		return nil, err
-	}
-	queue := make([]AuditQueueItem, 0, len(rows))
-	for _, row := range rows {
-		parsed, _ := url.Parse(row.PullRequestURL)
-		parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-		key := digestBytes([]byte(immutableIdentity(row.Repository, row.BaseSHA, row.HeadSHA)))
-		rowDigest, err := CanonicalCandidateSourceRowDigest(row)
-		if err != nil {
-			return nil, err
-		}
-		remoteURL := "https://github.com/" + row.Repository + ".git"
-		queue = append(queue, AuditQueueItem{
-			CaseID:          "aacr-" + strings.ToLower(strings.ReplaceAll(row.Repository, "/", "-")) + "-" + parts[3],
-			CandidateSource: row.CandidateSource, SourceID: row.SourceID, SourceRecordID: row.SourceRecordID,
-			SourceType: SourceHumanCaught, Repository: row.Repository, BaseSHA: row.BaseSHA, HeadSHA: row.HeadSHA,
-			SelectionKey: key, Language: row.Language, SourceReportedChurn: row.SourceReportedChurn,
-			SourceRowSHA256: rowDigest, EvidenceRefs: append([]string(nil), row.EvidenceRefs...),
-			BaseFetch: GitFetchSpec{RemoteURL: remoteURL, Ref: row.BaseSHA, OID: row.BaseSHA},
-			HeadFetch: GitFetchSpec{RemoteURL: remoteURL, Ref: "refs/pull/" + parts[3] + "/head", OID: row.HeadSHA},
-			Reasons: []string{
-				"exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
-				"ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
-				"two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded",
-			},
-		})
-	}
-	return queue, nil
 }
 
 type swrRecord struct {
@@ -2711,13 +3286,18 @@ func swrLocation(snippet string) (Location, error) {
 
 // HydrateGitCase replaces source-reported size facts with exact immutable Git facts.
 func HydrateGitCase(ctx context.Context, repositoryPath string, c PreparedCase) (PreparedCase, error) {
+	hydrated, _, err := hydrateGitCaseWithCapture(ctx, repositoryPath, c)
+	return hydrated, err
+}
+
+func hydrateGitCaseWithCapture(ctx context.Context, repositoryPath string, c PreparedCase) (PreparedCase, review.Capture, error) {
 	capture, err := capturePinnedRange(ctx, repositoryPath, c.BaseSHA, c.HeadSHA)
 	if err != nil {
-		return PreparedCase{}, err
+		return PreparedCase{}, review.Capture{}, err
 	}
 	tree, err := runGit(ctx, repositoryPath, "rev-parse", c.HeadSHA+"^{tree}")
 	if err != nil {
-		return PreparedCase{}, err
+		return PreparedCase{}, review.Capture{}, err
 	}
 	c.RawAdditions, c.RawDeletions = capture.RawAdditions, capture.RawDeletions
 	c.ChangedRanges = changedRangesFromNative(capture.Paths)
@@ -2739,15 +3319,15 @@ func HydrateGitCase(ctx context.Context, repositoryPath string, c PreparedCase) 
 	c.BuildStateSHA256 = digestBytes(bytes.TrimSpace(tree))
 	if c.MetamorphicFamily != "" {
 		if len(c.GroundTruth) != 1 {
-			return PreparedCase{}, errors.New("metamorphic Git hydration requires one causal ground truth")
+			return PreparedCase{}, review.Capture{}, errors.New("metamorphic Git hydration requires one causal ground truth")
 		}
 		position, positionErr := ComputeCanonicalDiffPosition(capture.Paths, c.GroundTruth[0].Locations)
 		if positionErr != nil {
-			return PreparedCase{}, positionErr
+			return PreparedCase{}, review.Capture{}, positionErr
 		}
 		c.DiffPosition = position
 	}
-	return c, nil
+	return c, capture, nil
 }
 
 func VerifyPreparedCaseGit(ctx context.Context, repositoryPath string, frozen PreparedCase) error {
@@ -2755,6 +3335,10 @@ func VerifyPreparedCaseGit(ctx context.Context, repositoryPath string, frozen Pr
 	if err != nil {
 		return err
 	}
+	return verifyHydratedCase(frozen, hydrated)
+}
+
+func verifyHydratedCase(frozen, hydrated PreparedCase) error {
 	if frozen.RawAdditions != hydrated.RawAdditions || frozen.RawDeletions != hydrated.RawDeletions ||
 		frozen.SizeBin != hydrated.SizeBin || frozen.StructuredRequired != hydrated.StructuredRequired ||
 		frozen.PatchSHA256 != hydrated.PatchSHA256 || frozen.BuildStateSHA256 != hydrated.BuildStateSHA256 ||
@@ -2940,6 +3524,155 @@ func safeRepositorySegment(value string) bool {
 	return true
 }
 
+const gitHydrationProofSchema = "review.eval-git-hydration-proof.v1"
+const gitHydrationAlgorithm = "exact-fetch-head-and-commit-object-v1"
+
+type gitHydrationProof struct {
+	Schema            string `json:"schema"`
+	Algorithm         string `json:"algorithm"`
+	Repository        string `json:"repository"`
+	RemoteURL         string `json:"remote_url"`
+	Ref               string `json:"ref"`
+	OID               string `json:"oid"`
+	ObjectStateSHA256 string `json:"object_state_sha256"`
+}
+
+func validateRepositoryFetchSpec(repository string, spec GitFetchSpec) error {
+	if err := ValidateGitFetchSpec(spec); err != nil {
+		return err
+	}
+	remotePath := strings.TrimSuffix(strings.TrimPrefix(spec.RemoteURL, "https://github.com/"), ".git")
+	if !strings.EqualFold(remotePath, repository) {
+		return fmt.Errorf("fetch remote %s does not match repository %s", spec.RemoteURL, repository)
+	}
+	return nil
+}
+
+func hydrationProofForObject(ctx context.Context, path, repository string, spec GitFetchSpec) (gitHydrationProof, error) {
+	object, err := runGit(ctx, path, "cat-file", "commit", spec.OID)
+	if err != nil {
+		return gitHydrationProof{}, fmt.Errorf("pinned repository %s lacks exact pinned OID %s", repository, spec.OID)
+	}
+	return gitHydrationProof{
+		Schema: gitHydrationProofSchema, Algorithm: gitHydrationAlgorithm,
+		Repository: repository, RemoteURL: spec.RemoteURL, Ref: spec.Ref, OID: spec.OID,
+		ObjectStateSHA256: digestBytes(object),
+	}, nil
+}
+
+func hydrationProofPath(repositoryPath string, proof gitHydrationProof) string {
+	identity := struct {
+		Algorithm, Repository, RemoteURL, Ref, OID, ObjectStateSHA256 string
+	}{
+		proof.Algorithm, proof.Repository, proof.RemoteURL, proof.Ref, proof.OID, proof.ObjectStateSHA256,
+	}
+	payload, _ := json.Marshal(identity)
+	return filepath.Join(repositoryPath, ".review-eval-hydration", digestBytes(payload)+".json")
+}
+
+func persistHydrationProof(repositoryPath string, proof gitHydrationProof) error {
+	path := hydrationProofPath(repositoryPath, proof)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return writeCanonicalJSON(path, proof)
+}
+
+func requireHydrationProof(repositoryPath string, expected gitHydrationProof) error {
+	path := hydrationProofPath(repositoryPath, expected)
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("offline pinned repository %s lacks hydration proof for %s: %w", expected.Repository, expected.OID, err)
+	}
+	var actual gitHydrationProof
+	if err := decodeStrictFile(path, &actual); err != nil {
+		return err
+	}
+	canonical, err := canonicalIndentedJSON(actual)
+	if err != nil || !bytes.Equal(payload, canonical) {
+		return errors.New("git hydration proof is not canonical JSON")
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		return fmt.Errorf("offline pinned repository %s has mismatched hydration proof for %s", expected.Repository, expected.OID)
+	}
+	return nil
+}
+
+type pinnedRemoteVerificationError struct {
+	err error
+}
+
+func (err pinnedRemoteVerificationError) Error() string {
+	return err.err.Error()
+}
+
+func (err pinnedRemoteVerificationError) Unwrap() error {
+	return err.err
+}
+
+func provenRemoteOIDRejection(err error) bool {
+	message := strings.ToLower(err.Error())
+	for _, fragment := range []string{
+		"not our ref",
+		"couldn't find remote ref",
+		"server does not allow request for unadvertised object",
+	} {
+		if strings.Contains(message, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPinnedRemoteVerificationError(err error) bool {
+	var verification pinnedRemoteVerificationError
+	return errors.As(err, &verification)
+}
+
+func hydratePinnedRepositorySpec(ctx context.Context, repositoryPath, repository string, spec GitFetchSpec, offline bool) error {
+	return hydratePinnedRepositorySpecWithFetcher(ctx, repositoryPath, repository, spec, offline,
+		func(ctx context.Context, path string, spec GitFetchSpec) error {
+			_, err := runGit(ctx, path, "fetch", "--no-tags", "--force", "--depth=1", spec.RemoteURL, spec.Ref)
+			return err
+		})
+}
+
+func hydratePinnedRepositorySpecWithFetcher(
+	ctx context.Context,
+	repositoryPath, repository string,
+	spec GitFetchSpec,
+	offline bool,
+	fetch func(context.Context, string, GitFetchSpec) error,
+) error {
+	if offline {
+		proof, err := hydrationProofForObject(ctx, repositoryPath, repository, spec)
+		if err != nil {
+			return err
+		}
+		return requireHydrationProof(repositoryPath, proof)
+	}
+	if err := fetch(ctx, repositoryPath, spec); err != nil {
+		if provenRemoteOIDRejection(err) {
+			return pinnedRemoteVerificationError{err: err}
+		}
+		return err
+	}
+	fetched, err := runGit(ctx, repositoryPath, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(string(fetched)) != spec.OID {
+		return pinnedRemoteVerificationError{err: fmt.Errorf(
+			"fetch %s from %s produced %s, not exact pinned OID %s",
+			spec.Ref, spec.RemoteURL, strings.TrimSpace(string(fetched)), spec.OID)}
+	}
+	proof, err := hydrationProofForObject(ctx, repositoryPath, repository, spec)
+	if err != nil {
+		return err
+	}
+	return persistHydrationProof(repositoryPath, proof)
+}
+
 func OpenPinnedRepository(ctx context.Context, cacheRoot, repository string, offline bool, fetchSpecs ...GitFetchSpec) (string, error) {
 	parts := strings.Split(repository, "/")
 	if len(parts) != 2 || !safeRepositorySegment(parts[0]) || !safeRepositorySegment(parts[1]) {
@@ -2974,27 +3707,16 @@ func OpenPinnedRepository(ctx context.Context, cacheRoot, repository string, off
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return "", fmt.Errorf("repository cache entry for %s is not a real directory", repository)
 	}
-	if offline {
-		return path, nil
-	}
-	if len(fetchSpecs) == 0 {
-		return "", fmt.Errorf("online preparation for %s requires explicit immutable fetch metadata", repository)
-	}
 	for _, spec := range fetchSpecs {
-		if err := ValidateGitFetchSpec(spec); err != nil {
+		if err := validateRepositoryFetchSpec(repository, spec); err != nil {
 			return "", err
 		}
-		remotePath := strings.TrimSuffix(strings.TrimPrefix(spec.RemoteURL, "https://github.com/"), ".git")
-		if !strings.EqualFold(remotePath, repository) {
-			return "", fmt.Errorf("fetch remote %s does not match repository %s", spec.RemoteURL, repository)
-		}
-		if _, err := runGit(ctx, path, "fetch", "--no-tags", "--force", "--depth=1", spec.RemoteURL, spec.Ref); err != nil {
+		if err := hydratePinnedRepositorySpec(ctx, path, repository, spec, offline); err != nil {
 			return "", err
 		}
-		fetched, err := runGit(ctx, path, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
-		if err != nil || strings.TrimSpace(string(fetched)) != spec.OID {
-			return "", fmt.Errorf("fetch %s did not produce exact pinned OID %s", spec.Ref, spec.OID)
-		}
+	}
+	if !offline && len(fetchSpecs) == 0 {
+		return "", fmt.Errorf("online preparation for %s requires explicit immutable fetch metadata", repository)
 	}
 	return path, nil
 }
@@ -3012,6 +3734,18 @@ func missingValues(seen map[string]bool, required []string) []string {
 		}
 	}
 	return missing
+}
+
+func equalStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func equalStringSets(left, right []string) bool {

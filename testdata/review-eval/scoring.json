@@ -3,7 +3,7 @@
   "policy_version": "review-eval-policy.v1",
   "artifact_schema_version": "review-eval-artifacts.v1",
   "sources_manifest_sha256": "36bcecf0aef80492d6a0c359d6cd3d342f5b7c7e3a8f93fe5ac52d091bfc8078",
-  "candidate_pool_sha256": "ecd6b30d29ce7599221221bb9b3d6f928fb71a826dae61f4d69e06c848adbc04",
+  "candidate_pool_sha256": "e2b11bef00c46967e937124956890a567e2aededf600da52c9aff2b8a09ba666",
   "clients": [
     {
       "id": "claude",
@@ -35,52 +35,8 @@
   "toolchains": null,
   "schemas": null,
   "large": {
-    "tuning_base_case_ids": [
-      "aacr-langflow-ai-langflow-6652",
-      "aacr-bluewave-labs-checkmate-2883",
-      "aacr-comfyanonymous-comfyui-7952",
-      "aacr-elastic-elasticsearch-119759",
-      "aacr-facebook-react-32499",
-      "aacr-freecad-freecad-20825",
-      "aacr-clickhouse-clickhouse-74070",
-      "aacr-langflow-ai-langflow-6044",
-      "aacr-immich-app-immich-17535",
-      "aacr-elastic-elasticsearch-118183",
-      "aacr-wavetermdev-waveterm-1998",
-      "aacr-n8n-io-n8n-20210"
-    ],
-    "held_out_base_case_ids": [
-      "aacr-freecad-freecad-21257",
-      "aacr-cherryhq-cherry-studio-5540",
-      "aacr-gofr-dev-gofr-1395",
-      "aacr-sveltejs-svelte-16232",
-      "aacr-cherryhq-cherry-studio-5637",
-      "aacr-google-gemini-gemini-cli-4828",
-      "aacr-valkey-io-valkey-1485",
-      "aacr-microsoft-typescript-go-831",
-      "aacr-freecad-freecad-19426",
-      "aacr-elastic-elasticsearch-126376",
-      "aacr-clickhouse-clickhouse-82441",
-      "aacr-laravel-framework-54226",
-      "aacr-google-gemini-gemini-cli-8154",
-      "aacr-immich-app-immich-14777",
-      "aacr-kestra-io-kestra-7191",
-      "aacr-gofr-dev-gofr-1355",
-      "aacr-clickhouse-clickhouse-73546",
-      "aacr-google-gemini-gemini-cli-8797",
-      "aacr-gofr-dev-gofr-1617",
-      "aacr-clickhouse-clickhouse-80345",
-      "aacr-keycloak-keycloak-40283",
-      "aacr-cline-cline-5524",
-      "aacr-opencv-opencv-27284",
-      "aacr-ollama-ollama-9654",
-      "aacr-n8n-io-n8n-15362",
-      "aacr-gofr-dev-gofr-1696",
-      "aacr-lvgl-lvgl-8689",
-      "aacr-clickhouse-clickhouse-75474",
-      "aacr-comfyanonymous-comfyui-8446",
-      "aacr-wavetermdev-waveterm-1793"
-    ],
+    "tuning_base_case_ids": [],
+    "held_out_base_case_ids": [],
     "triple_ids": [],
     "repetitions": 3,
     "max_model_tokens": 100000,
@@ -162,8 +118,10 @@
     "structured_required_count": 0
   },
   "freeze_blockers": [
-    "held-out base_case_ids refer to unresolved audit candidates, not approved frozen cases",
-    "no valid beginning/middle/end metamorphic triples can be frozen before an approved defect case and independently audited clean padding are available",
-    "Task 9 product binary is not integrated, so exact client model versions and executable/toolchain hashes cannot be truthfully pinned"
+    "14 mechanically qualified human-caught AACR candidates remain audit-required without approval: 12 tuning and 2 held-out; the held-out candidate deficit is 28",
+    "28 AACR identities are independently rejected by the A1 and A2 evidence sets and 13 additional identities remain mechanically quarantined",
+    "the frozen sources do not yet supply validated injected or clean large cases, Rust coverage, the 1001-3000 and 3001+ churn bins, or semantically approved defect-category coverage",
+    "no beginning/middle/end metamorphic triple can be frozen without an approved causal case and independently audited clean padding",
+    "exact client model, prompt, policy, executable, and Prowl toolchain pins remain unresolved"
   ]
 }
