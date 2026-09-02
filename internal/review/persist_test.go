@@ -100,7 +100,7 @@ func makeArtifactsWith(name string, digest func([]byte) Digest) PlanArtifacts {
 		ChangedPaths: []PlanPath{{PathID: id.Public, OldPath: "a.go", NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
 		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
 	}
-	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, IDRecords: []IDRecord{record}}
+	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, PlanIdentity: pi, IDRecords: []IDRecord{record}}
 }
 
 // makeStructuredArtifacts builds a production-valid structured plan that exercises
@@ -213,6 +213,7 @@ func makeStructuredArtifacts(name string) PlanArtifacts {
 	return PlanArtifacts{
 		Plan:              plan,
 		PlanIdentityBytes: idBytes,
+		PlanIdentity:      pi,
 		IDRecords:         []IDRecord{pRec, hRec, uRec, cRec, lRec, tRec},
 		Citations:         citations,
 		UnitCandidates:    map[string][]contextpacket.Candidate{unitID.Public: nil},
@@ -266,7 +267,7 @@ func collidingArtifacts(name string) PlanArtifacts {
 		ChangedPaths: []PlanPath{{PathID: id.Public, OldPath: path, NewPath: path, Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
 		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
 	}
-	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, IDRecords: []IDRecord{record}}
+	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, PlanIdentity: pi, IDRecords: []IDRecord{record}}
 }
 
 // collidingManifest builds a persisted manifest for a colliding plan, so a
@@ -276,7 +277,7 @@ func collidingManifest(name string) planManifest {
 	return planManifest{
 		Schema: planStoreSchemaV1, ReviewID: a.Plan.ReviewID, PlanDigest: a.Plan.PlanDigest,
 		ScopeKind: a.Plan.Scope.Kind, CreatedAt: 1, Plan: a.Plan,
-		PlanIdentityBytes: a.PlanIdentityBytes, IDRecords: a.IDRecords,
+		PlanIdentityBytes: a.PlanIdentityBytes, PlanIdentity: a.PlanIdentity, IDRecords: a.IDRecords,
 	}
 }
 
@@ -1188,6 +1189,21 @@ func TestPlanStoreSaveRejectsOversizedManifest(t *testing.T) {
 		a.MandatoryUnits[uid] = make([]byte, 2048) // exceeds the ceiling alone
 		if _, err := store.Save(ctx, a, nil); !errors.Is(err, ErrManifestCorrupt) {
 			t.Fatalf("save err=%v, want ErrManifestCorrupt", err)
+		}
+	})
+	t.Run("oversized candidate rejected before marshal", func(t *testing.T) {
+		store := newStore(t)
+		store.maxManifest = 64 << 10
+		marshaled := false
+		store.beforeMarshal = func() { marshaled = true } // must never be reached
+		a := makeStructuredArtifacts("oversized-candidate")
+		uid := a.Plan.PrimaryUnits[0].UnitID
+		a.UnitCandidates[uid] = []contextpacket.Candidate{{CompactContent: string(make([]byte, 1<<20))}}
+		if _, err := store.Save(ctx, a, nil); !errors.Is(err, ErrManifestCorrupt) {
+			t.Fatalf("oversized candidate err=%v, want ErrManifestCorrupt", err)
+		}
+		if marshaled {
+			t.Fatal("manifest was marshaled/allocated despite an over-ceiling candidate")
 		}
 	})
 }

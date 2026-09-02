@@ -34,6 +34,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -155,6 +156,10 @@ type PlanArtifacts struct {
 	// hashes it with a fixed SHA-256 and requires the result to match the plan
 	// digest and review id rather than trusting the supplied strings.
 	PlanIdentityBytes []byte
+	// PlanIdentity is the full structured identity whose ReviewPlanIdentityV1
+	// encoding must equal PlanIdentityBytes byte-for-byte and whose plan-bearing
+	// fields the store binds to the persisted Plan and ID records.
+	PlanIdentity PlanIdentity
 	// IDRecords covers every content-derived public ID in the plan/artifacts.
 	IDRecords []IDRecord
 	// WorkspaceFingerprint is the workspace head fingerprint for a workspace
@@ -185,6 +190,7 @@ type planManifest struct {
 	Citations               map[string]CitationProof             `json:"citations,omitempty"`
 	PublishedIndexSignature string                               `json:"published_index_signature,omitempty"`
 	PlanIdentityBytes       []byte                               `json:"plan_identity_bytes"`
+	PlanIdentity            PlanIdentity                         `json:"plan_identity"`
 	IDRecords               []IDRecord                           `json:"id_records,omitempty"`
 	ContentDigest           string                               `json:"content_digest"`
 }
@@ -261,6 +267,10 @@ type PlanStore struct {
 	// rollback restore); injectable so a test can force a restore failure and
 	// prove the sole snapshot is preserved rather than deleted.
 	renameFn func(oldpath, newpath string) error
+	// beforeMarshal, when set, is called immediately before the manifest is
+	// marshaled; a test uses it to prove an over-ceiling artifact is rejected by
+	// the preflight budget before any marshal/allocation is reached.
+	beforeMarshal func()
 }
 
 // OpenPlanStore resolves the Git common directory, roots the review state beneath
@@ -425,7 +435,7 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 	}
 	// Bind the canonical identity bytes to this plan and validate its mandatory
 	// unit payloads (only for the plan being saved, not the domain siblings).
-	if err := verifyArtifactIntegrity(artifacts.Plan, artifacts.IDRecords, artifacts.PlanIdentityBytes, artifacts.MandatoryUnits); err != nil {
+	if err := verifyArtifactIntegrity(artifacts.Plan, artifacts.IDRecords, artifacts.PlanIdentity, artifacts.PlanIdentityBytes, artifacts.MandatoryUnits); err != nil {
 		return SaveResult{}, err
 	}
 
@@ -442,7 +452,11 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 		Citations:               artifacts.Citations,
 		PublishedIndexSignature: artifacts.PublishedIndexSignature,
 		PlanIdentityBytes:       artifacts.PlanIdentityBytes,
+		PlanIdentity:            artifacts.PlanIdentity,
 		IDRecords:               artifacts.IDRecords,
+	}
+	if s.beforeMarshal != nil {
+		s.beforeMarshal()
 	}
 	payload, err := marshalManifest(manifest)
 	if err != nil {
@@ -629,6 +643,7 @@ func (s *PlanStore) Load(ctx context.Context, reviewID string) (PlanArtifacts, e
 		Citations:               manifest.Citations,
 		PublishedIndexSignature: manifest.PublishedIndexSignature,
 		PlanIdentityBytes:       manifest.PlanIdentityBytes,
+		PlanIdentity:            manifest.PlanIdentity,
 		IDRecords:               manifest.IDRecords,
 		WorkspaceFingerprint:    manifest.WorkspaceFingerprint,
 	}, nil
@@ -756,7 +771,7 @@ func (s *PlanStore) verifyManifest(ctx context.Context, m planManifest) error {
 	if _, err := addPlanToRegistry(ctx, registry, s.digest, m.Plan, m.Citations, m.UnitCandidates, m.MandatoryUnits, m.IDRecords, full); err != nil {
 		return err
 	}
-	if err := verifyArtifactIntegrity(m.Plan, m.IDRecords, m.PlanIdentityBytes, m.MandatoryUnits); err != nil {
+	if err := verifyArtifactIntegrity(m.Plan, m.IDRecords, m.PlanIdentity, m.PlanIdentityBytes, m.MandatoryUnits); err != nil {
 		return err
 	}
 	return ctx.Err()
@@ -978,29 +993,27 @@ func collectPlanIDs(plan Plan, citations map[string]CitationProof, unitCandidate
 // verifyArtifactIntegrity binds the canonical identity bytes to the persisted
 // plan and records, and validates the mandatory unit payloads. It is run only for
 // the plan being saved or loaded (never for unrelated domain siblings).
-func verifyArtifactIntegrity(plan Plan, records []IDRecord, identityBytes []byte, mandatory map[string][]byte) error {
-	if err := verifyIdentityBinding(plan, records, identityBytes); err != nil {
+func verifyArtifactIntegrity(plan Plan, records []IDRecord, pi PlanIdentity, identityBytes []byte, mandatory map[string][]byte) error {
+	if err := verifyIdentityBinding(plan, records, pi, identityBytes); err != nil {
 		return err
 	}
 	return validateMandatoryUnits(plan, mandatory)
 }
 
-// verifyIdentityBinding proves the canonical identity bytes describe exactly this
-// plan. For every category the plan also carries it compares, in order, each
-// identity-bearing field: paths (id, review_class, coverage, reason, role_ids and
-// the p_ record's old/new/status), audits (audit_id and target ids), cohorts
-// (cohort/layer ids and member unit ids over the plan's flattened cohort x layer
-// order), and primary units (unit id). It also requires the full set of content
-// digests embedded in the identity to equal the record full set, so hunks and any
-// extras are bound too. The public review id can therefore never name content
-// different from what ReviewPlanIdentityV1 encoded.
-func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) error {
-	top, err := decodeFramedFields(identityBytes)
-	if err != nil {
-		return fmt.Errorf("%w: undecodable identity bytes: %v", ErrPlanIdentityMismatch, err)
-	}
-	if string(top["schema"]) != PlanSchemaV1 {
-		return fmt.Errorf("%w: identity schema %q", ErrPlanIdentityMismatch, top["schema"])
+// verifyIdentityBinding proves the persisted identity describes exactly this plan.
+// It first requires the canonical ReviewPlanIdentityV1 encoding of the persisted
+// PlanIdentity struct to equal PlanIdentityBytes byte-for-byte (so the review id,
+// which is the hash of those bytes, names precisely this structured identity).
+// It then binds every plan-bearing field of that struct, in order, to the Plan
+// and its exact ID records: paths (id + review_class + coverage + reason +
+// role_ids, and the p_ record's old/new/status), primary units (unit id),
+// cohorts (cohort/layer/member unit ids over the plan's flattened cohort x layer
+// order), and audits (audit_id + target ids); and it requires the full set of
+// content-ID digests the struct embeds to equal the record full set (binding
+// hunks and rejecting extras).
+func verifyIdentityBinding(plan Plan, records []IDRecord, pi PlanIdentity, identityBytes []byte) error {
+	if !bytes.Equal(ReviewPlanIdentityV1(pi), identityBytes) {
+		return fmt.Errorf("%w: identity bytes are not the canonical encoding of the identity struct", ErrPlanIdentityMismatch)
 	}
 	byPublic := make(map[string]IDRecord, len(records))
 	for _, r := range records {
@@ -1013,72 +1026,29 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) 
 		}
 		return r.Full, nil
 	}
-	digField := func(f map[string][]byte, name string, want Digest) error {
-		got, err := asDigest(f[name])
+	wantFull := func(id StableID, public string) error {
+		want, err := fullOf(public)
 		if err != nil {
 			return err
 		}
-		if got != want {
-			return fmt.Errorf("%w: identity %s digest disagrees with the plan", ErrPlanIdentityMismatch, name)
-		}
-		return nil
-	}
-	digListMatches := func(raw []byte, publics []string) error {
-		items, err := decodeFrameList(raw)
-		if err != nil {
-			return err
-		}
-		if len(items) != len(publics) {
-			return fmt.Errorf("%w: identity digest list length disagrees with the plan", ErrPlanIdentityMismatch)
-		}
-		for i, it := range items {
-			want, err := fullOf(publics[i])
-			if err != nil {
-				return err
-			}
-			got, err := asDigest(it)
-			if err != nil {
-				return err
-			}
-			if got != want {
-				return fmt.Errorf("%w: identity member digest disagrees with the plan", ErrPlanIdentityMismatch)
-			}
+		if id.Full != want {
+			return fmt.Errorf("%w: identity digest for %s disagrees with its record", ErrPlanIdentityMismatch, public)
 		}
 		return nil
 	}
 
-	// --- paths: ordered, every identity-bearing field plus record old/new/status.
-	pathItems, err := decodeFrameList(top["paths"])
-	if err != nil {
-		return fmt.Errorf("%w: identity paths: %v", ErrPlanIdentityMismatch, err)
+	// paths: ordered, every plan-bearing field plus the record old/new/status.
+	if len(pi.Paths) != len(plan.ChangedPaths) {
+		return fmt.Errorf("%w: identity has %d paths, plan has %d", ErrPlanIdentityMismatch, len(pi.Paths), len(plan.ChangedPaths))
 	}
-	if len(pathItems) != len(plan.ChangedPaths) {
-		return fmt.Errorf("%w: identity has %d paths, plan has %d", ErrPlanIdentityMismatch, len(pathItems), len(plan.ChangedPaths))
-	}
-	for i, it := range pathItems {
-		f, err := decodeFramedFields(it)
-		if err != nil {
-			return fmt.Errorf("%w: identity path %d: %v", ErrPlanIdentityMismatch, i, err)
-		}
+	for i, e := range pi.Paths {
 		cp := plan.ChangedPaths[i]
-		want, err := fullOf(cp.PathID)
-		if err != nil {
+		if err := wantFull(e.PathID, cp.PathID); err != nil {
 			return err
 		}
-		if err := digField(f, "path_id", want); err != nil {
-			return err
+		if e.ReviewClass != cp.ReviewClass || e.Coverage != cp.Coverage || e.Reason != cp.Reason || !stringSlicesEqual(e.RoleIDs, cp.Roles) {
+			return fmt.Errorf("%w: changed path %s class/coverage/reason/roles disagree with the identity", ErrPlanIdentityMismatch, cp.PathID)
 		}
-		if string(f["review_class"]) != cp.ReviewClass || string(f["coverage"]) != cp.Coverage || string(f["reason"]) != cp.Reason {
-			return fmt.Errorf("%w: changed path %s class/coverage/reason disagrees with the identity", ErrPlanIdentityMismatch, cp.PathID)
-		}
-		roles, err := decodeStringList(f["role_ids"])
-		if err != nil {
-			return err
-		}
-		if !stringSlicesEqual(roles, cp.Roles) {
-			return fmt.Errorf("%w: changed path %s roles disagree with the identity", ErrPlanIdentityMismatch, cp.PathID)
-		}
-		// The p_ record canonical must encode the same old/new/status.
 		rf, err := decodeFramedFields(byPublic[cp.PathID].Canonical)
 		if err != nil {
 			return fmt.Errorf("%w: undecodable path record %s: %v", ErrPlanIdentityMismatch, cp.PathID, err)
@@ -1092,29 +1062,17 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) 
 		}
 	}
 
-	// --- primary units: ordered unit id.
-	unitItems, err := decodeFrameList(top["units"])
-	if err != nil {
-		return fmt.Errorf("%w: identity units: %v", ErrPlanIdentityMismatch, err)
+	// primary units: ordered unit id.
+	if len(pi.Units) != len(plan.PrimaryUnits) {
+		return fmt.Errorf("%w: identity has %d units, plan has %d", ErrPlanIdentityMismatch, len(pi.Units), len(plan.PrimaryUnits))
 	}
-	if len(unitItems) != len(plan.PrimaryUnits) {
-		return fmt.Errorf("%w: identity has %d units, plan has %d", ErrPlanIdentityMismatch, len(unitItems), len(plan.PrimaryUnits))
-	}
-	for i, it := range unitItems {
-		f, err := decodeFramedFields(it)
-		if err != nil {
-			return fmt.Errorf("%w: identity unit %d: %v", ErrPlanIdentityMismatch, i, err)
-		}
-		want, err := fullOf(plan.PrimaryUnits[i].UnitID)
-		if err != nil {
-			return err
-		}
-		if err := digField(f, "unit_id", want); err != nil {
+	for i, e := range pi.Units {
+		if err := wantFull(e.UnitID, plan.PrimaryUnits[i].UnitID); err != nil {
 			return err
 		}
 	}
 
-	// --- cohorts: ordered over the plan's flattened cohort x layer sequence.
+	// cohorts: ordered over the plan's flattened cohort x layer sequence.
 	type flatCohort struct {
 		cohort string
 		layer  string
@@ -1126,106 +1084,63 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) 
 			flat = append(flat, flatCohort{cohort: c.CohortID, layer: l.LayerID, units: l.UnitIDs})
 		}
 	}
-	cohortItems, err := decodeFrameList(top["cohorts"])
-	if err != nil {
-		return fmt.Errorf("%w: identity cohorts: %v", ErrPlanIdentityMismatch, err)
+	if len(pi.Cohorts) != len(flat) {
+		return fmt.Errorf("%w: identity has %d cohort rows, plan flattens to %d", ErrPlanIdentityMismatch, len(pi.Cohorts), len(flat))
 	}
-	if len(cohortItems) != len(flat) {
-		return fmt.Errorf("%w: identity has %d cohort rows, plan flattens to %d", ErrPlanIdentityMismatch, len(cohortItems), len(flat))
-	}
-	for i, it := range cohortItems {
-		f, err := decodeFramedFields(it)
-		if err != nil {
-			return fmt.Errorf("%w: identity cohort %d: %v", ErrPlanIdentityMismatch, i, err)
-		}
-		cwant, err := fullOf(flat[i].cohort)
-		if err != nil {
+	for i, e := range pi.Cohorts {
+		if err := wantFull(e.CohortID, flat[i].cohort); err != nil {
 			return err
 		}
-		if err := digField(f, "cohort_id", cwant); err != nil {
+		if err := wantFull(e.LayerID, flat[i].layer); err != nil {
 			return err
 		}
-		lwant, err := fullOf(flat[i].layer)
-		if err != nil {
-			return err
+		if len(e.UnitIDs) != len(flat[i].units) {
+			return fmt.Errorf("%w: identity cohort %d member count disagrees with the plan", ErrPlanIdentityMismatch, i)
 		}
-		if err := digField(f, "layer_id", lwant); err != nil {
-			return err
-		}
-		if err := digListMatches(f["unit_ids"], flat[i].units); err != nil {
-			return err
-		}
-	}
-
-	// --- audits: ordered audit id and target ids.
-	auditItems, err := decodeFrameList(top["audits"])
-	if err != nil {
-		return fmt.Errorf("%w: identity audits: %v", ErrPlanIdentityMismatch, err)
-	}
-	if len(auditItems) != len(plan.RequiredAudits) {
-		return fmt.Errorf("%w: identity has %d audits, plan has %d", ErrPlanIdentityMismatch, len(auditItems), len(plan.RequiredAudits))
-	}
-	for i, it := range auditItems {
-		f, err := decodeFramedFields(it)
-		if err != nil {
-			return fmt.Errorf("%w: identity audit %d: %v", ErrPlanIdentityMismatch, i, err)
-		}
-		if string(f["audit_id"]) != plan.RequiredAudits[i].AuditID {
-			return fmt.Errorf("%w: identity audit %d id disagrees with the plan", ErrPlanIdentityMismatch, i)
-		}
-		if err := digListMatches(f["target_ids"], plan.RequiredAudits[i].TargetIDs); err != nil {
-			return err
-		}
-	}
-
-	// --- full content-digest set equality (binds hunks and rejects extras).
-	embedded := map[Digest]bool{}
-	collect := func(section string, fields ...string) error {
-		items, err := decodeFrameList(top[section])
-		if err != nil {
-			return err
-		}
-		for _, it := range items {
-			f, err := decodeFramedFields(it)
-			if err != nil {
+		for j, u := range e.UnitIDs {
+			if err := wantFull(u, flat[i].units[j]); err != nil {
 				return err
 			}
-			for _, name := range fields {
-				if name == "target_ids" {
-					digs, err := decodeFrameList(f[name])
-					if err != nil {
-						return err
-					}
-					for _, d := range digs {
-						dig, err := asDigest(d)
-						if err != nil {
-							return err
-						}
-						embedded[dig] = true
-					}
-					continue
-				}
-				dig, err := asDigest(f[name])
-				if err != nil {
-					return err
-				}
-				embedded[dig] = true
+		}
+	}
+
+	// audits: ordered audit id and target ids.
+	if len(pi.Audits) != len(plan.RequiredAudits) {
+		return fmt.Errorf("%w: identity has %d audits, plan has %d", ErrPlanIdentityMismatch, len(pi.Audits), len(plan.RequiredAudits))
+	}
+	for i, e := range pi.Audits {
+		a := plan.RequiredAudits[i]
+		if e.AuditID != a.AuditID {
+			return fmt.Errorf("%w: identity audit %d id disagrees with the plan", ErrPlanIdentityMismatch, i)
+		}
+		if len(e.TargetIDs) != len(a.TargetIDs) {
+			return fmt.Errorf("%w: identity audit %d target count disagrees with the plan", ErrPlanIdentityMismatch, i)
+		}
+		for j, t := range e.TargetIDs {
+			if err := wantFull(t, a.TargetIDs[j]); err != nil {
+				return err
 			}
 		}
-		return nil
 	}
-	for _, c := range []struct {
-		section string
-		fields  []string
-	}{
-		{"paths", []string{"path_id"}},
-		{"hunks", []string{"hunk_id"}},
-		{"units", []string{"unit_id"}},
-		{"cohorts", []string{"cohort_id", "layer_id"}},
-		{"audits", []string{"target_ids"}},
-	} {
-		if err := collect(c.section, c.fields...); err != nil {
-			return fmt.Errorf("%w: identity %s: %v", ErrPlanIdentityMismatch, c.section, err)
+
+	// full content-digest set equality (binds hunks and rejects extras).
+	embedded := map[Digest]bool{}
+	for _, e := range pi.Paths {
+		embedded[e.PathID.Full] = true
+	}
+	for _, e := range pi.Hunks {
+		embedded[e.HunkID.Full] = true
+	}
+	for _, e := range pi.Units {
+		embedded[e.UnitID.Full] = true
+	}
+	for _, e := range pi.Cohorts {
+		embedded[e.CohortID.Full] = true
+		embedded[e.LayerID.Full] = true
+	}
+	for _, e := range pi.Audits {
+		for _, t := range e.TargetIDs {
+			embedded[t.Full] = true
 		}
 	}
 	recordFulls := make(map[Digest]bool, len(records))
@@ -1237,23 +1152,10 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) 
 	}
 	for d := range recordFulls {
 		if !embedded[d] {
-			return fmt.Errorf("%w: a record digest is absent from the identity bytes", ErrPlanIdentityMismatch)
+			return fmt.Errorf("%w: a record digest is absent from the identity", ErrPlanIdentityMismatch)
 		}
 	}
 	return nil
-}
-
-// decodeStringList decodes a FrameListV1 of UTF-8 strings.
-func decodeStringList(raw []byte) ([]string, error) {
-	items, err := decodeFrameList(raw)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, len(items))
-	for i, it := range items {
-		out[i] = string(it)
-	}
-	return out, nil
 }
 
 // stringSlicesEqual reports whether two string slices are element-wise equal.
@@ -1269,27 +1171,30 @@ func stringSlicesEqual(a, b []string) bool {
 	return true
 }
 
-// validateMandatoryUnits requires each mandatory unit payload to be byte-equal to
-// the canonical serialization (CanonicalMandatoryJSON) of the corresponding
-// primary unit of the plan, so a persisted mandatory object is exactly the
-// plan-bound, already-validated unit rather than arbitrary or merely
-// shape-compatible bytes.
+// validateMandatoryUnits requires the mandatory-unit key set to equal the plan's
+// primary-unit set exactly - one mandatory object per primary unit, no missing
+// and no extra keys - and each payload to be byte-equal to the corresponding
+// primary unit's CanonicalMandatoryJSON, so the persisted mandatory objects are
+// exactly the plan-bound, already-validated units and nothing else.
 func validateMandatoryUnits(plan Plan, mandatory map[string][]byte) error {
 	primary := make(map[string]Unit, len(plan.PrimaryUnits))
 	for _, u := range plan.PrimaryUnits {
 		primary[u.UnitID] = u
 	}
-	for key, raw := range mandatory {
-		u, ok := primary[key]
+	if len(mandatory) != len(primary) {
+		return fmt.Errorf("%w: %d mandatory units for %d primary units", ErrManifestCorrupt, len(mandatory), len(primary))
+	}
+	for id, u := range primary {
+		raw, ok := mandatory[id]
 		if !ok {
-			return fmt.Errorf("%w: mandatory unit %s is not a primary unit of the plan", ErrManifestCorrupt, key)
+			return fmt.Errorf("%w: primary unit %s has no mandatory object", ErrManifestCorrupt, id)
 		}
 		canonical, err := u.CanonicalMandatoryJSON()
 		if err != nil {
-			return fmt.Errorf("%w: mandatory unit %s: %v", ErrManifestCorrupt, key, err)
+			return fmt.Errorf("%w: mandatory unit %s: %v", ErrManifestCorrupt, id, err)
 		}
 		if !bytes.Equal(raw, canonical) {
-			return fmt.Errorf("%w: mandatory unit %s is not byte-equal to its primary unit canonical form", ErrManifestCorrupt, key)
+			return fmt.Errorf("%w: mandatory unit %s is not byte-equal to its primary unit canonical form", ErrManifestCorrupt, id)
 		}
 	}
 	return nil
@@ -1322,49 +1227,6 @@ func decodeFramedFields(b []byte) (map[string][]byte, error) {
 		b = b[vl:]
 	}
 	return out, nil
-}
-
-// decodeFrameList parses a FrameListV1 encoding (uint64be(count) followed by
-// uint64be(item_len)|item repeated) into its items.
-func decodeFrameList(b []byte) ([][]byte, error) {
-	if len(b) < 8 {
-		return nil, errors.New("truncated list count")
-	}
-	n := binary.BigEndian.Uint64(b[:8])
-	b = b[8:]
-	// Every item carries at least an 8-byte length prefix, so a count larger than
-	// the remaining bytes / 8 is malformed. Bounding it before any allocation
-	// prevents a hostile count from triggering a huge make or an out-of-range panic.
-	if n > uint64(len(b)/8) {
-		return nil, errors.New("list count exceeds available bytes")
-	}
-	items := make([][]byte, 0, n)
-	for i := uint64(0); i < n; i++ {
-		if len(b) < 8 {
-			return nil, errors.New("truncated item length")
-		}
-		il := binary.BigEndian.Uint64(b[:8])
-		b = b[8:]
-		if il > uint64(len(b)) {
-			return nil, errors.New("truncated item")
-		}
-		items = append(items, b[:il])
-		b = b[il:]
-	}
-	if len(b) != 0 {
-		return nil, errors.New("trailing bytes after list")
-	}
-	return items, nil
-}
-
-// asDigest converts a 32-byte value into a Digest.
-func asDigest(b []byte) (Digest, error) {
-	var d Digest
-	if len(b) != len(d) {
-		return d, fmt.Errorf("expected %d-byte digest, got %d", len(d), len(b))
-	}
-	copy(d[:], b)
-	return d, nil
 }
 
 // contentKindOf returns the content-ID kind of a well-formed public ID (prefix
@@ -1505,11 +1367,13 @@ func (c *ctxLimitReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// boundManifestContent charges each manifest content contributor against a fixed
-// budget with overflow-safe remaining checks, so an over-ceiling artifact is
-// rejected before the full manifest is marshaled or persisted. Variable-size
-// struct contributors (unit candidates and the plan) are measured with a
-// size-limited encoder so a single giant value cannot allocate past the ceiling.
+// boundManifestContent charges every manifest content contributor against a fixed
+// budget with overflow-safe remaining checks, rejecting an over-ceiling artifact
+// before it is marshaled or persisted. Variable-size struct/slice/map values
+// (the plan, identity, unit candidates, mandatory units, citations, and id
+// records) are walked structurally with accountValue, which never marshals, so a
+// single giant string, byte slice, or collection is rejected before any encoder
+// or allocation. The post-marshal length check remains a defense-in-depth backstop.
 func boundManifestContent(a PlanArtifacts, max int64) error {
 	remaining := max
 	charge := func(n int64) error {
@@ -1519,74 +1383,97 @@ func boundManifestContent(a PlanArtifacts, max int64) error {
 		remaining -= n
 		return nil
 	}
-	if err := charge(int64(len(a.PlanIdentityBytes))); err != nil {
+	if err := charge(base64Len(len(a.PlanIdentityBytes)) + int64(len(a.WorkspaceFingerprint)+len(a.PublishedIndexSignature))); err != nil {
 		return err
 	}
-	if err := charge(int64(len(a.WorkspaceFingerprint) + len(a.PublishedIndexSignature))); err != nil {
-		return err
-	}
-	for _, r := range a.IDRecords {
-		if err := charge(int64(len(r.Kind) + len(r.Public) + len(r.Canonical) + len(r.Full))); err != nil {
+	for _, v := range []any{a.Plan, a.PlanIdentity, a.UnitCandidates, a.MandatoryUnits, a.Citations, a.IDRecords} {
+		if err := accountValue(reflect.ValueOf(v), &remaining); err != nil {
+			if errors.Is(err, errManifestTooLarge) {
+				return fmt.Errorf("%w: manifest content exceeds the %d-byte ceiling", ErrManifestCorrupt, max)
+			}
 			return err
 		}
 	}
-	for k, v := range a.MandatoryUnits {
-		if err := charge(int64(len(k) + len(v))); err != nil {
-			return err
-		}
-	}
-	for k, c := range a.Citations {
-		if err := charge(int64(len(k) + len(c.ID) + len(c.Side) + len(c.Path) + len(c.ContentHash) + 32)); err != nil {
-			return err
-		}
-	}
-	for k, cands := range a.UnitCandidates {
-		if err := charge(int64(len(k))); err != nil {
-			return err
-		}
-		n, err := jsonSizeWithin(cands, remaining)
-		if err != nil {
-			return err
-		}
-		if err := charge(n); err != nil {
-			return err
-		}
-	}
-	n, err := jsonSizeWithin(a.Plan, remaining)
-	if err != nil {
-		return err
-	}
-	return charge(n)
+	return nil
 }
 
-// jsonSizeWithin returns the JSON-encoded size of v, failing closed as soon as
-// the encoding would exceed limit so a hostile value cannot allocate without
-// bound.
-func jsonSizeWithin(v any, limit int64) (int64, error) {
-	w := &countingLimitWriter{limit: limit}
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		if errors.Is(err, errManifestTooLarge) {
-			return 0, fmt.Errorf("%w: manifest content exceeds its ceiling", ErrManifestCorrupt)
+// base64Len is the standard-base64 encoded length of n raw bytes, used to charge
+// []byte/array values that JSON serializes as base64 strings.
+func base64Len(n int) int64 { return int64(4 * ((n + 2) / 3)) }
+
+// accountValue charges an upper bound on the JSON size of v against remaining
+// without marshaling, failing closed with errManifestTooLarge the moment the
+// running total would exceed the budget. It walks strings, byte slices/arrays
+// (as base64), slices, arrays, maps, and exported struct fields.
+func accountValue(v reflect.Value, remaining *int64) error {
+	charge := func(n int64) error {
+		if n < 0 || n > *remaining {
+			return errManifestTooLarge
 		}
-		return 0, fmt.Errorf("%w: %v", ErrManifestCorrupt, err)
+		*remaining -= n
+		return nil
 	}
-	return w.n, nil
-}
-
-// countingLimitWriter counts bytes written and fails once it would exceed limit.
-type countingLimitWriter struct {
-	n     int64
-	limit int64
-}
-
-func (w *countingLimitWriter) Write(p []byte) (int, error) {
-	w.n += int64(len(p))
-	if w.n > w.limit {
-		return 0, errManifestTooLarge
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return charge(4)
+		}
+		return accountValue(v.Elem(), remaining)
+	case reflect.String:
+		return charge(int64(v.Len()) + 2)
+	case reflect.Slice, reflect.Array:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			return charge(base64Len(v.Len()) + 2)
+		}
+		if err := charge(2); err != nil {
+			return err
+		}
+		for i := range v.Len() {
+			if err := charge(1); err != nil {
+				return err
+			}
+			if err := accountValue(v.Index(i), remaining); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Map:
+		if err := charge(2); err != nil {
+			return err
+		}
+		iter := v.MapRange()
+		for iter.Next() {
+			if err := charge(2); err != nil {
+				return err
+			}
+			if err := accountValue(iter.Key(), remaining); err != nil {
+				return err
+			}
+			if err := accountValue(iter.Value(), remaining); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Struct:
+		if err := charge(2); err != nil {
+			return err
+		}
+		t := v.Type()
+		for i := range v.NumField() {
+			if t.Field(i).PkgPath != "" {
+				continue // unexported field; not serialized
+			}
+			if err := charge(int64(len(t.Field(i).Name)) + 4); err != nil {
+				return err
+			}
+			if err := accountValue(v.Field(i), remaining); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return charge(24)
 	}
-	return len(p), nil
 }
 
 // marshalManifest computes the integrity digest and returns the serialized bytes.
