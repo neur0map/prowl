@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -9,6 +12,7 @@ import (
 
 	"github.com/prowl-agent/prowl-agent/internal/capability"
 	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/prowl-agent/prowl-agent/internal/setup"
 	"github.com/prowl-agent/prowl-agent/skills"
 )
 
@@ -142,6 +146,65 @@ func agentFacingCommandSources(t *testing.T) []agentFacingSource {
 		name: "project map block",
 		text: projectMapBlock(query.Overview{}),
 	})
+	sources = append(sources, generatedRoutingCommandSources(t)...)
+	sources = append(sources, reviewActionCommandSources(t)...)
+	return sources
+}
+
+func generatedRoutingCommandSources(t *testing.T) []agentFacingSource {
+	t.Helper()
+	root := t.TempDir()
+	agentsPath := filepath.Join(root, "AGENTS.md")
+	if err := setup.EnsureAgentsBlock(agentsPath); err != nil {
+		t.Fatal(err)
+	}
+	service, err := setup.NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := service.Plan(context.Background(), []string{setup.IntegrationOMP})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Apply(context.Background(), setup.ApplyRequest{
+		Integrations:                 plan.Integrations,
+		PlanHash:                     plan.Hash,
+		ExpectedProjectConfigVersion: plan.ProjectConfigVersion,
+		Approved:                     true,
+		IdempotencyKey:               "agent-facing-command-sources",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var sources []agentFacingSource
+	for name, path := range map[string]string{
+		"generated AGENTS.md": agentsPath,
+		"generated RULES.md":  filepath.Join(root, ".omp", "RULES.md"),
+	} {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sources = append(sources, agentFacingSource{name: name, text: string(content)})
+	}
+	return sources
+}
+
+func reviewActionCommandSources(t *testing.T) []agentFacingSource {
+	t.Helper()
+	var action reviewActionManifest
+	decodeReviewYAML(t, ".github/actions/prowl-review/action.yml", &action)
+	var sources []agentFacingSource
+	for _, step := range action.Runs.Steps {
+		if !strings.Contains(step.Run, "prowl-agent ") {
+			continue
+		}
+		script := strings.ReplaceAll(step.Run, "\\\n", " ")
+		sources = append(sources, agentFacingSource{
+			name: "review action step " + step.Name,
+			text: "```sh\n" + script + "\n```",
+		})
+	}
 	return sources
 }
 

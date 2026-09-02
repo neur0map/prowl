@@ -1,6 +1,12 @@
-name: "Prowl review"
-description: "Index the repository and run prowl-agent doctor, emitting SARIF for GitHub code scanning so new issues surface inline on the pull request."
+name: "Prowl review context"
+description: "Prepare deterministic Prowl review context and doctor diagnostics for a host coding agent; the action does not perform semantic review or post comments."
 inputs:
+  base:
+    description: "Immutable base commit SHA for the review range."
+    required: true
+  head:
+    description: "Immutable head commit SHA for the review range."
+    required: true
   fail-on:
     description: "Exit non-zero when findings reach this severity: none, warn, or error."
     default: "none"
@@ -11,18 +17,101 @@ inputs:
     description: "Where to write the SARIF report."
     default: "prowl-results.sarif"
 outputs:
+  plan:
+    description: "Path to the native review plan JSON artifact."
+    value: '${{ steps.plan.outputs.plan }}'
+  review-id:
+    description: "Stable identifier parsed from the native review plan."
+    value: '${{ steps.plan.outputs.review-id }}'
+  structured-required:
+    description: "Whether raw text churn requires the structured review protocol."
+    value: '${{ steps.plan.outputs.structured-required }}'
   sarif:
-    description: "Path to the written SARIF report."
-    value: ${{ inputs.sarif-path }}
+    description: "Path to the written doctor SARIF report."
+    value: '${{ inputs.sarif-path }}'
 runs:
   using: composite
   steps:
-    - name: Index the repository
+    - name: Validate review inputs
       shell: bash
-      run: prowl-agent init --no-input --no-ai >/dev/null
-    - name: Run prowl doctor (SARIF)
+      env:
+        PROWL_BASE: '${{ inputs.base }}'
+        PROWL_HEAD: '${{ inputs.head }}'
+        PROWL_FAIL_ON: '${{ inputs.fail-on }}'
+      run: |
+        set -euo pipefail
+        object_format="$(git rev-parse --show-object-format)"
+        case "$object_format" in
+          sha1) oid_length=40 ;;
+          sha256) oid_length=64 ;;
+          *)
+            echo "unsupported Git object format" >&2
+            exit 2
+            ;;
+        esac
+        printf -v zero_oid '%0*d' "$oid_length" 0
+        valid_oid() {
+          [[ ${#1} -eq $oid_length ]] && [[ "$1" =~ ^[0-9a-f]+$ ]] && [[ "$1" != "$zero_oid" ]]
+        }
+        if ! valid_oid "$PROWL_BASE"; then
+          echo "base must be a nonzero lowercase OID matching the repository object format" >&2
+          exit 2
+        fi
+        if ! valid_oid "$PROWL_HEAD"; then
+          echo "head must be a nonzero lowercase OID matching the repository object format" >&2
+          exit 2
+        fi
+        case "$PROWL_FAIL_ON" in
+          none|warn|error) ;;
+          *)
+            echo "fail-on must be one of: none, warn, error" >&2
+            exit 2
+            ;;
+        esac
+    - name: Initialize Prowl
       shell: bash
-      run: prowl-agent doctor --profile "${{ inputs.profile }}" --format sarif > "${{ inputs.sarif-path }}"
-    - name: Gate on findings
+      run: |
+        set -euo pipefail
+        prowl-agent init --no-input >/dev/null
+    - name: Freshen the Prowl index
       shell: bash
-      run: prowl-agent doctor --profile "${{ inputs.profile }}" --fail-on "${{ inputs.fail-on }}"
+      run: |
+        set -euo pipefail
+        prowl-agent overview --format json >/dev/null
+    - name: Plan native review context
+      id: plan
+      shell: bash
+      env:
+        PROWL_BASE: '${{ inputs.base }}'
+        PROWL_HEAD: '${{ inputs.head }}'
+      run: |
+        set -euo pipefail
+        umask 077
+        plan_path="$(mktemp "${RUNNER_TEMP}/prowl-review-plan.XXXXXX.json")"
+        prowl-agent review plan \
+          --base "$PROWL_BASE" \
+          --head "$PROWL_HEAD" \
+          --format json > "$plan_path"
+        review_id="$(jq -er '.review_id | select(type == "string" and length == 44 and test("^rvw_[0-9a-f]{40}$"))' "$plan_path")"
+        structured_required="$(jq -er '.structured_required | if type == "boolean" then tostring else error("structured_required must be boolean") end' "$plan_path")"
+        {
+          printf 'plan=%s\n' "$plan_path"
+          printf 'review-id=%s\n' "$review_id"
+          printf 'structured-required=%s\n' "$structured_required"
+        } >> "$GITHUB_OUTPUT"
+    - name: Run Prowl doctor (SARIF)
+      shell: bash
+      env:
+        PROWL_PROFILE: '${{ inputs.profile }}'
+        PROWL_SARIF_PATH: '${{ inputs.sarif-path }}'
+      run: |
+        set -euo pipefail
+        prowl-agent doctor --profile "$PROWL_PROFILE" --format sarif > "$PROWL_SARIF_PATH"
+    - name: Gate on doctor findings
+      shell: bash
+      env:
+        PROWL_FAIL_ON: '${{ inputs.fail-on }}'
+        PROWL_PROFILE: '${{ inputs.profile }}'
+      run: |
+        set -euo pipefail
+        prowl-agent doctor --profile "$PROWL_PROFILE" --fail-on "$PROWL_FAIL_ON"

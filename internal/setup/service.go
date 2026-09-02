@@ -1256,6 +1256,8 @@ or read whole files just to locate things. Prowl reindexes what changed before
 each query, so answers stay current and are cited to file:line, returned in one
 call instead of a grep hit list you then open files to disambiguate.
 
+Before reviewing a workspace, commit, or branch range, run ` + "`prowl-agent review plan`" + `. If raw additions plus deletions exceed 300 (` + "`raw_additions + raw_deletions > 300`" + `), review every returned unit and all four required audits, then run ` + "`prowl-agent review check`" + `; never approve an incomplete, stale, or invalid report.
+
 | Question | First command |
 |---|---|
 | Map the repository | ` + "`prowl-agent overview`" + ` |
@@ -1287,6 +1289,8 @@ overview, find <name>, def <name-or-id>, outline <path>, references <name-or-id>
 impact <path>, search "<question>", peek <file:start-end>. It answers from a
 cited index (reindexed before each query) in one call. Use grep only for exact
 literal or regex text and glob only for filename patterns.
+
+Before reviewing a workspace, commit, or branch range, run ` + "`prowl-agent review plan`" + `. If raw additions plus deletions exceed 300 (` + "`raw_additions + raw_deletions > 300`" + `), review every returned unit and all four required audits, then run ` + "`prowl-agent review check`" + `; never approve an incomplete, stale, or invalid report.
 ` + agentsEndMarker
 
 type mcpServer struct {

@@ -192,8 +192,8 @@ func TestReviewSkillFrontmatterAndProtocol(t *testing.T) {
 
 	compact := strings.Join(strings.Fields(strings.ToLower(skill.Content)), " ")
 	for _, clause := range []string{
-		"raw text additions plus removals greater than 300",
-		"300 or fewer",
+		"raw_additions + raw_deletions > 300",
+		"at or below that threshold",
 		"binary payload bytes are never counted",
 		"one bounded unit at a time",
 		"record its primary receipt",
@@ -215,6 +215,15 @@ func TestReviewSkillFrontmatterAndProtocol(t *testing.T) {
 			t.Errorf("review skill omits required protocol clause %q", clause)
 		}
 	}
+	for _, competing := range []string{
+		"raw text additions plus removals",
+		"greater than 300",
+		"300 or fewer",
+	} {
+		if strings.Contains(compact, competing) {
+			t.Errorf("review skill retains competing threshold wording %q", competing)
+		}
+	}
 	for _, command := range []string{
 		"`prowl-agent review plan [--base ref --head ref | --commit ref] [--structured]`",
 		"`prowl-agent review unit <review-id>/<unit-id> [--budget-tokens n --budget-bytes n]`",
@@ -231,6 +240,30 @@ func TestReviewSkillFrontmatterAndProtocol(t *testing.T) {
 	}
 	if strings.Contains(compact, "mcp") {
 		t.Error("review skill presents MCP as an alternative")
+	}
+}
+
+// Generated routing stays compact because this portable skill owns the detailed
+// unit, receipt, and four-audit protocol for every host.
+func TestReviewRoutingPortableSkillOwnsDetailedProtocol(t *testing.T) {
+	skill, ok := findSkill("prowl-pr-review")
+	if !ok {
+		t.Fatal("prowl-pr-review skill is not embedded")
+	}
+	compact := strings.Join(strings.Fields(strings.ToLower(skill.Content)), " ")
+	for _, detail := range []string{
+		"prowl-agent review unit",
+		"record its primary receipt",
+		"audit_removed_behavior_v1",
+		"audit_contract_migration_v1",
+		"audit_test_matrix_v1",
+		"audit_integration_gap_v1",
+		"acknowledged_primary_hunk_ids",
+		"acknowledged_audit_target_ids",
+	} {
+		if !strings.Contains(compact, detail) {
+			t.Errorf("portable review skill does not own protocol detail %q", detail)
+		}
 	}
 }
 

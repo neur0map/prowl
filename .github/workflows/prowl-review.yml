@@ -1,37 +1,159 @@
 name: prowl review
 
-# Prowl reviews every pull request: it indexes the changed tree and runs doctor,
-# uploading SARIF so GitHub code scanning surfaces only the issues this PR
-# introduces, inline on the diff. This workflow dogfoods Prowl on its own repo;
-# copy it (and the composite action) into any project after `prowl-agent init`.
+# The candidate tool and local action run only with contents:read. SARIF
+# publication is isolated in a job that neither checks out nor executes
+# pull-request head code.
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   review:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sarif-artifact-id: '${{ steps.sarif-artifact.outputs.artifact-id }}'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+      - name: Prepare immutable review range
+        id: range
+        shell: bash
+        env:
+          PROWL_EVENT_NAME: '${{ github.event_name }}'
+          PROWL_PR_BASE: '${{ github.event.pull_request.base.sha }}'
+          PROWL_PR_HEAD: '${{ github.event.pull_request.head.sha }}'
+          PROWL_PUSH_BASE: '${{ github.event.before }}'
+          PROWL_PUSH_HEAD: '${{ github.sha }}'
+        run: |
+          set -euo pipefail
+          object_format="$(git rev-parse --show-object-format)"
+          case "$object_format" in
+            sha1) oid_length=40 ;;
+            sha256) oid_length=64 ;;
+            *)
+              echo "unsupported Git object format" >&2
+              exit 2
+              ;;
+          esac
+          printf -v zero_oid '%0*d' "$oid_length" 0
+          valid_oid() {
+            [[ ${#1} -eq $oid_length ]] && [[ "$1" =~ ^[0-9a-f]+$ ]] && [[ "$1" != "$zero_oid" ]]
+          }
+          case "$PROWL_EVENT_NAME" in
+            pull_request)
+              if ! valid_oid "$PROWL_PR_BASE" || ! valid_oid "$PROWL_PR_HEAD"; then
+                echo "pull-request review range must contain nonzero lowercase OIDs matching the repository object format" >&2
+                exit 2
+              fi
+              if ! git cat-file -e "${PROWL_PR_HEAD}^{commit}"; then
+                echo "checked-out pull-request head does not match the immutable event OID" >&2
+                exit 2
+              fi
+              if ! git cat-file -e "${PROWL_PR_BASE}^{commit}"; then
+                git fetch --no-tags --no-recurse-submodules --force origin \
+                  "+${PROWL_PR_BASE}:refs/prowl-review/base"
+              fi
+              if ! git cat-file -e "${PROWL_PR_BASE}^{commit}"; then
+                echo "pull-request base OID is unavailable after exact fetch" >&2
+                exit 2
+              fi
+              base="$PROWL_PR_BASE"
+              head="$PROWL_PR_HEAD"
+              ;;
+            push)
+              if ! valid_oid "$PROWL_PUSH_HEAD"; then
+                echo "push review head must be a nonzero lowercase OID matching the repository object format" >&2
+                exit 2
+              fi
+              if [[ "$PROWL_PUSH_BASE" == "$zero_oid" ]]; then
+                printf 'skip=true\n' >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if ! valid_oid "$PROWL_PUSH_BASE"; then
+                echo "push review base must be a nonzero lowercase OID matching the repository object format" >&2
+                exit 2
+              fi
+              git fetch --no-tags --no-recurse-submodules --force origin \
+                "+${PROWL_PUSH_BASE}:refs/prowl-review/base" \
+                "+${PROWL_PUSH_HEAD}:refs/prowl-review/head"
+              if ! git cat-file -e "${PROWL_PUSH_BASE}^{commit}" ||
+                ! git cat-file -e "${PROWL_PUSH_HEAD}^{commit}"; then
+                echo "push review range is unavailable after exact fetch" >&2
+                exit 2
+              fi
+              base="$PROWL_PUSH_BASE"
+              head="$PROWL_PUSH_HEAD"
+              ;;
+            *)
+              echo "unsupported review event" >&2
+              exit 2
+              ;;
+          esac
+          {
+            printf 'skip=false\n'
+            printf 'base=%s\n' "$base"
+            printf 'head=%s\n' "$head"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Build prowl-agent
-        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$HOME/.local/bin/prowl-agent" ./cmd/prowl-agent
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$HOME/.local/bin/prowl-agent" ./cmd/prowl-agent
       - name: Add prowl-agent to PATH
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Prowl review
+      - name: Prepare Prowl review context
         id: prowl
+        if: "${{ steps.range.outputs.skip != 'true' }}"
         uses: ./.github/actions/prowl-review
         with:
+          base: '${{ steps.range.outputs.base }}'
+          head: '${{ steps.range.outputs.head }}'
           fail-on: error
-      - name: Upload SARIF
-        if: always()
+      - name: Upload review plan
+        if: "${{ always() && steps.prowl.outputs.plan != '' }}"
+        uses: actions/upload-artifact@v4
+        with:
+          name: prowl-review-plan
+          path: '${{ steps.prowl.outputs.plan }}'
+          if-no-files-found: error
+      - name: Upload doctor SARIF artifact
+        id: sarif-artifact
+        if: "${{ always() && steps.prowl.outputs.sarif != '' }}"
+        uses: actions/upload-artifact@v4
+        with:
+          name: prowl-doctor-sarif
+          path: '${{ steps.prowl.outputs.sarif }}'
+          if-no-files-found: ignore
+
+  publish-sarif:
+    needs: review
+    if: "${{ always() && needs.review.outputs.sarif-artifact-id != '' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}"
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Download doctor SARIF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: prowl-doctor-sarif
+          path: prowl-doctor-sarif
+      - name: Publish doctor SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: ${{ steps.prowl.outputs.sarif }}
+          sarif_file: prowl-doctor-sarif/prowl-results.sarif
           category: prowl-agent

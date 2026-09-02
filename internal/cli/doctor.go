@@ -28,6 +28,11 @@ func newDoctorCmd(version string) *cobra.Command {
 		Use:   "doctor",
 		Short: "Diagnose repository health (use --profile rice for desktop/dotfile checks)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			switch failOn {
+			case "none", "warn", "error":
+			default:
+				return fmt.Errorf("unknown doctor --fail-on value %q (choose none, warn, or error)", failOn)
+			}
 			if integrations {
 				for _, flag := range []string{"profile", "baseline", "fail-on", "include-excluded"} {
 					if cmd.Flags().Changed(flag) {

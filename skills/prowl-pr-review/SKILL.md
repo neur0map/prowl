@@ -21,10 +21,10 @@ Start with the native plan command whose complete syntax is
 Use no scope flags for the current workspace, `--base` and `--head` together for
 a branch or pull-request range, or `--commit` for one non-merge commit.
 
-Raw text additions plus removals greater than 300 require structured Prowl
-review. A change with 300 or fewer defaults to direct review unless
-`--structured` is supplied. Binary payload bytes are never counted. Do not try
-to force direct mode when the plan says `structured_required=true`.
+`raw_additions + raw_deletions > 300` requires structured Prowl review. At or
+below that threshold, review defaults to direct unless `--structured` is
+supplied. Binary payload bytes are never counted. Do not try to force direct
+mode when the plan says `structured_required=true`.
 
 When `mode=direct`, perform a focused review from the returned bounded context.
 The structured receipt matrix and four audits are not required, but the report

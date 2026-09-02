@@ -555,10 +555,8 @@ func TestSetupApplyInstallsAndRemovesEmbeddedSkills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read .omp/RULES.md: %v", err)
 	}
-	if !strings.Contains(string(rules), "<!-- prowl-agent -->") ||
-		!strings.Contains(string(rules), "prowl-agent") ||
-		strings.Contains(string(rules), "search_context") {
-		t.Fatalf(".omp/RULES.md is not the CLI-first sticky rule: %q", rules)
+	if got, want := string(rules), rulesBlock+"\n"; got != want {
+		t.Fatalf(".omp/RULES.md content = %q, want generated routing block %q", got, want)
 	}
 	// Removing the integrations takes their installed skill files back out.
 	if err := service.removeIntegrations([]string{IntegrationOMP, IntegrationClaude}); err != nil {
@@ -696,6 +694,28 @@ func TestSetupMigratesLegacyExplorationSkill(t *testing.T) {
 				t.Errorf("installed code-search content mismatch")
 			}
 		})
+	}
+}
+
+func TestReviewRoutingContractIsCompactAndMandatory(t *testing.T) {
+	const contract = "Before reviewing a workspace, commit, or branch range, run `prowl-agent review plan`. If raw additions plus deletions exceed 300 (`raw_additions + raw_deletions > 300`), review every returned unit and all four required audits, then run `prowl-agent review check`; never approve an incomplete, stale, or invalid report."
+	for name, body := range map[string]string{
+		"AGENTS.md block":     agentsBlock,
+		".omp/RULES.md block": rulesBlock,
+	} {
+		if count := strings.Count(body, contract); count != 1 {
+			t.Errorf("%s contains the mandatory review routing contract %d times, want once", name, count)
+		}
+		for _, portableDetail := range []string{
+			"prowl-agent review unit",
+			"audit_removed_behavior_v1",
+			"acknowledged_primary_hunk_ids",
+			"receipt",
+		} {
+			if strings.Contains(strings.ToLower(body), portableDetail) {
+				t.Errorf("%s duplicates portable review skill detail %q", name, portableDetail)
+			}
+		}
 	}
 }
 
