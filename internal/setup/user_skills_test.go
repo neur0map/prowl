@@ -179,6 +179,46 @@ func TestUserSkillPlanOMPDestinations(t *testing.T) {
 	}
 }
 
+func TestUserSkillsInstallReviewAssets(t *testing.T) {
+	opts := newUserOpts(t)
+	mustApply(t, opts)
+
+	var wantSkill, wantCommand string
+	for _, skill := range skills.All() {
+		if skill.Name == "prowl-pr-review" {
+			wantSkill = skill.Content
+			break
+		}
+	}
+	for _, asset := range skills.Native("claude") {
+		if asset.Path == "commands/review.md" {
+			wantCommand = asset.Content
+			break
+		}
+	}
+	if wantSkill == "" {
+		t.Fatal("embedded prowl-pr-review skill missing")
+	}
+	if wantCommand == "" {
+		t.Fatal("embedded Claude review command missing")
+	}
+
+	for rel, want := range map[string]string{
+		".claude/skills/prowl/skills/prowl-pr-review/SKILL.md": wantSkill,
+		".claude/skills/prowl/commands/review.md":              wantCommand,
+		".omp/agent/skills/prowl-pr-review/SKILL.md":           wantSkill,
+	} {
+		got, err := os.ReadFile(filepath.Join(opts.Home, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Errorf("read installed review asset %s: %v", rel, err)
+			continue
+		}
+		if string(got) != want {
+			t.Errorf("installed review asset %s differs from embedded source", rel)
+		}
+	}
+}
+
 // TestUserSkillPlanPreviewOrderingIsStable proves the previewed destinations are
 // deterministically ordered and carry no absolute paths or file bodies.
 func TestUserSkillPlanPreviewOrderingIsStable(t *testing.T) {

@@ -1,0 +1,16 @@
+name: review-large-change
+title: Review a large change with complete coverage
+description: Partition a workspace, commit, or PR range into bounded graph-aware review units and verify review coverage.
+triggers: [review pull request, review commit, review large diff, review agent generated change]
+requires: [workspace index, local git repository]
+outputs: [review plan, bounded units, coverage check]
+privacy: local-only
+read_only: true
+version: "1"
+prompts: [review-change]
+resources: []
+tools: []
+commands:
+  - prowl-agent review plan --base <base> --head <head>
+  - prowl-agent review unit <review-id>/<unit-id>
+  - prowl-agent review check --review <review-id> --report <report.json>
