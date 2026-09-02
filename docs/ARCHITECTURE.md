@@ -22,6 +22,8 @@ internal/graph       include / exec / resource resolution and role inference
 internal/index       ignore-aware walk and hash-based incremental indexing
 internal/store       SQLite schema, FTS5, sqlite-vec, graph reads (blast-radius CTE)
 internal/query       structural queries and hybrid/semantic search
+internal/review      deterministic Git capture, review planning, bounded units, durable plan state, and report checks
+internal/revieweval  developer-only corpus preparation, trial collection, frozen scoring, and shipping gates
 internal/doctor      health checks (cycles, conflicts, hotspots)
 internal/mcp         MCP stdio server
 internal/lsp         Language Server (stdio) for editors (definition, references, hover, ...)
@@ -77,6 +79,58 @@ internal/assist      optional Ollama / coding-agent inferencer (higher-quality e
 
 Indexing is incremental: only files whose content hash changed are reparsed, and
 graph resolution re-runs globally so the index stays correct as files move around.
+
+## Native change review
+
+The experimental `prowl-agent review` command group is CLI-first and has no MCP
+core tool. `internal/cli/review.go` contains only Cobra wiring and presentation;
+`internal/review` owns the transport-independent Git capture, raw churn
+accounting, deterministic planning, bounded unit assembly, persistence, and
+report validation. Prowl neither invokes a model nor claims semantic correctness;
+substantive review remains the host coding agent's responsibility. Mandatory
+generated routing and the GitHub Action cutover remain disabled until the frozen
+held-out gates pass.
+
+Workspace planning is a verified transaction. It fingerprints the resolved
+`HEAD` plus tracked and untracked content around index refreshes, and accepts a
+plan only when both captures and the published index signature agree; one full
+retry is allowed before the operation fails as concurrently modified. Commit
+and range scopes resolve immutable Git object IDs. When the checked-out
+workspace is not exactly the clean resolved head, Prowl materializes a private
+snapshot directly from Git tree/blob objects and builds a private head index
+without checking out the revision or running repository code.
+
+Plans and their private snapshots live outside the worktree under
+`<git-common-dir>/prowl/`, so linked worktrees share one durable identity,
+locking, collision, and retention domain without adding review artifacts to
+workspace status. A plan ID binds the resolved scope, canonical patch, planning
+outputs, and head-index content signature. Persisted manifests, snapshots,
+mandatory unit payloads, and content-derived IDs are integrity-checked when
+saved and loaded.
+
+`review unit` reads one persisted territory at a time. Its complete owned patch
+is mandatory; cited symbols and graph context are optional and bounded.
+`review check` binds canonical `review.report.v1` JSON back to the plan,
+recomputes workspace scope fingerprints and `HEAD` freshness, and validates
+identity, locations, citations, recommendations, and structured receipt
+coverage. Missing coverage is incomplete and a moved workspace is stale; both
+fail closed. Commit and range plans remain bound to their immutable object IDs.
+The checker validates deterministic evidence and coverage, not whether a
+finding is semantically true.
+
+`internal/revieweval` is a separate developer evaluation boundary rather than a
+runtime review dependency. Corpus preparation binds candidates to immutable
+source manifests, provenance and license records, Git revisions and exact
+change facts, claim/audit evidence, partition membership, and frozen protocol
+pins. Missing, ambiguous, or mismatched evidence fails preparation instead of
+entering a tuning or held-out corpus.
+
+Evaluation collection and scoring are separate phases. Collection retains
+condition-neutral trial output and raw artifacts under the frozen toolchain and
+budgets. Scoring later consumes that retained collection plus a frozen blind
+adjudication matrix, applies deterministic failure scoring and aggregation, and
+evaluates the shipping gates. This keeps corpus qualification, trial execution,
+human evidence adjudication, and metric calculation as distinct boundaries.
 
 ## Semantic layer
 
