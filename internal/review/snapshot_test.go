@@ -723,3 +723,88 @@ func TestMaterializeBatchCheckStrictFraming(t *testing.T) {
 		}
 	}
 }
+
+// ---- immutable revision binding (TASK5-003) --------------------------------
+
+// TestHeadViewRejectsUnresolvedTreeish proves OpenHeadView refuses a mutable ref
+// or option-like tree-ish (head or base) before running any Git command, so a
+// review can never bind to content that could move.
+func TestHeadViewRejectsUnresolvedTreeish(t *testing.T) {
+	// A runner that fails if invoked proves validation happens before any Git call.
+	runner := fakeTreeRunner{
+		onOutput: func(args []string) ([]byte, error) { return nil, fmt.Errorf("git must not run: %v", args) },
+		onPipe:   func(_ io.Reader, args []string) ([]byte, error) { return nil, fmt.Errorf("git must not run: %v", args) },
+	}
+	cases := []struct {
+		name string
+		base string
+		head string
+	}{
+		{"head is a ref", "", "HEAD"},
+		{"head is a short id", "", "abc123"},
+		{"head is option-like", "", "--output=/etc/passwd"},
+		{"base is a ref", "main", fortyHex},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := OpenHeadView(context.Background(), HeadViewOptions{
+				Runner:         runner,
+				RepoRoot:       t.TempDir(),
+				ObjectFormat:   "sha1",
+				BaseTreeish:    tc.base,
+				HeadTreeish:    tc.head,
+				SnapshotParent: t.TempDir(),
+			})
+			if !errors.Is(err, ErrSnapshotTreeishNotResolved) {
+				t.Fatalf("err=%v, want ErrSnapshotTreeishNotResolved", err)
+			}
+		})
+	}
+}
+
+// ---- oversized symlink availability (TASK5-011) ----------------------------
+
+// TestHeadViewOversizedSymlinkOmitted proves a symlink blob larger than the
+// symlink cap is recorded as an omission and never read into a content wave, so
+// a hostile large 120000 blob (below the total cap) cannot make the view
+// unavailable; its bytes remain available through the resolver.
+func TestHeadViewOversizedSymlinkOmitted(t *testing.T) {
+	f := newGitFixture(t)
+	f.write(t, "keep.go", "package pkg\n\nfunc Kept() {}\n")
+	f.commit(t, "seed")
+	f.commitBlobEntry(t, "120000", "biglink", "keep.go") // 7-byte target, over a cap of 4
+	head := f.revParse(t, "HEAD")
+
+	var links []string
+	seam := func(root *os.Root, target, name string) error {
+		links = append(links, name)
+		return root.Symlink(target, name)
+	}
+	hv, err := OpenHeadView(context.Background(), HeadViewOptions{
+		Runner:          f.runner,
+		RepoRoot:        f.root,
+		ObjectFormat:    "sha1",
+		HeadTreeish:     head,
+		SnapshotParent:  t.TempDir(),
+		MaxSymlinkBytes: 4,
+		symlink:         seam,
+	})
+	if err != nil {
+		t.Fatalf("OpenHeadView: %v", err)
+	}
+	defer hv.Close()
+
+	if !hasOmission(hv.Omissions, "biglink") {
+		t.Fatalf("oversized symlink not omitted: %+v", hv.Omissions)
+	}
+	if contains(links, "biglink") {
+		t.Fatal("oversized symlink was materialized as a filesystem link")
+	}
+	entry, err := hv.Sources.Read(context.Background(), SideHead, "biglink", 1<<20)
+	if err != nil || string(entry.Bytes) != "keep.go" {
+		t.Fatalf("biglink target=%q err=%v, want keep.go", entry.Bytes, err)
+	}
+	if hits, err := hv.Query.FindSymbol("Kept"); err != nil || len(hits) == 0 {
+		t.Fatalf("FindSymbol(Kept)=%v err=%v; materialization aborted", hits, err)
+	}
+}

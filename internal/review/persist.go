@@ -22,6 +22,7 @@ package review
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -189,23 +190,47 @@ type planManifest struct {
 
 // SnapshotLease is a store-owned directory beneath <common>/prowl/snapshots that
 // a caller materializes into and then hands to Save. Only the store can mint a
-// lease, and Save validates it (no-follow directory, same device, store-owned)
-// before consuming it, so a caller can never direct Save at an arbitrary
-// destructive path. An unconsumed lease is the caller's to Release.
+// lease; its backing path is immutable from outside (exposed read-only via Dir)
+// so it can never be redirected into an arbitrary destructive path. Save and
+// Release both revalidate the lease (store-owned, direct child of the snapshots
+// root, no-follow real directory) before consuming or deleting it. An unconsumed
+// lease is the caller's to Release.
 type SnapshotLease struct {
-	Dir      string
+	dir      string
 	store    *PlanStore
 	consumed bool
 }
 
-// Release deletes an unconsumed lease directory. It is a no-op once the lease has
-// been consumed by a successful Save.
+// Dir is the directory the caller materializes its snapshot into. It is
+// read-only: the lease's backing path cannot be reassigned by a caller.
+func (l *SnapshotLease) Dir() string {
+	if l == nil {
+		return ""
+	}
+	return l.dir
+}
+
+// Release validates and deletes an unconsumed lease directory through the
+// store's confined snapshots root (no-follow). It is a no-op once the lease has
+// been consumed by a successful Save, and it refuses to delete a lease that is
+// not a genuine store-owned directory.
 func (l *SnapshotLease) Release() error {
 	if l == nil || l.consumed {
 		return nil
 	}
+	if l.store == nil {
+		return fmt.Errorf("%w: lease has no owning store", ErrSnapshotLease)
+	}
+	if err := l.store.validateLease(l); err != nil {
+		return err
+	}
 	l.consumed = true
-	return os.RemoveAll(l.Dir)
+	sroot, err := os.OpenRoot(l.store.snapshotsDir)
+	if err != nil {
+		return err
+	}
+	defer sroot.Close()
+	return sroot.RemoveAll(filepath.Base(l.dir))
 }
 
 // PlanStore persists plans beneath the Git common directory. It is safe to open
@@ -232,6 +257,10 @@ type PlanStore struct {
 	// pruneOverride, when set, replaces the post-publication retention pass so a
 	// test can observe a surfaced prune warning deterministically.
 	pruneOverride func(context.Context, time.Time) error
+	// renameFn performs the cross-root snapshot moves (lease->temp and the
+	// rollback restore); injectable so a test can force a restore failure and
+	// prove the sole snapshot is preserved rather than deleted.
+	renameFn func(oldpath, newpath string) error
 }
 
 // OpenPlanStore resolves the Git common directory, roots the review state beneath
@@ -245,9 +274,16 @@ func OpenPlanStore(ctx context.Context, runner GitRunner, repoRoot string) (*Pla
 	if err != nil {
 		return nil, err
 	}
-	root := filepath.Join(common, "prowl", reviewsSubdir)
-	locks := filepath.Join(root, locksSubdir)
-	snapshots := filepath.Join(common, "prowl", snapshotsSubdir)
+	prowlDir := filepath.Join(common, "prowl")
+	root := filepath.Join(prowlDir, reviewsSubdir)
+	// Lock files and snapshots live as siblings of the reviews root (not inside
+	// it), so a swap or symlink-replacement of the reviews directory cannot
+	// redirect a lock or snapshot write, and reader/pruner locks stay stable.
+	locks := filepath.Join(prowlDir, locksSubdir)
+	snapshots := filepath.Join(prowlDir, snapshotsSubdir)
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(locks, 0o700); err != nil {
 		return nil, err
 	}
@@ -263,12 +299,13 @@ func OpenPlanStore(ctx context.Context, runner GitRunner, repoRoot string) (*Pla
 		rootDir:      rootDir,
 		locksDir:     locks,
 		snapshotsDir: snapshots,
-		lockPath:     filepath.Join(root, storeLockName),
+		lockPath:     filepath.Join(prowlDir, storeLockName),
 		lockTimeout:  defaultLockTimeout,
 		maxManifest:  maxManifestBytesV1,
 		digest:       func(b []byte) Digest { return sha256.Sum256(b) },
 		now:          time.Now,
 		sameDevice:   sameDevice,
+		renameFn:     os.Rename,
 	}, nil
 }
 
@@ -286,8 +323,8 @@ func (s *PlanStore) Close() error {
 }
 
 // NewSnapshotLease mints a fresh store-owned snapshot directory under the store's
-// snapshots root. The caller materializes into lease.Dir and then hands the lease
-// to Save (or Release()s it on an abandoned attempt).
+// snapshots root. The caller materializes into lease.Dir() and then hands the
+// lease to Save (or Release()s it on an abandoned attempt).
 func (s *PlanStore) NewSnapshotLease(ctx context.Context) (*SnapshotLease, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -299,7 +336,7 @@ func (s *PlanStore) NewSnapshotLease(ctx context.Context) (*SnapshotLease, error
 	if err != nil {
 		return nil, err
 	}
-	return &SnapshotLease{Dir: dir, store: s}, nil
+	return &SnapshotLease{dir: dir, store: s}, nil
 }
 
 // Save persists artifacts atomically under the plan's review id. It recomputes
@@ -328,13 +365,19 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 	}
 	defer release()
 
-	reviewDir := filepath.Join(s.root, reviewID)
 	if existing, err := s.loadManifest(ctx, reviewID); err == nil {
 		existingFull := sha256.Sum256(existing.PlanIdentityBytes)
 		if existingFull == full {
-			// Identical immutable plan: reuse, deleting the redundant incoming
-			// lease so the caller does not leak a temp tree.
-			_ = lease.Release()
+			// Identical immutable plan: reuse only after the existing manifest
+			// passes the same full verification a fresh Save would, so a corrupt
+			// or invalid persisted plan is never silently accepted.
+			if verr := s.verifyManifest(ctx, existing); verr != nil {
+				return SaveResult{}, verr
+			}
+			// Delete the redundant incoming lease; a bad lease surfaces its error.
+			if rerr := lease.Release(); rerr != nil {
+				return SaveResult{}, rerr
+			}
 			return SaveResult{ReviewID: reviewID, Reused: true}, nil
 		}
 		return SaveResult{}, fmt.Errorf("%w: review %s already persisted with a different identity", ErrIDCollision, reviewID)
@@ -342,11 +385,28 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 		return SaveResult{}, err
 	}
 
+	// Cap before allocation: the mandatory unit bytes dominate manifest size, so
+	// reject an over-ceiling payload before decoding/marshaling, and again the
+	// marshaled bytes before publication, so Save never persists a review its own
+	// Load would reject as oversized.
+	var artifactBytes int64
+	for _, v := range artifacts.MandatoryUnits {
+		artifactBytes += int64(len(v))
+	}
+	if artifactBytes > s.maxManifest {
+		return SaveResult{}, fmt.Errorf("%w: mandatory unit bytes exceed the %d-byte ceiling", ErrManifestCorrupt, s.maxManifest)
+	}
+
 	registry, err := s.buildDomainRegistry(ctx, reviewID)
 	if err != nil {
 		return SaveResult{}, err
 	}
 	if _, err := addPlanToRegistry(ctx, registry, s.digest, artifacts.Plan, artifacts.Citations, artifacts.UnitCandidates, artifacts.MandatoryUnits, artifacts.IDRecords, full); err != nil {
+		return SaveResult{}, err
+	}
+	// Bind the canonical identity bytes to this plan and validate its mandatory
+	// unit payloads (only for the plan being saved, not the domain siblings).
+	if err := verifyArtifactIntegrity(artifacts.Plan, artifacts.IDRecords, artifacts.PlanIdentityBytes, artifacts.MandatoryUnits); err != nil {
 		return SaveResult{}, err
 	}
 
@@ -369,7 +429,10 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 	if err != nil {
 		return SaveResult{}, err
 	}
-	if err := s.publish(reviewDir, payload, lease); err != nil {
+	if int64(len(payload)) > s.maxManifest {
+		return SaveResult{}, fmt.Errorf("%w: manifest is %d bytes, exceeds the %d-byte ceiling", ErrManifestCorrupt, len(payload), s.maxManifest)
+	}
+	if err := s.publish(reviewID, payload, lease); err != nil {
 		return SaveResult{}, err
 	}
 
@@ -384,12 +447,16 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 	return res, nil
 }
 
-// publish writes the manifest into a temp directory, validates and moves the
-// caller's leased snapshot into it, then atomically renames it to the review
-// directory. A pre-publication failure leaves the caller's lease intact
-// (restoring it if it was already moved) and no review or temp directory behind.
-func (s *PlanStore) publish(reviewDir string, payload []byte, lease *SnapshotLease) error {
-	tmp, err := os.MkdirTemp(s.root, ".tmp-save-")
+// publish writes the manifest into a temp directory created through the pinned
+// reviews root, validates and moves the caller's leased snapshot into it, then
+// atomically renames it to the review directory - all relative to the pinned
+// descriptor, so a swap of the reviews path can neither split reads from writes
+// nor redirect the rename outside the owned root. A pre-publication failure
+// restores the caller's lease; if that restore itself fails, the sole snapshot is
+// preserved in the temp tree and the rollback failure is surfaced rather than
+// deleting the only copy.
+func (s *PlanStore) publish(reviewID string, payload []byte, lease *SnapshotLease) (err error) {
+	tmpName, err := s.mkdirTemp()
 	if err != nil {
 		return err
 	}
@@ -400,44 +467,80 @@ func (s *PlanStore) publish(reviewDir string, payload []byte, lease *SnapshotLea
 			return
 		}
 		if moved && lease != nil {
-			// Restore the caller's lease before the temp directory is removed.
-			if rerr := os.Rename(filepath.Join(tmp, snapshotName), lease.Dir); rerr == nil {
-				lease.consumed = false
+			// Restore the caller's lease before removing the temp tree. If the
+			// restore fails, keep the temp tree (holding the only snapshot) and
+			// surface the rollback failure instead of destroying the sole copy.
+			src := filepath.Join(s.root, tmpName, snapshotName)
+			if rerr := s.renameFn(src, lease.dir); rerr != nil {
+				err = errors.Join(err, fmt.Errorf("%w: snapshot preserved at %s; rollback failed: %v", ErrSnapshotOwnership, src, rerr))
+				return
 			}
+			lease.consumed = false
 		}
-		_ = os.RemoveAll(tmp)
+		_ = s.rootDir.RemoveAll(tmpName)
 	}()
-	if err := writeRootedFile(tmp, manifestName, payload); err != nil {
+	tr, err := s.rootDir.OpenRoot(tmpName)
+	if err != nil {
 		return err
 	}
+	werr := tr.WriteFile(manifestName, payload, 0o600)
+	tr.Close()
+	if werr != nil {
+		return werr
+	}
 	if lease != nil {
-		if err := s.consumeLease(lease, filepath.Join(tmp, snapshotName)); err != nil {
-			return err
+		if cerr := s.consumeLease(lease, tmpName); cerr != nil {
+			return cerr
 		}
 		moved = true
 	}
-	if err := os.Rename(tmp, reviewDir); err != nil {
-		return fmt.Errorf("%w: %v", ErrSnapshotOwnership, err)
+	if rerr := s.rootDir.Rename(tmpName, reviewID); rerr != nil {
+		return fmt.Errorf("%w: %v", ErrSnapshotOwnership, rerr)
 	}
 	committed = true
 	return nil
 }
 
-// consumeLease validates that a lease is a genuine store-owned directory - minted
-// by this store, a direct child of the snapshots root reached without a symlink,
-// a real directory, and on the same device as the review root - and then moves it
-// to dest, marking it consumed. Any validation failure leaves the lease intact.
-func (s *PlanStore) consumeLease(lease *SnapshotLease, dest string) error {
+// mkdirTemp creates a uniquely-named temp directory through the pinned reviews
+// root, so it is created on the same inode reads and the final rename use.
+func (s *PlanStore) mkdirTemp() (string, error) {
+	for range 100 {
+		var b [12]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return "", err
+		}
+		name := ".tmp-save-" + hex.EncodeToString(b[:])
+		err := s.rootDir.Mkdir(name, 0o700)
+		if err == nil {
+			return name, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return "", err
+		}
+	}
+	return "", errors.New("review: could not create a unique temp directory")
+}
+
+// validateLease proves a lease is a genuine store-owned directory: minted by this
+// store, unconsumed, a direct lease-prefixed child of the snapshots root, and a
+// real directory reached without a symlink. It never follows or deletes.
+func (s *PlanStore) validateLease(lease *SnapshotLease) error {
+	if lease == nil {
+		return fmt.Errorf("%w: nil lease", ErrSnapshotLease)
+	}
 	if lease.store != s {
 		return fmt.Errorf("%w: lease was not issued by this store", ErrSnapshotLease)
 	}
 	if lease.consumed {
 		return fmt.Errorf("%w: lease already consumed", ErrSnapshotLease)
 	}
-	if filepath.Dir(lease.Dir) != s.snapshotsDir {
-		return fmt.Errorf("%w: %q is not under the store snapshots root", ErrSnapshotLease, lease.Dir)
+	if filepath.Dir(lease.dir) != s.snapshotsDir {
+		return fmt.Errorf("%w: %q is not under the store snapshots root", ErrSnapshotLease, lease.dir)
 	}
-	base := filepath.Base(lease.Dir)
+	base := filepath.Base(lease.dir)
+	if !strings.HasPrefix(base, leasePrefix) {
+		return fmt.Errorf("%w: %q is not a lease directory", ErrSnapshotLease, lease.dir)
+	}
 	sroot, err := os.OpenRoot(s.snapshotsDir)
 	if err != nil {
 		return err
@@ -448,19 +551,43 @@ func (s *PlanStore) consumeLease(lease *SnapshotLease, dest string) error {
 		return fmt.Errorf("%w: %v", ErrSnapshotLease, err)
 	}
 	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
-		return fmt.Errorf("%w: %q is not a real directory", ErrSnapshotLease, lease.Dir)
+		return fmt.Errorf("%w: %q is not a real directory", ErrSnapshotLease, lease.dir)
 	}
-	same, err := s.sameDevice(s.root, lease.Dir)
+	return nil
+}
+
+// consumeLease validates a store-owned lease, requires it be on the same device
+// as the review root, moves it into <tmpName>/snapshot, and then re-verifies the
+// published entry with a no-follow stat through the pinned root, so a source
+// swapped for a symlink between validation and the move cannot be published.
+func (s *PlanStore) consumeLease(lease *SnapshotLease, tmpName string) error {
+	if err := s.validateLease(lease); err != nil {
+		return err
+	}
+	same, err := s.sameDevice(s.root, lease.dir)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrSnapshotLease, err)
 	}
 	if !same {
-		return fmt.Errorf("%w: %q is on a different device", ErrSnapshotLease, lease.Dir)
+		return fmt.Errorf("%w: %q is on a different device", ErrSnapshotLease, lease.dir)
 	}
-	if err := os.Rename(lease.Dir, dest); err != nil {
+	dest := filepath.Join(s.root, tmpName, snapshotName)
+	if err := s.renameFn(lease.dir, dest); err != nil {
 		return fmt.Errorf("%w: %v", ErrSnapshotOwnership, err)
 	}
 	lease.consumed = true
+	tr, err := s.rootDir.OpenRoot(tmpName)
+	if err != nil {
+		return err
+	}
+	defer tr.Close()
+	info, err := tr.Lstat(snapshotName)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrSnapshotLease, err)
+	}
+	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("%w: published snapshot is not a real directory", ErrSnapshotLease)
+	}
 	return nil
 }
 
@@ -610,6 +737,9 @@ func (s *PlanStore) verifyManifest(ctx context.Context, m planManifest) error {
 	if _, err := addPlanToRegistry(ctx, registry, s.digest, m.Plan, m.Citations, m.UnitCandidates, m.MandatoryUnits, m.IDRecords, full); err != nil {
 		return err
 	}
+	if err := verifyArtifactIntegrity(m.Plan, m.IDRecords, m.PlanIdentityBytes, m.MandatoryUnits); err != nil {
+		return err
+	}
 	return ctx.Err()
 }
 
@@ -653,7 +783,10 @@ func addPlanToRegistry(ctx context.Context, registry map[string]Digest, digest f
 	if err != nil {
 		return nil, err
 	}
-	enumerated := enumeratePlanIDs(plan, citations, unitCandidates, mandatoryUnits)
+	enumerated, err := collectPlanIDs(plan, citations, unitCandidates, mandatoryUnits)
+	if err != nil {
+		return nil, err
+	}
 	for id := range enumerated {
 		if _, ok := byPublic[id]; !ok {
 			return nil, fmt.Errorf("%w: plan references %s with no identity record", ErrIDRegistry, id)
@@ -717,54 +850,299 @@ func registerID(registry map[string]Digest, public string, full Digest) error {
 	return nil
 }
 
-// enumeratePlanIDs collects every syntactically valid content-derived public ID
-// the plan, its unit candidates, mandatory units, and citations reference.
-func enumeratePlanIDs(plan Plan, citations map[string]CitationProof, unitCandidates map[string][]contextpacket.Candidate, mandatoryUnits map[string][]byte) map[string]struct{} {
+// collectPlanIDs collects every content-derived public ID the plan, its unit
+// candidates, mandatory units, and citations reference, enforcing the exact kind
+// each field must carry and rejecting any malformed or wrong-kind reference so a
+// field can never smuggle an ID of another kind past the registry.
+func collectPlanIDs(plan Plan, citations map[string]CitationProof, unitCandidates map[string][]contextpacket.Candidate, mandatoryUnits map[string][]byte) (map[string]struct{}, error) {
 	set := map[string]struct{}{}
-	add := func(id string) {
-		if _, ok := contentKindOf(id); ok {
-			set[id] = struct{}{}
+	addKind := func(id, kind string) error {
+		k, ok := contentKindOf(id)
+		if !ok {
+			return fmt.Errorf("%w: malformed content id %q", ErrIDRegistry, id)
 		}
+		if k != kind {
+			return fmt.Errorf("%w: id %q is kind %q, expected %q", ErrIDRegistry, id, k, kind)
+		}
+		set[id] = struct{}{}
+		return nil
+	}
+	addContent := func(id string) error {
+		if _, ok := contentKindOf(id); !ok {
+			return fmt.Errorf("%w: malformed content id %q", ErrIDRegistry, id)
+		}
+		set[id] = struct{}{}
+		return nil
 	}
 	for _, p := range plan.ChangedPaths {
-		add(p.PathID)
+		if err := addKind(p.PathID, PathIDPrefixV1); err != nil {
+			return nil, err
+		}
 	}
 	for _, c := range plan.Cohorts {
-		add(c.CohortID)
+		if err := addKind(c.CohortID, CohortIDPrefixV1); err != nil {
+			return nil, err
+		}
 		for _, u := range c.UnitIDs {
-			add(u)
+			if err := addKind(u, UnitIDPrefixV1); err != nil {
+				return nil, err
+			}
 		}
 		for _, l := range c.Layers {
-			add(l.LayerID)
+			if err := addKind(l.LayerID, LayerIDPrefixV1); err != nil {
+				return nil, err
+			}
 			for _, u := range l.UnitIDs {
-				add(u)
+				if err := addKind(u, UnitIDPrefixV1); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 	for _, u := range plan.PrimaryUnits {
-		add(u.UnitID)
-		add(u.CohortID)
-		add(u.LayerID)
+		if err := addKind(u.UnitID, UnitIDPrefixV1); err != nil {
+			return nil, err
+		}
+		if err := addKind(u.CohortID, CohortIDPrefixV1); err != nil {
+			return nil, err
+		}
+		if err := addKind(u.LayerID, LayerIDPrefixV1); err != nil {
+			return nil, err
+		}
 		for _, h := range u.Hunks {
-			add(h.PathID)
+			if err := addKind(h.PathID, PathIDPrefixV1); err != nil {
+				return nil, err
+			}
 		}
 	}
 	for _, a := range plan.RequiredAudits {
 		for _, target := range a.TargetIDs {
-			add(target)
+			if err := addKind(target, TargetIDPrefixV1); err != nil {
+				return nil, err
+			}
 		}
 	}
 	for key, c := range citations {
-		add(key)
-		add(c.ID)
+		if err := addContent(key); err != nil {
+			return nil, err
+		}
+		if err := addContent(c.ID); err != nil {
+			return nil, err
+		}
 	}
 	for key := range unitCandidates {
-		add(key)
+		if err := addKind(key, UnitIDPrefixV1); err != nil {
+			return nil, err
+		}
 	}
 	for key := range mandatoryUnits {
-		add(key)
+		if err := addKind(key, UnitIDPrefixV1); err != nil {
+			return nil, err
+		}
 	}
-	return set
+	return set, nil
+}
+
+// verifyArtifactIntegrity binds the canonical identity bytes to the persisted
+// plan and records, and validates the mandatory unit payloads. It is run only for
+// the plan being saved or loaded (never for unrelated domain siblings).
+func verifyArtifactIntegrity(plan Plan, records []IDRecord, identityBytes []byte, mandatory map[string][]byte) error {
+	if err := verifyIdentityBinding(plan, records, identityBytes); err != nil {
+		return err
+	}
+	return validateMandatoryUnits(plan, mandatory)
+}
+
+// verifyIdentityBinding proves the canonical identity bytes describe exactly this
+// plan: (a) the content-ID digests embedded in the identity encoding equal the
+// set of record full digests, and (b) each changed-path's visible old/new/status
+// equal the values encoded in its p_ record's canonical input, so the public
+// review id can never name content different from what it was derived over.
+func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) error {
+	top, err := decodeFramedFields(identityBytes)
+	if err != nil {
+		return fmt.Errorf("%w: undecodable identity bytes: %v", ErrPlanIdentityMismatch, err)
+	}
+	if string(top["schema"]) != PlanSchemaV1 {
+		return fmt.Errorf("%w: identity schema %q", ErrPlanIdentityMismatch, top["schema"])
+	}
+	embedded := map[Digest]bool{}
+	collect := func(section string, fields ...string) error {
+		items, err := decodeFrameList(top[section])
+		if err != nil {
+			return err
+		}
+		for _, it := range items {
+			f, err := decodeFramedFields(it)
+			if err != nil {
+				return err
+			}
+			for _, name := range fields {
+				if name == "target_ids" {
+					digs, err := decodeFrameList(f[name])
+					if err != nil {
+						return err
+					}
+					for _, d := range digs {
+						dig, err := asDigest(d)
+						if err != nil {
+							return err
+						}
+						embedded[dig] = true
+					}
+					continue
+				}
+				dig, err := asDigest(f[name])
+				if err != nil {
+					return err
+				}
+				embedded[dig] = true
+			}
+		}
+		return nil
+	}
+	for _, c := range []struct {
+		section string
+		fields  []string
+	}{
+		{"paths", []string{"path_id"}},
+		{"hunks", []string{"hunk_id"}},
+		{"units", []string{"unit_id"}},
+		{"cohorts", []string{"cohort_id", "layer_id"}},
+		{"audits", []string{"target_ids"}},
+	} {
+		if err := collect(c.section, c.fields...); err != nil {
+			return fmt.Errorf("%w: identity %s: %v", ErrPlanIdentityMismatch, c.section, err)
+		}
+	}
+	recordFulls := make(map[Digest]bool, len(records))
+	for _, r := range records {
+		recordFulls[r.Full] = true
+	}
+	if len(embedded) != len(recordFulls) {
+		return fmt.Errorf("%w: identity embeds %d content ids, records carry %d", ErrPlanIdentityMismatch, len(embedded), len(recordFulls))
+	}
+	for d := range recordFulls {
+		if !embedded[d] {
+			return fmt.Errorf("%w: a record digest is absent from the identity bytes", ErrPlanIdentityMismatch)
+		}
+	}
+	// (b) Each changed path's visible fields must match its p_ record canonical.
+	byPublic := make(map[string]IDRecord, len(records))
+	for _, r := range records {
+		byPublic[r.Public] = r
+	}
+	for _, cp := range plan.ChangedPaths {
+		r, ok := byPublic[cp.PathID]
+		if !ok {
+			continue // absence is caught by the registry set-equality check
+		}
+		fields, err := decodeFramedFields(r.Canonical)
+		if err != nil {
+			return fmt.Errorf("%w: undecodable path record %s: %v", ErrPlanIdentityMismatch, cp.PathID, err)
+		}
+		rec, err := decodeFramedFields(fields["record"])
+		if err != nil {
+			return fmt.Errorf("%w: undecodable path record body %s: %v", ErrPlanIdentityMismatch, cp.PathID, err)
+		}
+		if string(rec["new_path"]) != cp.NewPath || string(rec["old_path"]) != cp.OldPath || string(rec["status"]) != cp.Status {
+			return fmt.Errorf("%w: changed path %s disagrees with its identity record", ErrPlanIdentityMismatch, cp.PathID)
+		}
+	}
+	return nil
+}
+
+// validateMandatoryUnits decodes each mandatory unit payload, validates its
+// review.unit.v1 shape, and requires its key to equal its unit id and to name a
+// primary unit of the plan, so a persisted mandatory object is always a real,
+// plan-bound unit rather than arbitrary bytes.
+func validateMandatoryUnits(plan Plan, mandatory map[string][]byte) error {
+	primary := make(map[string]bool, len(plan.PrimaryUnits))
+	for _, u := range plan.PrimaryUnits {
+		primary[u.UnitID] = true
+	}
+	for key, raw := range mandatory {
+		var u Unit
+		if err := json.Unmarshal(raw, &u); err != nil {
+			return fmt.Errorf("%w: mandatory unit %s: %v", ErrManifestCorrupt, key, err)
+		}
+		if err := u.Validate(); err != nil {
+			return fmt.Errorf("%w: mandatory unit %s: %v", ErrManifestCorrupt, key, err)
+		}
+		if u.UnitID != key {
+			return fmt.Errorf("%w: mandatory unit key %s does not match unit id %s", ErrManifestCorrupt, key, u.UnitID)
+		}
+		if !primary[key] {
+			return fmt.Errorf("%w: mandatory unit %s is not a primary unit of the plan", ErrManifestCorrupt, key)
+		}
+	}
+	return nil
+}
+
+// decodeFramedFields parses a FramedFieldsV1 record (a sequence of
+// uint16be(name_len)|name|uint64be(value_len)|value) into a name->value map.
+func decodeFramedFields(b []byte) (map[string][]byte, error) {
+	out := map[string][]byte{}
+	for len(b) > 0 {
+		if len(b) < 2 {
+			return nil, errors.New("truncated field name length")
+		}
+		nl := int(binary.BigEndian.Uint16(b[:2]))
+		b = b[2:]
+		if nl == 0 || len(b) < nl {
+			return nil, errors.New("truncated field name")
+		}
+		name := string(b[:nl])
+		b = b[nl:]
+		if len(b) < 8 {
+			return nil, errors.New("truncated value length")
+		}
+		vl := binary.BigEndian.Uint64(b[:8])
+		b = b[8:]
+		if vl > uint64(len(b)) {
+			return nil, errors.New("truncated value")
+		}
+		out[name] = b[:vl]
+		b = b[vl:]
+	}
+	return out, nil
+}
+
+// decodeFrameList parses a FrameListV1 encoding (uint64be(count) followed by
+// uint64be(item_len)|item repeated) into its items.
+func decodeFrameList(b []byte) ([][]byte, error) {
+	if len(b) < 8 {
+		return nil, errors.New("truncated list count")
+	}
+	n := binary.BigEndian.Uint64(b[:8])
+	b = b[8:]
+	items := make([][]byte, 0, n)
+	for i := uint64(0); i < n; i++ {
+		if len(b) < 8 {
+			return nil, errors.New("truncated item length")
+		}
+		il := binary.BigEndian.Uint64(b[:8])
+		b = b[8:]
+		if il > uint64(len(b)) {
+			return nil, errors.New("truncated item")
+		}
+		items = append(items, b[:il])
+		b = b[il:]
+	}
+	if len(b) != 0 {
+		return nil, errors.New("trailing bytes after list")
+	}
+	return items, nil
+}
+
+// asDigest converts a 32-byte value into a Digest.
+func asDigest(b []byte) (Digest, error) {
+	var d Digest
+	if len(b) != len(d) {
+		return d, fmt.Errorf("expected %d-byte digest, got %d", len(d), len(b))
+	}
+	copy(d[:], b)
+	return d, nil
 }
 
 // contentKindOf returns the content-ID kind of a well-formed public ID (prefix
@@ -841,29 +1219,42 @@ func (s *PlanStore) loadManifest(ctx context.Context, reviewID string) (planMani
 
 // decodeManifest streams a manifest through a context-aware, byte-bounded reader
 // into a JSON decoder, so cancellation is honored mid-read and mid-decode and an
-// oversized manifest fails closed without buffering past the ceiling.
+// oversized manifest fails closed without buffering past the ceiling. It rejects
+// any trailing bytes by requiring the next decode to be io.EOF, and rejects a
+// stream that reached the byte ceiling even when the first object parsed.
 func decodeManifest(ctx context.Context, r io.Reader, max int64) (planManifest, error) {
 	cr := &ctxLimitReader{ctx: ctx, r: r, remaining: max + 1}
 	dec := json.NewDecoder(cr)
 	var m planManifest
 	if err := dec.Decode(&m); err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return planManifest{}, ctxErr
-		}
-		if cr.exceeded || errors.Is(err, errManifestTooLarge) {
-			return planManifest{}, fmt.Errorf("%w: manifest exceeds %d bytes", ErrManifestCorrupt, max)
-		}
-		return planManifest{}, fmt.Errorf("%w: %v", ErrManifestCorrupt, err)
+		return planManifest{}, manifestDecodeError(ctx, cr, err)
 	}
-	// Reject trailing bytes after the single manifest object, matching the strict
-	// whole-document decode the store relied on before it streamed.
-	if dec.More() {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return planManifest{}, ctxErr
+	// Require exactly one JSON document: the next decode must be a clean io.EOF.
+	// json.Decoder.More cannot be trusted here - it hides reader errors and treats
+	// a stray delimiter as end-of-stream - so decode again and demand io.EOF.
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return planManifest{}, fmt.Errorf("%w: trailing data after manifest", ErrManifestCorrupt)
 		}
-		return planManifest{}, fmt.Errorf("%w: trailing data after manifest", ErrManifestCorrupt)
+		return planManifest{}, manifestDecodeError(ctx, cr, err)
+	}
+	if cr.exceeded {
+		return planManifest{}, fmt.Errorf("%w: manifest exceeds %d bytes", ErrManifestCorrupt, max)
 	}
 	return m, nil
+}
+
+// manifestDecodeError maps a decoder error to a typed cause: cancellation, an
+// over-ceiling read, or a generic corruption.
+func manifestDecodeError(ctx context.Context, cr *ctxLimitReader, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	if cr.exceeded || errors.Is(err, errManifestTooLarge) {
+		return fmt.Errorf("%w: manifest exceeds its byte ceiling", ErrManifestCorrupt)
+	}
+	return fmt.Errorf("%w: %v", ErrManifestCorrupt, err)
 }
 
 // ctxLimitReader wraps a reader with a per-read context check and a hard byte
@@ -1018,7 +1409,13 @@ func (s *PlanStore) deleteReview(reviewID string) error {
 		return nil // in use; never delete a locked plan
 	}
 	defer fl.Unlock()
-	if err := os.RemoveAll(filepath.Join(s.root, reviewID)); err != nil {
+	// Remove through the pinned reviews root (no-follow within the confined root),
+	// so a swap of the reviews path cannot redirect the recursive delete outside
+	// the owned tree.
+	if !validReviewID(reviewID) {
+		return fmt.Errorf("review: refusing to delete malformed review id %q", reviewID)
+	}
+	if err := s.rootDir.RemoveAll(reviewID); err != nil {
 		return err
 	}
 	// The striped lock file itself is retained (bounded by the stripe count) so

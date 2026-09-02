@@ -64,6 +64,10 @@ const (
 	MaxSnapshotEntriesV1          = 250_000
 	MaxSnapshotBlobBytesV1  int64 = 64 << 20
 	MaxSnapshotTotalBytesV1 int64 = 4 << 30
+	// MaxSymlinkTargetBytesV1 bounds a materialized symlink's target. A genuine
+	// link target is well under this; a larger 120000 blob is malformed/hostile
+	// and is omitted rather than materialized.
+	MaxSymlinkTargetBytesV1 int64 = 1 << 20
 )
 
 var (
@@ -96,6 +100,11 @@ var (
 	// ErrReuseUnavailable reports that a requested index reuse is not eligible and
 	// no head tree-ish is available to materialize instead.
 	ErrReuseUnavailable = errors.New("review: index reuse is not eligible and no head tree-ish is available")
+	// ErrSnapshotTreeishNotResolved reports that a base or head tree-ish is not a
+	// full-width resolved object id. A mutable ref could name different content
+	// between materialization and later source reads, so only immutable OIDs are
+	// accepted.
+	ErrSnapshotTreeishNotResolved = errors.New("review: snapshot tree-ish must be a full resolved object id")
 )
 
 // ReviewSide names one revision side of a review. It reuses the model's Side type
@@ -187,7 +196,7 @@ func (g *gitTreeResolver) read(ctx context.Context, p string, maxBytes int64) (S
 		return SourceEntry{}, err
 	}
 	out, err := g.runner.Output(ctx, g.root, snapshotGitOutputLimit,
-		"ls-tree", "-z", "--full-tree", g.treeish, "--", literalPathspec(clean))
+		"ls-tree", "-z", "--full-tree", "--end-of-options", g.treeish, "--", literalPathspec(clean))
 	if err != nil {
 		return SourceEntry{}, err
 	}
@@ -444,6 +453,11 @@ type HeadViewOptions struct {
 	MaxEntries    int
 	MaxBlobBytes  int64
 	MaxTotalBytes int64
+	// MaxSymlinkBytes bounds the target size of a materialized symlink. A symlink
+	// blob larger than this (a real link target is tiny; an oversized one is
+	// malformed/hostile) is recorded as an omission rather than read into memory,
+	// keeping the view available. It defaults to MaxSymlinkTargetBytesV1.
+	MaxSymlinkBytes int64
 
 	// symlink is the (test-injectable) link creator. It defaults to rootSymlink.
 	symlink symlinkFunc
@@ -470,6 +484,13 @@ func (o HeadViewOptions) maxTotalBytes() int64 {
 	return MaxSnapshotTotalBytesV1
 }
 
+func (o HeadViewOptions) maxSymlinkBytes() int64 {
+	if o.MaxSymlinkBytes > 0 {
+		return o.MaxSymlinkBytes
+	}
+	return MaxSymlinkTargetBytesV1
+}
+
 func (o HeadViewOptions) symlinker() symlinkFunc {
 	if o.symlink != nil {
 		return o.symlink
@@ -494,6 +515,13 @@ func OpenHeadView(ctx context.Context, opts HeadViewOptions) (*HeadView, error) 
 	}
 	opt := index.Options{Ignore: opts.Config.Ignore, Languages: opts.Config.Languages}
 
+	// A base tree-ish, when present, is used for immutable source reads on both the
+	// reuse and materialize paths; require a full resolved OID so a mutable ref can
+	// never name different content later.
+	if opts.BaseTreeish != "" && !isFullOID(opts.BaseTreeish, width) {
+		return nil, fmt.Errorf("%w: base %q", ErrSnapshotTreeishNotResolved, opts.BaseTreeish)
+	}
+
 	if opts.Reuse != nil {
 		eligible, err := eligibleReuse(ctx, opts, opt, width)
 		if err != nil {
@@ -509,6 +537,9 @@ func OpenHeadView(ctx context.Context, opts HeadViewOptions) (*HeadView, error) 
 
 	if opts.HeadTreeish == "" {
 		return nil, errors.New("review: OpenHeadView requires a head tree-ish to materialize")
+	}
+	if !isFullOID(opts.HeadTreeish, width) {
+		return nil, fmt.Errorf("%w: head %q", ErrSnapshotTreeishNotResolved, opts.HeadTreeish)
 	}
 	return materializeHeadView(ctx, opts, width, opt)
 }
@@ -696,7 +727,7 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 	// fully buffered.
 	parser := newTreeStreamParser(width, opts.maxEntries())
 	pipeErr := opts.Runner.Pipe(ctx, opts.RepoRoot, snapshotGitOutputLimit,
-		bytes.NewReader(nil), parser, "ls-tree", "-rz", "--full-tree", opts.HeadTreeish)
+		bytes.NewReader(nil), parser, "ls-tree", "-rz", "--full-tree", "--end-of-options", opts.HeadTreeish)
 	if parser.err != nil {
 		return nil, parser.err
 	}
@@ -720,8 +751,15 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 	if err != nil {
 		return nil, err
 	}
+	// Preflight: prove every blob's size before any content read or write, so an
+	// oversized or missing object fails closed with nothing on disk. An oversized
+	// symlink target (a real link is tiny; a larger one is malformed/hostile) is
+	// recorded as an omission and never read, keeping the view available instead
+	// of aborting materialization on a hostile commit.
+	var omissions []Omission
+	skip := make([]bool, len(entries))
 	remaining := opts.maxTotalBytes()
-	for _, e := range entries {
+	for i, e := range entries {
 		meta, ok := sizes[e.oid]
 		if !ok || !isBlobMode(e.mode) {
 			continue
@@ -732,7 +770,13 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 		if meta.typ != "blob" {
 			return nil, fmt.Errorf("%w: %s is a %s, not a blob", ErrSnapshotMalformedStream, e.oid, meta.typ)
 		}
-		if e.mode != "120000" && meta.size > opts.maxBlobBytes() {
+		if e.mode == "120000" {
+			if meta.size > opts.maxSymlinkBytes() {
+				omissions = append(omissions, Omission{Path: e.path, Side: SideHead, Reason: "oversized symlink target"})
+				skip[i] = true
+				continue
+			}
+		} else if meta.size > opts.maxBlobBytes() {
 			return nil, fmt.Errorf("%w: %q is %d bytes", ErrSnapshotBlobTooLarge, e.path, meta.size)
 		}
 		// Overflow-safe total accounting: subtraction never overflows.
@@ -748,7 +792,6 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 	}
 	defer root.Close()
 
-	var omissions []Omission
 	symlink := opts.symlinker()
 	writeBlob := func(e treeEntry, data []byte) error {
 		if dir := path.Dir(e.path); dir != "." {
@@ -781,7 +824,7 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 		i := start
 		for ; i < len(entries); i++ {
 			e := entries[i]
-			if e.mode == "160000" || !isBlobMode(e.mode) {
+			if e.mode == "160000" || !isBlobMode(e.mode) || skip[i] {
 				continue
 			}
 			meta := sizes[e.oid]
@@ -806,7 +849,7 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 		}
 		for j := start; j < end; j++ {
 			e := entries[j]
-			if e.mode == "160000" || !isBlobMode(e.mode) {
+			if e.mode == "160000" || !isBlobMode(e.mode) || skip[j] {
 				continue
 			}
 			o, ok := objs[e.oid]
