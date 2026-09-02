@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,21 +52,21 @@ func contentRecord(kind string, canonical []byte) (StableID, IDRecord) {
 // pathRecordFor builds a real p_ StableID plus its identity record for a changed
 // path at the given path, using the given content digest so collision fixtures
 // can inject one. The canonical is a genuine framed RawPathRecord.
-func pathRecordFor(digest func([]byte) Digest, path string) (StableID, IDRecord) {
+func pathRecordFor(digest func([]byte) Digest, path string) (scope Digest, id StableID, record IDRecord) {
 	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
-	scope := ScopeDigest("sha1", oid20, oid20, ScopeCommit, Digest{})
 	rec := RawPathRecord{
 		Kind: "tracked", Status: "M", OldPath: path, NewPath: path,
 		OldMode: 0o100644, NewMode: 0o100644, OldSide: oid20, NewSide: oid20,
 		TextClass: "text", Additions: 1,
 	}
+	scope = ScopeDigest("sha1", oid20, oid20, ScopeCommit, CanonicalPatchDigest([]RawPathRecord{rec}))
 	canonical := Frame(Field{Name: "scope", Value: scope[:]}, Field{Name: "record", Value: rec.Frame()})
 	full := digest(canonical)
-	id := PublicID(PathIDPrefixV1, full, PublicIDContentBytesV1)
-	return id, IDRecord{Kind: PathIDPrefixV1, Public: id.Public, Full: full, Canonical: canonical}
+	id = PublicID(PathIDPrefixV1, full, PublicIDContentBytesV1)
+	return scope, id, IDRecord{Kind: PathIDPrefixV1, Public: id.Public, Full: full, Canonical: canonical}
 }
 
-func pathRecord(digest func([]byte) Digest) (StableID, IDRecord) {
+func pathRecord(digest func([]byte) Digest) (Digest, StableID, IDRecord) {
 	return pathRecordFor(digest, "a.go")
 }
 
@@ -75,6 +78,24 @@ func mustCanonicalUnit(u Unit) []byte {
 	return b
 }
 
+// withPublishedSignature sets the served index signature and rebinds it into the
+// identity's head index signature, recomputing the identity (and rippling the new
+// review id into next commands and any primary units) so the persisted plan stays
+// internally consistent.
+func withPublishedSignature(a PlanArtifacts, sig string) PlanArtifacts {
+	a.PublishedIndexSignature = sig
+	a.PlanIdentity.HeadIndexSignature = []byte(sig)
+	a.PlanIdentityBytes, a.Plan.ReviewID, a.Plan.PlanDigest = identityFrom(a.PlanIdentity)
+	for i := range a.Plan.NextCommands {
+		a.Plan.NextCommands[i].Command = "prowl-agent review unit " + a.Plan.ReviewID
+	}
+	for i := range a.Plan.PrimaryUnits {
+		a.Plan.PrimaryUnits[i].ReviewID = a.Plan.ReviewID
+		a.MandatoryUnits[a.Plan.PrimaryUnits[i].UnitID] = mustCanonicalUnit(a.Plan.PrimaryUnits[i])
+	}
+	return a
+}
+
 // makeArtifacts builds a minimal valid direct-mode plan with a real StableID for
 // its single changed path, identity bytes that embed that path id, and a
 // complete identity registry.
@@ -83,10 +104,10 @@ func makeArtifacts(name string) PlanArtifacts {
 }
 
 func makeArtifactsWith(name string, digest func([]byte) Digest) PlanArtifacts {
-	id, record := pathRecord(digest)
+	scope, id, record := pathRecord(digest)
 	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
 	pi := PlanIdentity{
-		PlannerVersion: name, IndexSchema: "prowl.index.v1", IndexVersion: "1",
+		PlannerVersion: name, ScopeDigest: scope, IndexSchema: "prowl.index.v1", IndexVersion: "1",
 		Paths: []PlanPathEntry{{PathID: id, ReviewClass: "full", Coverage: "full", RoleIDs: []string{"implementation"}}},
 	}
 	idBytes, reviewID, planDigest := identityFrom(pi)
@@ -111,13 +132,13 @@ func makeArtifactsWith(name string, digest func([]byte) Digest) PlanArtifacts {
 // identity records.
 func makeStructuredArtifacts(name string) PlanArtifacts {
 	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
-	scope := ScopeDigest("sha1", oid20, oid20, ScopeCommit, Digest{})
-
 	rec := RawPathRecord{
 		Kind: "tracked", Status: "M", OldPath: "svc.go", NewPath: "svc.go",
 		OldMode: 0o100644, NewMode: 0o100644, OldSide: oid20, NewSide: oid20,
 		TextClass: "text", Additions: 3, Deletions: 1,
 	}
+	scope := ScopeDigest("sha1", oid20, oid20, ScopeCommit, CanonicalPatchDigest([]RawPathRecord{rec}))
+
 	pCanon := Frame(Field{Name: "scope", Value: scope[:]}, Field{Name: "record", Value: rec.Frame()})
 	pathID, pRec := contentRecord(PathIDPrefixV1, pCanon)
 
@@ -182,7 +203,7 @@ func makeStructuredArtifacts(name string) PlanArtifacts {
 		Schema: UnitSchemaV1, ReviewID: reviewID, UnitID: unitID.Public,
 		CohortID: cohortID.Public, LayerID: layerID.Public,
 		ScopeKind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20,
-		Hunks: []UnitHunk{{PathID: pathID.Public, OldPath: "svc.go", NewPath: "svc.go", Status: "M", Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 3, PatchBase64: "QGJvZHlA"}},
+		Hunks: []UnitHunk{{PathID: pathID.Public, OldPath: "svc.go", NewPath: "svc.go", Status: "M", Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 3, PatchBase64: base64.StdEncoding.EncodeToString(hunk.Payload)}},
 	}
 	plan := Plan{
 		Schema:             PlanSchemaV1,
@@ -221,16 +242,53 @@ func makeStructuredArtifacts(name string) PlanArtifacts {
 	}
 }
 
+// makeDirectPartitionedArtifacts mirrors a real below-threshold planner result:
+// display-only cohorts and audits are omitted, while canonical identity retains
+// the cohort/layer partition used by the primary unit.
+func makeDirectPartitionedArtifacts(name string) PlanArtifacts {
+	a := makeStructuredArtifacts(name)
+	a.Plan.Mode = ModeDirect
+	a.Plan.StructuredRequired = false
+	a.Plan.Cohorts = nil
+	a.Plan.RequiredAudits = nil
+	a.PlanIdentity.Audits = nil
+	a.IDRecords = a.IDRecords[:5] // p_, h_, u_, c_, l_; direct mode has no audit target.
+	a.PlanIdentityBytes, a.Plan.ReviewID, a.Plan.PlanDigest = identityFrom(a.PlanIdentity)
+	for i := range a.Plan.PrimaryUnits {
+		a.Plan.PrimaryUnits[i].ReviewID = a.Plan.ReviewID
+		unitID := a.Plan.PrimaryUnits[i].UnitID
+		a.MandatoryUnits[unitID] = mustCanonicalUnit(a.Plan.PrimaryUnits[i])
+	}
+	a.Plan.NextCommands[0].Command = "prowl-agent review unit " + a.Plan.ReviewID
+	return a
+}
+
 // makeWorkspaceArtifacts builds a workspace-scope plan with a fingerprint bound
 // to its workspace head.
 func makeWorkspaceArtifacts(name string) PlanArtifacts {
 	a := makeArtifacts(name)
-	head := make([]byte, 32)
-	head[0] = 0x5a
-	a.Plan.Scope.Kind = ScopeWorkspace
-	a.Plan.Scope.Base = SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
-	a.Plan.Scope.Head = SideIdentity{Kind: SideWorkspaceSHA256, Value: head}
-	a.WorkspaceFingerprint = hex.EncodeToString(head)
+	base := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
+	headValue := make([]byte, sha256.Size)
+	headValue[0] = 0x5a
+	head := SideIdentity{Kind: SideWorkspaceSHA256, Value: headValue}
+	rec := RawPathRecord{
+		Kind: "tracked", Status: "M", OldPath: "a.go", NewPath: "a.go",
+		OldMode: 0o100644, NewMode: 0o100644, OldSide: base, NewSide: head,
+		TextClass: "text", Additions: 1,
+	}
+	scope := ScopeDigest("sha1", base, head, ScopeWorkspace, CanonicalPatchDigest([]RawPathRecord{rec}))
+	canonical := Frame(Field{Name: "scope", Value: scope[:]}, Field{Name: "record", Value: rec.Frame()})
+	id, record := contentRecord(PathIDPrefixV1, canonical)
+
+	a.Plan.Scope = Scope{Kind: ScopeWorkspace, ObjectFormat: "sha1", Base: base, Head: head}
+	a.Plan.ChangedPaths[0].PathID = id.Public
+	a.PlanIdentity.ScopeDigest = scope
+	a.PlanIdentity.Paths[0].PathID = id
+	a.PlanIdentityBytes, a.Plan.ReviewID, a.Plan.PlanDigest = identityFrom(a.PlanIdentity)
+	a.Plan.NextCommands[0].Command = "prowl-agent review unit " + a.Plan.ReviewID
+	a.IDRecords[0] = record
+	a.WorkspaceFingerprint = hex.EncodeToString(headValue)
+	a.WorkspaceCaptureFingerprint = strings.Repeat("5a", sha256.Size)
 	return a
 }
 
@@ -250,10 +308,10 @@ func collidingDigest(b []byte) Digest {
 // The record is a genuine framed path record so identity binding accepts it.
 func collidingArtifacts(name string) PlanArtifacts {
 	path := name + ".go"
-	id, record := pathRecordFor(collidingDigest, path)
+	scope, id, record := pathRecordFor(collidingDigest, path)
 	oid20 := SideIdentity{Kind: SideGitOID, Value: make([]byte, 20)}
 	pi := PlanIdentity{
-		PlannerVersion: name, IndexSchema: "prowl.index.v1", IndexVersion: "1",
+		PlannerVersion: name, ScopeDigest: scope, IndexSchema: "prowl.index.v1", IndexVersion: "1",
 		Paths: []PlanPathEntry{{PathID: id, ReviewClass: "full", Coverage: "full", RoleIDs: []string{"implementation"}}},
 	}
 	idBytes, reviewID, planDigest := identityFrom(pi)
@@ -332,7 +390,7 @@ func TestPlanStoreSaveLoadRoundTrip(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
 	a := makeArtifacts("round")
-	a.PublishedIndexSignature = "sig-123"
+	a = withPublishedSignature(a, "sig-123")
 	pathID := a.Plan.ChangedPaths[0].PathID
 	a.Citations = map[string]CitationProof{pathID: {ID: pathID, Side: SideHead, Path: "a.go", ContentHash: hex.EncodeToString(make([]byte, 32)), Start: 1, End: 4}}
 	if _, err := store.Save(ctx, a, nil); err != nil {
@@ -351,6 +409,49 @@ func TestPlanStoreSaveLoadRoundTrip(t *testing.T) {
 	if len(got.IDRecords) != 1 || got.IDRecords[0].Public != pathID {
 		t.Fatalf("id records lost: %+v", got.IDRecords)
 	}
+}
+
+// TestPlanStoreSaveLoadDirectPartitionIdentity is the direct-mode regression:
+// the display plan omits cohorts, but its canonical identity retains and binds
+// the real cohort/layer row through PrimaryUnits.
+func TestPlanStoreSaveLoadDirectPartitionIdentity(t *testing.T) {
+	store := newStore(t)
+	ctx := context.Background()
+	a := makeDirectPartitionedArtifacts("direct-partition")
+	if _, err := store.Save(ctx, a, nil); err != nil {
+		t.Fatalf("save direct partition identity: %v", err)
+	}
+	got, err := store.Load(ctx, a.Plan.ReviewID)
+	if err != nil {
+		t.Fatalf("load direct partition identity: %v", err)
+	}
+	if got.Plan.Mode != ModeDirect || len(got.Plan.Cohorts) != 0 || len(got.Plan.RequiredAudits) != 0 {
+		t.Fatalf("direct display collections changed: %+v", got.Plan)
+	}
+	unit := got.Plan.PrimaryUnits[0]
+	row := got.PlanIdentity.Cohorts[0]
+	if row.CohortID.Public != unit.CohortID || row.LayerID.Public != unit.LayerID || row.UnitIDs[0].Public != unit.UnitID {
+		t.Fatalf("direct partition binding lost: unit=%+v identity=%+v", unit, row)
+	}
+}
+
+func TestVerifyIdentityBindingDirectAndStructuredCohorts(t *testing.T) {
+	t.Run("direct binds retained rows to primary units", func(t *testing.T) {
+		a := makeDirectPartitionedArtifacts("direct-binding")
+		a.PlanIdentity.Cohorts[0].UnitIDs = nil
+		a.PlanIdentityBytes, a.Plan.ReviewID, a.Plan.PlanDigest = identityFrom(a.PlanIdentity)
+		if err := verifyIdentityBinding(a.Plan, a.IDRecords, a.PlanIdentity, a.PlanIdentityBytes); !errors.Is(err, ErrPlanIdentityMismatch) {
+			t.Fatalf("direct partition mismatch err=%v, want ErrPlanIdentityMismatch", err)
+		}
+	})
+
+	t.Run("structured still binds displayed rows exactly", func(t *testing.T) {
+		a := makeStructuredArtifacts("structured-binding")
+		a.Plan.Cohorts[0].Layers[0].UnitIDs = nil
+		if err := verifyIdentityBinding(a.Plan, a.IDRecords, a.PlanIdentity, a.PlanIdentityBytes); !errors.Is(err, ErrPlanIdentityMismatch) {
+			t.Fatalf("structured display mismatch err=%v, want ErrPlanIdentityMismatch", err)
+		}
+	})
 }
 
 // TestPlanStoreSaveLoadStructuredAllKinds proves a production-valid structured
@@ -413,7 +514,7 @@ func TestPlanStoreRegistryRejectsShapeViolations(t *testing.T) {
 	}{
 		{"omission: plan id without record", func(a *PlanArtifacts) { a.IDRecords = nil }, ErrIDRegistry},
 		{"foreign: record not in plan", func(a *PlanArtifacts) {
-			_, extra := pathRecordFor(sha256Digest, "other.go")
+			_, _, extra := pathRecordFor(sha256Digest, "other.go")
 			a.IDRecords = append(a.IDRecords, extra)
 		}, ErrIDRegistry},
 		{"mapping: full does not match canonical", func(a *PlanArtifacts) {
@@ -716,6 +817,22 @@ func TestPlanStoreWorkspaceFingerprintInvariants(t *testing.T) {
 			t.Fatalf("err=%v, want ErrWorkspaceFingerprint", err)
 		}
 	})
+	t.Run("workspace without canonical capture fingerprint rejected", func(t *testing.T) {
+		store := newStore(t)
+		a := makeWorkspaceArtifacts("ws-capture-empty")
+		a.WorkspaceCaptureFingerprint = ""
+		if _, err := store.Save(ctx, a, nil); !errors.Is(err, ErrWorkspaceFingerprint) {
+			t.Fatalf("err=%v, want ErrWorkspaceFingerprint", err)
+		}
+	})
+	t.Run("committed with canonical capture fingerprint rejected", func(t *testing.T) {
+		store := newStore(t)
+		a := makeArtifacts("commit-capture-fp")
+		a.WorkspaceCaptureFingerprint = strings.Repeat("ab", sha256.Size)
+		if _, err := store.Save(ctx, a, nil); !errors.Is(err, ErrWorkspaceFingerprint) {
+			t.Fatalf("err=%v, want ErrWorkspaceFingerprint", err)
+		}
+	})
 }
 
 // TestPlanStoreStaleWorkspaceFingerprint proves a workspace plan is stale when
@@ -937,7 +1054,7 @@ func TestPlanStoreLoadThroughPinnedRootSurvivesRootSwap(t *testing.T) {
 	store := newStore(t)
 	ctx := context.Background()
 	a := makeArtifacts("pinned")
-	a.PublishedIndexSignature = "original-sig"
+	a = withPublishedSignature(a, "original-sig")
 	if _, err := store.Save(ctx, a, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -1204,6 +1321,108 @@ func TestPlanStoreSaveRejectsOversizedManifest(t *testing.T) {
 		}
 		if marshaled {
 			t.Fatal("manifest was marshaled/allocated despite an over-ceiling candidate")
+		}
+	})
+}
+
+// TestAccountValueNeverUndercountsJSON proves the manifest preflight walker is a
+// safe upper bound on the encoding/json size: a fixed byte array is charged as a
+// numeric JSON array (not base64), and an escapable string is charged its
+// worst-case escaped length (TASK5-CLOSURE-002).
+func TestAccountValueNeverUndercountsJSON(t *testing.T) {
+	var arr Digest
+	for i := range arr {
+		arr[i] = byte(i)
+	}
+	remaining := int64(1) << 40
+	before := remaining
+	if err := accountValue(reflect.ValueOf(arr), &remaining); err != nil {
+		t.Fatalf("account array: %v", err)
+	}
+	arrayCost := before - remaining
+	realArray, err := json.Marshal(arr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if arrayCost < int64(len(realArray)) {
+		t.Fatalf("digest array charged %d < real json %d bytes (undercount)", arrayCost, len(realArray))
+	}
+	if arrayCost <= base64Len(len(arr))+2 {
+		t.Fatalf("digest array charged like base64 (%d); must exceed base64 estimate %d", arrayCost, base64Len(len(arr))+2)
+	}
+
+	s := strings.Repeat("<", 256)
+	remaining = int64(1) << 40
+	before = remaining
+	if err := accountValue(reflect.ValueOf(s), &remaining); err != nil {
+		t.Fatalf("account string: %v", err)
+	}
+	strCost := before - remaining
+	realStr, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strCost < int64(len(realStr)) {
+		t.Fatalf("escaped string charged %d < real json %d bytes (undercount)", strCost, len(realStr))
+	}
+	if strCost <= int64(len(s))+2 {
+		t.Fatalf("escaped string charged like raw length (%d); must exceed %d", strCost, len(s)+2)
+	}
+}
+
+// TestPlanStoreRejectsEscapedOversizeBeforeMarshal proves an escapable string that
+// fits raw but expands past the ceiling in JSON is rejected before the encoder
+// allocates it (TASK5-CLOSURE-002).
+func TestPlanStoreRejectsEscapedOversizeBeforeMarshal(t *testing.T) {
+	store := newStore(t)
+	store.maxManifest = 64 << 10
+	marshaled := false
+	store.beforeMarshal = func() { marshaled = true } // must never be reached
+	a := makeStructuredArtifacts("escaped-oversize")
+	uid := a.Plan.PrimaryUnits[0].UnitID
+	// ~20 KiB raw fits under the 64 KiB ceiling, but each '<' expands to six bytes
+	// (\u003c) in JSON, so the encoded manifest would blow the ceiling.
+	a.UnitCandidates[uid] = []contextpacket.Candidate{{CompactContent: strings.Repeat("<", 20000)}}
+	if _, err := store.Save(context.Background(), a, nil); !errors.Is(err, ErrManifestCorrupt) {
+		t.Fatalf("escaped oversize err=%v, want ErrManifestCorrupt", err)
+	}
+	if marshaled {
+		t.Fatal("manifest was marshaled/allocated despite an escaped over-ceiling candidate")
+	}
+}
+
+// TestPlanStoreDeepIdentityBinding proves the identity binding covers the served
+// scope, the primary unit patch bytes, and the published index signature, not
+// just structural ids (TASK5-CLOSURE-001).
+func TestPlanStoreDeepIdentityBinding(t *testing.T) {
+	t.Run("scope head mutation rejected", func(t *testing.T) {
+		a := makeStructuredArtifacts("scope-head")
+		a.Plan.Scope.Head = SideIdentity{Kind: SideGitOID, Value: bytes.Repeat([]byte{0x7}, 20)}
+		if err := verifyIdentityBinding(a.Plan, a.IDRecords, a.PlanIdentity, a.PlanIdentityBytes); !errors.Is(err, ErrPlanIdentityMismatch) {
+			t.Fatalf("mutated scope head err=%v, want ErrPlanIdentityMismatch", err)
+		}
+	})
+	t.Run("identity scope digest disagrees with record", func(t *testing.T) {
+		a := makeStructuredArtifacts("scope-embed")
+		a.PlanIdentity.ScopeDigest = Digest{0x9}
+		a.PlanIdentityBytes, a.Plan.ReviewID, a.Plan.PlanDigest = identityFrom(a.PlanIdentity)
+		if err := verifyIdentityBinding(a.Plan, a.IDRecords, a.PlanIdentity, a.PlanIdentityBytes); !errors.Is(err, ErrPlanIdentityMismatch) {
+			t.Fatalf("scope digest disagreement err=%v, want ErrPlanIdentityMismatch", err)
+		}
+	})
+	t.Run("unit hunk patch mutation rejected", func(t *testing.T) {
+		a := makeStructuredArtifacts("hunk-patch")
+		a.Plan.PrimaryUnits[0].Hunks[0].PatchBase64 = base64.StdEncoding.EncodeToString([]byte("tampered patch bytes"))
+		if err := verifyIdentityBinding(a.Plan, a.IDRecords, a.PlanIdentity, a.PlanIdentityBytes); !errors.Is(err, ErrPlanIdentityMismatch) {
+			t.Fatalf("mutated unit patch err=%v, want ErrPlanIdentityMismatch", err)
+		}
+	})
+	t.Run("published index signature must bind identity", func(t *testing.T) {
+		store := newStore(t)
+		a := makeArtifacts("index-sig")
+		a.PublishedIndexSignature = "served-but-unbound"
+		if _, err := store.Save(context.Background(), a, nil); !errors.Is(err, ErrPlanIdentityMismatch) {
+			t.Fatalf("unbound published signature err=%v, want ErrPlanIdentityMismatch", err)
 		}
 	})
 }

@@ -25,6 +25,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -165,6 +166,9 @@ type PlanArtifacts struct {
 	// WorkspaceFingerprint is the workspace head fingerprint for a workspace
 	// plan; it is empty for an immutable committed or range plan.
 	WorkspaceFingerprint string
+	// WorkspaceCaptureFingerprint binds the complete accepted canonical capture,
+	// including deletion-only path identity. It is empty for immutable scopes.
+	WorkspaceCaptureFingerprint string
 }
 
 // SaveResult reports the outcome of a Save. PruneWarning carries a
@@ -178,21 +182,22 @@ type SaveResult struct {
 
 // planManifest is the on-disk representation of a persisted plan.
 type planManifest struct {
-	Schema                  string                               `json:"schema"`
-	ReviewID                string                               `json:"review_id"`
-	PlanDigest              string                               `json:"plan_digest"`
-	ScopeKind               ScopeKind                            `json:"scope_kind"`
-	WorkspaceFingerprint    string                               `json:"workspace_fingerprint,omitempty"`
-	CreatedAt               int64                                `json:"created_at"`
-	Plan                    Plan                                 `json:"plan"`
-	UnitCandidates          map[string][]contextpacket.Candidate `json:"unit_candidates,omitempty"`
-	MandatoryUnits          map[string][]byte                    `json:"mandatory_units,omitempty"`
-	Citations               map[string]CitationProof             `json:"citations,omitempty"`
-	PublishedIndexSignature string                               `json:"published_index_signature,omitempty"`
-	PlanIdentityBytes       []byte                               `json:"plan_identity_bytes"`
-	PlanIdentity            PlanIdentity                         `json:"plan_identity"`
-	IDRecords               []IDRecord                           `json:"id_records,omitempty"`
-	ContentDigest           string                               `json:"content_digest"`
+	Schema                      string                               `json:"schema"`
+	ReviewID                    string                               `json:"review_id"`
+	PlanDigest                  string                               `json:"plan_digest"`
+	ScopeKind                   ScopeKind                            `json:"scope_kind"`
+	WorkspaceFingerprint        string                               `json:"workspace_fingerprint,omitempty"`
+	WorkspaceCaptureFingerprint string                               `json:"workspace_capture_fingerprint,omitempty"`
+	CreatedAt                   int64                                `json:"created_at"`
+	Plan                        Plan                                 `json:"plan"`
+	UnitCandidates              map[string][]contextpacket.Candidate `json:"unit_candidates,omitempty"`
+	MandatoryUnits              map[string][]byte                    `json:"mandatory_units,omitempty"`
+	Citations                   map[string]CitationProof             `json:"citations,omitempty"`
+	PublishedIndexSignature     string                               `json:"published_index_signature,omitempty"`
+	PlanIdentityBytes           []byte                               `json:"plan_identity_bytes"`
+	PlanIdentity                PlanIdentity                         `json:"plan_identity"`
+	IDRecords                   []IDRecord                           `json:"id_records,omitempty"`
+	ContentDigest               string                               `json:"content_digest"`
 }
 
 // SnapshotLease is a store-owned directory beneath <common>/prowl/snapshots that
@@ -389,6 +394,9 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 	if err := verifyWorkspaceFingerprint(artifacts.Plan, artifacts.WorkspaceFingerprint); err != nil {
 		return SaveResult{}, err
 	}
+	if err := verifyWorkspaceCaptureFingerprint(artifacts.Plan, artifacts.WorkspaceCaptureFingerprint); err != nil {
+		return SaveResult{}, err
+	}
 	reviewID := artifacts.Plan.ReviewID
 
 	release, err := s.lock(ctx)
@@ -435,25 +443,26 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 	}
 	// Bind the canonical identity bytes to this plan and validate its mandatory
 	// unit payloads (only for the plan being saved, not the domain siblings).
-	if err := verifyArtifactIntegrity(artifacts.Plan, artifacts.IDRecords, artifacts.PlanIdentity, artifacts.PlanIdentityBytes, artifacts.MandatoryUnits); err != nil {
+	if err := verifyArtifactIntegrity(artifacts.Plan, artifacts.IDRecords, artifacts.PlanIdentity, artifacts.PlanIdentityBytes, artifacts.PublishedIndexSignature, artifacts.MandatoryUnits); err != nil {
 		return SaveResult{}, err
 	}
 
 	manifest := planManifest{
-		Schema:                  planStoreSchemaV1,
-		ReviewID:                reviewID,
-		PlanDigest:              artifacts.Plan.PlanDigest,
-		ScopeKind:               artifacts.Plan.Scope.Kind,
-		WorkspaceFingerprint:    artifacts.WorkspaceFingerprint,
-		CreatedAt:               s.now().Unix(),
-		Plan:                    artifacts.Plan,
-		UnitCandidates:          artifacts.UnitCandidates,
-		MandatoryUnits:          artifacts.MandatoryUnits,
-		Citations:               artifacts.Citations,
-		PublishedIndexSignature: artifacts.PublishedIndexSignature,
-		PlanIdentityBytes:       artifacts.PlanIdentityBytes,
-		PlanIdentity:            artifacts.PlanIdentity,
-		IDRecords:               artifacts.IDRecords,
+		Schema:                      planStoreSchemaV1,
+		ReviewID:                    reviewID,
+		PlanDigest:                  artifacts.Plan.PlanDigest,
+		ScopeKind:                   artifacts.Plan.Scope.Kind,
+		WorkspaceFingerprint:        artifacts.WorkspaceFingerprint,
+		WorkspaceCaptureFingerprint: artifacts.WorkspaceCaptureFingerprint,
+		CreatedAt:                   s.now().Unix(),
+		Plan:                        artifacts.Plan,
+		UnitCandidates:              artifacts.UnitCandidates,
+		MandatoryUnits:              artifacts.MandatoryUnits,
+		Citations:                   artifacts.Citations,
+		PublishedIndexSignature:     artifacts.PublishedIndexSignature,
+		PlanIdentityBytes:           artifacts.PlanIdentityBytes,
+		PlanIdentity:                artifacts.PlanIdentity,
+		IDRecords:                   artifacts.IDRecords,
 	}
 	if s.beforeMarshal != nil {
 		s.beforeMarshal()
@@ -637,15 +646,16 @@ func (s *PlanStore) Load(ctx context.Context, reviewID string) (PlanArtifacts, e
 		return PlanArtifacts{}, err
 	}
 	return PlanArtifacts{
-		Plan:                    manifest.Plan,
-		UnitCandidates:          manifest.UnitCandidates,
-		MandatoryUnits:          manifest.MandatoryUnits,
-		Citations:               manifest.Citations,
-		PublishedIndexSignature: manifest.PublishedIndexSignature,
-		PlanIdentityBytes:       manifest.PlanIdentityBytes,
-		PlanIdentity:            manifest.PlanIdentity,
-		IDRecords:               manifest.IDRecords,
-		WorkspaceFingerprint:    manifest.WorkspaceFingerprint,
+		Plan:                        manifest.Plan,
+		UnitCandidates:              manifest.UnitCandidates,
+		MandatoryUnits:              manifest.MandatoryUnits,
+		Citations:                   manifest.Citations,
+		PublishedIndexSignature:     manifest.PublishedIndexSignature,
+		PlanIdentityBytes:           manifest.PlanIdentityBytes,
+		PlanIdentity:                manifest.PlanIdentity,
+		IDRecords:                   manifest.IDRecords,
+		WorkspaceCaptureFingerprint: manifest.WorkspaceCaptureFingerprint,
+		WorkspaceFingerprint:        manifest.WorkspaceFingerprint,
 	}, nil
 }
 
@@ -745,6 +755,19 @@ func verifyWorkspaceFingerprint(plan Plan, fingerprint string) error {
 	return nil
 }
 
+func verifyWorkspaceCaptureFingerprint(plan Plan, fingerprint string) error {
+	if plan.Scope.Kind == ScopeWorkspace {
+		if !isCanonicalDigestHex(fingerprint) {
+			return fmt.Errorf("%w: workspace capture fingerprint is not canonical SHA-256", ErrWorkspaceFingerprint)
+		}
+		return nil
+	}
+	if fingerprint != "" {
+		return fmt.Errorf("%w: committed/range plan must not carry a workspace capture fingerprint", ErrWorkspaceFingerprint)
+	}
+	return nil
+}
+
 // verifyManifest re-runs every consistency check a load must pass, including the
 // cross-domain collision registry (not merely the manifest's own records).
 func (s *PlanStore) verifyManifest(ctx context.Context, m planManifest) error {
@@ -764,6 +787,9 @@ func (s *PlanStore) verifyManifest(ctx context.Context, m planManifest) error {
 	if err := verifyWorkspaceFingerprint(m.Plan, m.WorkspaceFingerprint); err != nil {
 		return err
 	}
+	if err := verifyWorkspaceCaptureFingerprint(m.Plan, m.WorkspaceCaptureFingerprint); err != nil {
+		return err
+	}
 	registry, err := s.buildDomainRegistry(ctx, m.ReviewID)
 	if err != nil {
 		return err
@@ -771,7 +797,7 @@ func (s *PlanStore) verifyManifest(ctx context.Context, m planManifest) error {
 	if _, err := addPlanToRegistry(ctx, registry, s.digest, m.Plan, m.Citations, m.UnitCandidates, m.MandatoryUnits, m.IDRecords, full); err != nil {
 		return err
 	}
-	if err := verifyArtifactIntegrity(m.Plan, m.IDRecords, m.PlanIdentity, m.PlanIdentityBytes, m.MandatoryUnits); err != nil {
+	if err := verifyArtifactIntegrity(m.Plan, m.IDRecords, m.PlanIdentity, m.PlanIdentityBytes, m.PublishedIndexSignature, m.MandatoryUnits); err != nil {
 		return err
 	}
 	return ctx.Err()
@@ -991,11 +1017,18 @@ func collectPlanIDs(plan Plan, citations map[string]CitationProof, unitCandidate
 }
 
 // verifyArtifactIntegrity binds the canonical identity bytes to the persisted
-// plan and records, and validates the mandatory unit payloads. It is run only for
-// the plan being saved or loaded (never for unrelated domain siblings).
-func verifyArtifactIntegrity(plan Plan, records []IDRecord, pi PlanIdentity, identityBytes []byte, mandatory map[string][]byte) error {
+// plan and records, binds the served index signature to the identity head index
+// signature, and validates the mandatory unit payloads. It is run only for the
+// plan being saved or loaded (never for unrelated domain siblings).
+func verifyArtifactIntegrity(plan Plan, records []IDRecord, pi PlanIdentity, identityBytes []byte, publishedIndexSignature string, mandatory map[string][]byte) error {
 	if err := verifyIdentityBinding(plan, records, pi, identityBytes); err != nil {
 		return err
+	}
+	// The published index signature is stored and served alongside the plan; bind
+	// it to the identity's head index signature so a swapped signature cannot ride
+	// on an otherwise-valid review id.
+	if string(pi.HeadIndexSignature) != publishedIndexSignature {
+		return fmt.Errorf("%w: published index signature disagrees with the identity head index signature", ErrPlanIdentityMismatch)
 	}
 	return validateMandatoryUnits(plan, mandatory)
 }
@@ -1006,11 +1039,14 @@ func verifyArtifactIntegrity(plan Plan, records []IDRecord, pi PlanIdentity, ide
 // which is the hash of those bytes, names precisely this structured identity).
 // It then binds every plan-bearing field of that struct, in order, to the Plan
 // and its exact ID records: paths (id + review_class + coverage + reason +
-// role_ids, and the p_ record's old/new/status), primary units (unit id),
-// cohorts (cohort/layer/member unit ids over the plan's flattened cohort x layer
-// order), and audits (audit_id + target ids); and it requires the full set of
-// content-ID digests the struct embeds to equal the record full set (binding
-// hunks and rejecting extras).
+// role_ids, the p_ record's old/new/status, and the scope digest embedded in
+// each p_ record); the plan scope digest, recomputed from Plan.Scope and the
+// canonical patch of the record frames; primary units (unit id plus each owned
+// hunk, whose id is recomputed from the unit's exact patch bytes); structured
+// cohorts against the displayed cohort/layer collections; direct cohorts against
+// PrimaryUnits' retained cohort/layer relationships; and audits (audit_id +
+// target ids). Finally, it requires the full set of content-ID digests the
+// struct embeds to equal the record full set, binding hunks and rejecting extras.
 func verifyIdentityBinding(plan Plan, records []IDRecord, pi PlanIdentity, identityBytes []byte) error {
 	if !bytes.Equal(ReviewPlanIdentityV1(pi), identityBytes) {
 		return fmt.Errorf("%w: identity bytes are not the canonical encoding of the identity struct", ErrPlanIdentityMismatch)
@@ -1041,6 +1077,13 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, pi PlanIdentity, ident
 	if len(pi.Paths) != len(plan.ChangedPaths) {
 		return fmt.Errorf("%w: identity has %d paths, plan has %d", ErrPlanIdentityMismatch, len(pi.Paths), len(plan.ChangedPaths))
 	}
+	// patchRows collects each changed path's canonical record frame (in identity
+	// order) so the plan scope digest can be recomputed from the plan and records.
+	type patchRow struct {
+		newPath, oldPath, status string
+		frame                    []byte
+	}
+	var patchRows []patchRow
 	for i, e := range pi.Paths {
 		cp := plan.ChangedPaths[i]
 		if err := wantFull(e.PathID, cp.PathID); err != nil {
@@ -1060,6 +1103,33 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, pi PlanIdentity, ident
 		if string(rec["new_path"]) != cp.NewPath || string(rec["old_path"]) != cp.OldPath || string(rec["status"]) != cp.Status {
 			return fmt.Errorf("%w: changed path %s disagrees with its identity record", ErrPlanIdentityMismatch, cp.PathID)
 		}
+		if !bytes.Equal(rf["scope"], pi.ScopeDigest[:]) {
+			return fmt.Errorf("%w: changed path %s binds a different scope than the identity", ErrPlanIdentityMismatch, cp.PathID)
+		}
+		patchRows = append(patchRows, patchRow{
+			newPath: string(rec["new_path"]), oldPath: string(rec["old_path"]), status: string(rec["status"]),
+			frame: rf["record"],
+		})
+	}
+
+	// Recompute the canonical patch from the ordered record frames and bind the
+	// resulting scope digest to the identity, so a mutated Plan.Scope (base, head,
+	// object format, or kind) or a swapped patch is rejected.
+	sort.SliceStable(patchRows, func(i, j int) bool {
+		if patchRows[i].newPath != patchRows[j].newPath {
+			return patchRows[i].newPath < patchRows[j].newPath
+		}
+		if patchRows[i].oldPath != patchRows[j].oldPath {
+			return patchRows[i].oldPath < patchRows[j].oldPath
+		}
+		return patchRows[i].status < patchRows[j].status
+	})
+	patchFrames := make([][]byte, len(patchRows))
+	for i := range patchRows {
+		patchFrames[i] = patchRows[i].frame
+	}
+	if ScopeDigest(plan.Scope.ObjectFormat, plan.Scope.Base, plan.Scope.Head, plan.Scope.Kind, sha256.Sum256(FrameList(patchFrames...))) != pi.ScopeDigest {
+		return fmt.Errorf("%w: identity scope digest disagrees with the plan scope and canonical patch", ErrPlanIdentityMismatch)
 	}
 
 	// primary units: ordered unit id.
@@ -1067,39 +1137,82 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, pi PlanIdentity, ident
 		return fmt.Errorf("%w: identity has %d units, plan has %d", ErrPlanIdentityMismatch, len(pi.Units), len(plan.PrimaryUnits))
 	}
 	for i, e := range pi.Units {
-		if err := wantFull(e.UnitID, plan.PrimaryUnits[i].UnitID); err != nil {
+		u := plan.PrimaryUnits[i]
+		if err := wantFull(e.UnitID, u.UnitID); err != nil {
 			return err
+		}
+		// Bind each identity hunk id to the primary unit's owned hunk, recomputing
+		// the hunk id from the unit's exact patch bytes so mutated patch content is
+		// rejected even when the unit id is unchanged.
+		if len(e.HunkIDs) != len(u.Hunks) {
+			return fmt.Errorf("%w: identity unit %s has %d hunks, plan has %d", ErrPlanIdentityMismatch, u.UnitID, len(e.HunkIDs), len(u.Hunks))
+		}
+		for j, hid := range e.HunkIDs {
+			uh := u.Hunks[j]
+			pathFull, err := fullOf(uh.PathID)
+			if err != nil {
+				return err
+			}
+			payload, err := base64.StdEncoding.DecodeString(uh.PatchBase64)
+			if err != nil {
+				return fmt.Errorf("%w: unit %s hunk %d patch is not valid base64", ErrPlanIdentityMismatch, u.UnitID, j)
+			}
+			raw := RawHunk{
+				Ordinal:           uint64(uh.Ordinal),
+				OldStart:          uint64(uh.OldStart),
+				OldLines:          uint64(uh.OldCount),
+				NewStart:          uint64(uh.NewStart),
+				NewLines:          uint64(uh.NewCount),
+				NoFinalNewlineOld: uh.NoFinalNewlineOld,
+				NoFinalNewlineNew: uh.NoFinalNewlineNew,
+				Payload:           payload,
+			}
+			if HunkID(pi.ScopeDigest, pathFull, raw).Full != hid.Full {
+				return fmt.Errorf("%w: unit %s hunk %d identity disagrees with its patch bytes", ErrPlanIdentityMismatch, u.UnitID, j)
+			}
+			if err := wantFull(hid, hid.Public); err != nil {
+				return err
+			}
 		}
 	}
 
-	// cohorts: ordered over the plan's flattened cohort x layer sequence.
-	type flatCohort struct {
-		cohort string
-		layer  string
-		units  []string
-	}
-	var flat []flatCohort
-	for _, c := range plan.Cohorts {
-		for _, l := range c.Layers {
-			flat = append(flat, flatCohort{cohort: c.CohortID, layer: l.LayerID, units: l.UnitIDs})
-		}
-	}
-	if len(pi.Cohorts) != len(flat) {
-		return fmt.Errorf("%w: identity has %d cohort rows, plan flattens to %d", ErrPlanIdentityMismatch, len(pi.Cohorts), len(flat))
-	}
-	for i, e := range pi.Cohorts {
-		if err := wantFull(e.CohortID, flat[i].cohort); err != nil {
+	// Structured plans expose their complete cohort/layer matrix, so bind every
+	// identity row to that display collection exactly. Direct plans intentionally
+	// omit the display matrix; bind their retained partition rows to the ordered
+	// PrimaryUnits instead.
+	if plan.Mode == ModeDirect {
+		if err := verifyDirectIdentityCohorts(plan.PrimaryUnits, pi.Cohorts, records, fullOf, wantFull); err != nil {
 			return err
 		}
-		if err := wantFull(e.LayerID, flat[i].layer); err != nil {
-			return err
+	} else {
+		type flatCohort struct {
+			cohort string
+			layer  string
+			units  []string
 		}
-		if len(e.UnitIDs) != len(flat[i].units) {
-			return fmt.Errorf("%w: identity cohort %d member count disagrees with the plan", ErrPlanIdentityMismatch, i)
+		var flat []flatCohort
+		for _, c := range plan.Cohorts {
+			for _, l := range c.Layers {
+				flat = append(flat, flatCohort{cohort: c.CohortID, layer: l.LayerID, units: l.UnitIDs})
+			}
 		}
-		for j, u := range e.UnitIDs {
-			if err := wantFull(u, flat[i].units[j]); err != nil {
+		if len(pi.Cohorts) != len(flat) {
+			return fmt.Errorf("%w: identity has %d cohort rows, plan flattens to %d", ErrPlanIdentityMismatch, len(pi.Cohorts), len(flat))
+		}
+		for i, e := range pi.Cohorts {
+			if err := wantFull(e.CohortID, flat[i].cohort); err != nil {
 				return err
+			}
+			if err := wantFull(e.LayerID, flat[i].layer); err != nil {
+				return err
+			}
+			if len(e.UnitIDs) != len(flat[i].units) {
+				return fmt.Errorf("%w: identity cohort %d member count disagrees with the plan", ErrPlanIdentityMismatch, i)
+			}
+			for j, u := range e.UnitIDs {
+				if err := wantFull(u, flat[i].units[j]); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -1154,6 +1267,58 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, pi PlanIdentity, ident
 		if !embedded[d] {
 			return fmt.Errorf("%w: a record digest is absent from the identity", ErrPlanIdentityMismatch)
 		}
+	}
+	return nil
+}
+
+func verifyDirectIdentityCohorts(primary []Unit, rows []PlanCohortEntry, records []IDRecord, fullOf func(string) (Digest, error), wantFull func(StableID, string) error) error {
+	type partition struct {
+		cohort Digest
+		layer  Digest
+	}
+	hasRecord := func(kind string, full Digest) bool {
+		for _, record := range records {
+			if record.Kind == kind && record.Full == full {
+				return true
+			}
+		}
+		return false
+	}
+	seen := make(map[partition]bool, len(rows))
+	unitIndex := 0
+	for rowIndex, row := range rows {
+		key := partition{cohort: row.CohortID.Full, layer: row.LayerID.Full}
+		if seen[key] {
+			return fmt.Errorf("%w: direct identity repeats cohort/layer row %d", ErrPlanIdentityMismatch, rowIndex)
+		}
+		seen[key] = true
+		if !hasRecord(CohortIDPrefixV1, key.cohort) || !hasRecord(LayerIDPrefixV1, key.layer) {
+			return fmt.Errorf("%w: direct identity cohort row %d has no matching cohort/layer records", ErrPlanIdentityMismatch, rowIndex)
+		}
+		for _, unitID := range row.UnitIDs {
+			if unitIndex >= len(primary) {
+				return fmt.Errorf("%w: direct identity has more partitioned units than the plan", ErrPlanIdentityMismatch)
+			}
+			unit := primary[unitIndex]
+			if err := wantFull(unitID, unit.UnitID); err != nil {
+				return err
+			}
+			cohort, err := fullOf(unit.CohortID)
+			if err != nil {
+				return err
+			}
+			layer, err := fullOf(unit.LayerID)
+			if err != nil {
+				return err
+			}
+			if cohort != key.cohort || layer != key.layer {
+				return fmt.Errorf("%w: direct unit %s cohort/layer disagrees with identity row %d", ErrPlanIdentityMismatch, unit.UnitID, rowIndex)
+			}
+			unitIndex++
+		}
+	}
+	if unitIndex != len(primary) {
+		return fmt.Errorf("%w: direct identity partitions %d units, plan has %d", ErrPlanIdentityMismatch, unitIndex, len(primary))
 	}
 	return nil
 }
@@ -1305,7 +1470,6 @@ func (s *PlanStore) loadManifest(ctx context.Context, reviewID string) (planMani
 // into a JSON decoder, so cancellation is honored mid-read and mid-decode and an
 // oversized manifest fails closed without buffering past the ceiling. It rejects
 // any trailing bytes by requiring the next decode to be io.EOF, and rejects a
-// stream that reached the byte ceiling even when the first object parsed.
 func decodeManifest(ctx context.Context, r io.Reader, max int64) (planManifest, error) {
 	cr := &ctxLimitReader{ctx: ctx, r: r, remaining: max + 1}
 	dec := json.NewDecoder(cr)
@@ -1383,7 +1547,7 @@ func boundManifestContent(a PlanArtifacts, max int64) error {
 		remaining -= n
 		return nil
 	}
-	if err := charge(base64Len(len(a.PlanIdentityBytes)) + int64(len(a.WorkspaceFingerprint)+len(a.PublishedIndexSignature))); err != nil {
+	if err := charge(base64Len(len(a.PlanIdentityBytes)) + int64(len(a.WorkspaceFingerprint)+len(a.WorkspaceCaptureFingerprint)+len(a.PublishedIndexSignature))); err != nil {
 		return err
 	}
 	for _, v := range []any{a.Plan, a.PlanIdentity, a.UnitCandidates, a.MandatoryUnits, a.Citations, a.IDRecords} {
@@ -1401,10 +1565,12 @@ func boundManifestContent(a PlanArtifacts, max int64) error {
 // []byte/array values that JSON serializes as base64 strings.
 func base64Len(n int) int64 { return int64(4 * ((n + 2) / 3)) }
 
-// accountValue charges an upper bound on the JSON size of v against remaining
-// without marshaling, failing closed with errManifestTooLarge the moment the
-// running total would exceed the budget. It walks strings, byte slices/arrays
-// (as base64), slices, arrays, maps, and exported struct fields.
+// accountValue charges a conservative upper bound on the encoding/json size of v
+// against remaining without marshaling, failing closed with errManifestTooLarge
+// the moment the running total would exceed the budget. It never undercounts: it
+// distinguishes []byte slices (base64 string) from fixed [N]byte arrays (JSON
+// numeric array), scans every string for worst-case JSON escaping, and accounts
+// map/slice/struct punctuation and key escaping.
 func accountValue(v reflect.Value, remaining *int64) error {
 	charge := func(n int64) error {
 		if n < 0 || n > *remaining {
@@ -1416,14 +1582,32 @@ func accountValue(v reflect.Value, remaining *int64) error {
 	switch v.Kind() {
 	case reflect.Pointer, reflect.Interface:
 		if v.IsNil() {
-			return charge(4)
+			return charge(4) // "null"
 		}
 		return accountValue(v.Elem(), remaining)
 	case reflect.String:
-		return charge(int64(v.Len()) + 2)
-	case reflect.Slice, reflect.Array:
+		return accountString(v.String(), remaining)
+	case reflect.Slice:
 		if v.Type().Elem().Kind() == reflect.Uint8 {
-			return charge(base64Len(v.Len()) + 2)
+			return charge(base64Len(v.Len()) + 2) // base64 string with quotes
+		}
+		if err := charge(2); err != nil { // []
+			return err
+		}
+		for i := range v.Len() {
+			if err := charge(1); err != nil { // comma
+				return err
+			}
+			if err := accountValue(v.Index(i), remaining); err != nil {
+				return err
+			}
+		}
+		return nil
+	case reflect.Array:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			// encoding/json renders a fixed byte array as a JSON numeric array,
+			// not base64: each element is up to 3 digits plus a separator.
+			return charge(int64(v.Len())*4 + 2)
 		}
 		if err := charge(2); err != nil {
 			return err
@@ -1438,12 +1622,12 @@ func accountValue(v reflect.Value, remaining *int64) error {
 		}
 		return nil
 	case reflect.Map:
-		if err := charge(2); err != nil {
+		if err := charge(2); err != nil { // {}
 			return err
 		}
 		iter := v.MapRange()
 		for iter.Next() {
-			if err := charge(2); err != nil {
+			if err := charge(2); err != nil { // colon + comma
 				return err
 			}
 			if err := accountValue(iter.Key(), remaining); err != nil {
@@ -1463,7 +1647,12 @@ func accountValue(v reflect.Value, remaining *int64) error {
 			if t.Field(i).PkgPath != "" {
 				continue // unexported field; not serialized
 			}
-			if err := charge(int64(len(t.Field(i).Name)) + 4); err != nil {
+			// Field key (a quoted JSON string) plus ':' and ','. Field names are
+			// ASCII identifiers, but scan for escaping to never undercount.
+			if err := accountString(t.Field(i).Name, remaining); err != nil {
+				return err
+			}
+			if err := charge(2); err != nil {
 				return err
 			}
 			if err := accountValue(v.Field(i), remaining); err != nil {
@@ -1472,8 +1661,30 @@ func accountValue(v reflect.Value, remaining *int64) error {
 		}
 		return nil
 	default:
-		return charge(24)
+		return charge(24) // numbers, bools
 	}
+}
+
+// accountString charges the worst-case JSON-escaped length of s (quotes included)
+// against remaining with a bounded scan that stops as soon as the running cost
+// would exceed the budget, so a huge string is rejected without a full pass.
+func accountString(s string, remaining *int64) error {
+	cost := int64(2) // surrounding quotes
+	for i := range len(s) {
+		switch c := s[i]; {
+		case c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c == '\b' || c == '\f':
+			cost += 2 // short escape
+		case c < 0x20 || c == '<' || c == '>' || c == '&' || c >= 0x80:
+			cost += 6 // \uXXXX (controls, HTML-escaped, and any non-ASCII byte)
+		default:
+			cost += 1
+		}
+		if cost > *remaining {
+			return errManifestTooLarge
+		}
+	}
+	*remaining -= cost
+	return nil
 }
 
 // marshalManifest computes the integrity digest and returns the serialized bytes.
