@@ -211,6 +211,9 @@ func (g *gitTreeResolver) read(ctx context.Context, p string, maxBytes int64) (S
 	}
 	switch entryKind {
 	case "tree":
+		if !isFullOID(oid, g.width) {
+			return SourceEntry{}, fmt.Errorf("%w: tree %q has malformed id %q", ErrSnapshotUnsafeEntry, clean, oid)
+		}
 		return SourceEntry{Path: clean, Present: true, Mode: modeTree, Kind: "tree", OID: oid}, nil
 	case "gitlink":
 		if !isFullOID(oid, g.width) {
@@ -397,16 +400,17 @@ type HeadView struct {
 
 // ReusableView carries the current project services a HeadView may reuse when the
 // reviewed content is exactly the current clean worktree at the resolved head
-// (or the workspace itself). The HeadView does not own these services, so its
-// Close never touches them. Eligibility is always verified by OpenHeadView.
+// (or the live workspace). The HeadView does not own these services, so its
+// Close never touches them. Eligibility is always verified by OpenHeadView from
+// observed state (index completeness, published signature, on-disk row bytes,
+// and - for a committed head - HEAD equality over a clean worktree); a caller
+// never asserts reuse. Workspace vs committed reuse is derived from whether a
+// resolved head tree-ish is supplied, not from a caller flag.
 type ReusableView struct {
 	Root    string
 	Store   *store.Store
 	Query   *query.Querier
 	Context *contextpacket.Service
-	// Workspace marks a workspace-scope reuse: the reviewed head is the live
-	// worktree, so there is no resolved head OID to match.
-	Workspace bool
 }
 
 // symlinkFunc creates a symbolic link rooted in a snapshot. It is a seam so a
@@ -532,17 +536,25 @@ func newReuseHeadView(opts HeadViewOptions, width int) *HeadView {
 		Store:   reuse.Store,
 		Query:   reuse.Query,
 		Context: reuse.Context,
-		Sources: newSourceResolver(opts, width, reuse.Workspace),
+		Sources: newSourceResolver(opts, width, opts.HeadTreeish == ""),
 		Close:   func() error { return nil },
 	}
 }
 
 // eligibleReuse verifies every condition under which the current index may stand
-// in for the resolved head. Any unmet condition returns false (materialize);
-// only a genuine error (cancellation, git/index failure) returns an error.
+// in for the reviewed head. It trusts no caller assertion: it requires complete
+// non-nil reused services rooted at the capture root, a published index whose
+// recomputed signature matches the stored one, and every indexed row's bytes
+// still present unchanged on disk (index.ValidateSnapshotContext, which closes
+// the stale-row-with-same-meta hole). For a committed head it additionally
+// requires the current HEAD to equal the full resolved head over a clean
+// tracked+untracked worktree. A workspace reuse (no resolved head tree-ish)
+// reviews the live worktree, so it has no HEAD/clean condition. Any unmet
+// condition returns false (materialize / unavailable); only a genuine error
+// (cancellation, git/index failure) returns an error.
 func eligibleReuse(ctx context.Context, opts HeadViewOptions, opt index.Options, width int) (bool, error) {
 	r := opts.Reuse
-	if r.Root == "" || r.Store == nil || r.Query == nil || r.Root != opts.RepoRoot {
+	if r.Root == "" || r.Store == nil || r.Query == nil || r.Context == nil || r.Root != opts.RepoRoot {
 		return false, nil
 	}
 	state, err := r.Store.GetMeta("index_state")
@@ -563,9 +575,22 @@ func eligibleReuse(ctx context.Context, opts HeadViewOptions, opt index.Options,
 	if stored != strconv.FormatUint(sig, 16) {
 		return false, nil
 	}
-	if r.Workspace {
+	// Prove every published row was derived from the exact bytes still on disk;
+	// a stale row whose freshness meta happens to match is caught here.
+	if err := index.ValidateSnapshotContext(ctx, r.Store, r.Root); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return false, ctxErr
+		}
+		return false, nil
+	}
+	// Workspace reuse: the reviewed head is the live worktree, with no resolved
+	// head OID to match. The signature+row validation above already binds the
+	// reused index to the current worktree bytes.
+	if opts.HeadTreeish == "" {
 		return true, nil
 	}
+	// Committed reuse: the current HEAD must equal the full resolved head over a
+	// clean tracked+untracked worktree.
 	if !isFullOID(opts.HeadTreeish, width) {
 		return false, nil
 	}
@@ -664,12 +689,21 @@ type treeEntry struct {
 // written until every entry has passed validation and every blob size is known,
 // so a hostile stream can never leave a partial or escaping snapshot.
 func materializeTree(ctx context.Context, opts HeadViewOptions, width int, contentDir string) ([]Omission, error) {
-	out, err := opts.Runner.Output(ctx, opts.RepoRoot, snapshotGitOutputLimit,
-		"ls-tree", "-rz", "--full-tree", opts.HeadTreeish)
-	if err != nil {
-		return nil, err
+	// Stream ls-tree through Pipe into an incremental NUL parser that stops at
+	// maxEntries+1. When the parser rejects a record (cap exceeded or a hostile
+	// entry) its Write returns an error, which the runner surfaces as a terminal
+	// failure and uses to kill the git producer, so a runaway stream is never
+	// fully buffered.
+	parser := newTreeStreamParser(width, opts.maxEntries())
+	pipeErr := opts.Runner.Pipe(ctx, opts.RepoRoot, snapshotGitOutputLimit,
+		bytes.NewReader(nil), parser, "ls-tree", "-rz", "--full-tree", opts.HeadTreeish)
+	if parser.err != nil {
+		return nil, parser.err
 	}
-	entries, err := parseTreeEntries(out, width, opts.maxEntries())
+	if pipeErr != nil {
+		return nil, pipeErr
+	}
+	entries, err := parser.result()
 	if err != nil {
 		return nil, err
 	}
@@ -742,7 +776,7 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 			return nil, err
 		}
 		wave := make([]string, 0, 64)
-		waveBytes := int64(0)
+		waveRemaining := snapshotContentBatchBytes
 		seen := map[string]bool{}
 		i := start
 		for ; i < len(entries); i++ {
@@ -754,12 +788,13 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 			if seen[e.oid] {
 				continue
 			}
-			if len(wave) > 0 && waveBytes+meta.size > snapshotContentBatchBytes {
+			// Remaining-based accounting: never add sizes that could overflow.
+			if len(wave) > 0 && meta.size > waveRemaining {
 				break
 			}
 			wave = append(wave, e.oid)
 			seen[e.oid] = true
-			waveBytes += meta.size
+			waveRemaining -= meta.size
 		}
 		end := i
 		objs := map[string]CatFileObject{}
@@ -790,58 +825,110 @@ func materializeTree(ctx context.Context, opts HeadViewOptions, width int, conte
 	return omissions, nil
 }
 
-// parseTreeEntries parses `ls-tree -rz --full-tree` output incrementally into
-// validated entries, stopping as soon as the entry cap is exceeded. It rejects a
-// missing terminal NUL, a malformed record, a mode/type mismatch, an invalid or
-// non-UTF-8 path, an absolute path, parent traversal, a duplicate path, a
-// parent/file conflict, an unsupported mode, and a short object id.
-func parseTreeEntries(out []byte, width, maxEntries int) ([]treeEntry, error) {
-	var entries []treeEntry
-	files := map[string]bool{}
-	dirs := map[string]bool{}
-	rest := out
-	for len(rest) > 0 {
-		i := bytes.IndexByte(rest, 0)
+// treeStreamParser is an io.Writer that parses `ls-tree -rz --full-tree` output
+// incrementally as it streams from git. It validates each NUL-terminated record
+// the moment it completes and returns a terminal error from Write as soon as a
+// record is malformed, unsafe, or the entry cap is exceeded, so the runner kills
+// the git producer instead of buffering an unbounded stream. Partial records are
+// buffered across writes.
+type treeStreamParser struct {
+	width      int
+	maxEntries int
+	buf        []byte
+	entries    []treeEntry
+	files      map[string]bool
+	dirs       map[string]bool
+	err        error
+}
+
+func newTreeStreamParser(width, maxEntries int) *treeStreamParser {
+	return &treeStreamParser{
+		width:      width,
+		maxEntries: maxEntries,
+		files:      map[string]bool{},
+		dirs:       map[string]bool{},
+	}
+}
+
+// Write consumes a stream chunk, completing and validating every whole record it
+// contains. A terminal validation error is recorded and returned so the runner
+// stops the producer.
+func (p *treeStreamParser) Write(b []byte) (int, error) {
+	if p.err != nil {
+		return 0, p.err
+	}
+	p.buf = append(p.buf, b...)
+	for {
+		i := bytes.IndexByte(p.buf, 0)
 		if i < 0 {
-			return nil, fmt.Errorf("%w: ls-tree output not NUL-terminated", ErrSnapshotMalformedStream)
+			break
 		}
-		rec := rest[:i]
-		rest = rest[i+1:]
-		if len(rec) == 0 {
-			return nil, fmt.Errorf("%w: empty ls-tree record", ErrSnapshotMalformedStream)
-		}
-		mode, typ, oid, p, err := parseLsTreeRecord(rec)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrSnapshotMalformedStream, err)
-		}
-		if _, err := classifyEntry(mode, typ); err != nil {
-			return nil, err
-		}
-		if isBlobMode(mode) || mode == "160000" {
-			if !isFullOID(oid, width) {
-				return nil, fmt.Errorf("%w: entry %q has malformed object id %q", ErrSnapshotUnsafeEntry, p, oid)
-			}
-		}
-		clean, err := safeTreePath(p)
-		if err != nil {
-			return nil, err
-		}
-		if files[clean] || dirs[clean] {
-			return nil, fmt.Errorf("%w: duplicate or conflicting path %q", ErrSnapshotUnsafeEntry, clean)
-		}
-		for _, ancestor := range ancestorPaths(clean) {
-			if files[ancestor] {
-				return nil, fmt.Errorf("%w: %q conflicts with file %q", ErrSnapshotUnsafeEntry, clean, ancestor)
-			}
-			dirs[ancestor] = true
-		}
-		files[clean] = true
-		entries = append(entries, treeEntry{mode: mode, typ: typ, oid: oid, path: clean})
-		if len(entries) > maxEntries {
-			return nil, fmt.Errorf("%w: more than %d entries", ErrSnapshotTooManyEntries, maxEntries)
+		rec := p.buf[:i]
+		p.buf = p.buf[i+1:]
+		if err := p.consume(rec); err != nil {
+			p.err = err
+			return 0, err
 		}
 	}
-	return entries, nil
+	return len(b), nil
+}
+
+// consume validates and records one complete record.
+func (p *treeStreamParser) consume(rec []byte) error {
+	if len(rec) == 0 {
+		return fmt.Errorf("%w: empty ls-tree record", ErrSnapshotMalformedStream)
+	}
+	mode, typ, oid, path, err := parseLsTreeRecord(rec)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrSnapshotMalformedStream, err)
+	}
+	if _, err := classifyEntry(mode, typ); err != nil {
+		return err
+	}
+	if !isFullOID(oid, p.width) {
+		return fmt.Errorf("%w: entry %q has malformed object id %q", ErrSnapshotUnsafeEntry, path, oid)
+	}
+	clean, err := safeTreePath(path)
+	if err != nil {
+		return err
+	}
+	if p.files[clean] || p.dirs[clean] {
+		return fmt.Errorf("%w: duplicate or conflicting path %q", ErrSnapshotUnsafeEntry, clean)
+	}
+	for _, ancestor := range ancestorPaths(clean) {
+		if p.files[ancestor] {
+			return fmt.Errorf("%w: %q conflicts with file %q", ErrSnapshotUnsafeEntry, clean, ancestor)
+		}
+		p.dirs[ancestor] = true
+	}
+	p.files[clean] = true
+	p.entries = append(p.entries, treeEntry{mode: mode, typ: typ, oid: oid, path: clean})
+	if len(p.entries) > p.maxEntries {
+		return fmt.Errorf("%w: more than %d entries", ErrSnapshotTooManyEntries, p.maxEntries)
+	}
+	return nil
+}
+
+// result returns the parsed entries once the stream is exhausted, rejecting a
+// trailing partial record (missing terminal NUL).
+func (p *treeStreamParser) result() ([]treeEntry, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	if len(p.buf) != 0 {
+		return nil, fmt.Errorf("%w: ls-tree output not NUL-terminated", ErrSnapshotMalformedStream)
+	}
+	return p.entries, nil
+}
+
+// parseTreeEntries parses a complete `ls-tree -rz --full-tree` byte slice through
+// the same incremental parser the streaming materializer uses.
+func parseTreeEntries(out []byte, width, maxEntries int) ([]treeEntry, error) {
+	p := newTreeStreamParser(width, maxEntries)
+	if _, err := p.Write(out); err != nil {
+		return nil, err
+	}
+	return p.result()
 }
 
 // safeTreePath validates a tree entry path: non-empty valid UTF-8, relative
@@ -911,7 +998,14 @@ func batchCheck(ctx context.Context, runner GitRunner, root string, oids []strin
 	if err := runner.Pipe(ctx, root, snapshotGitOutputLimit, &stdin, &stdout, "cat-file", "--batch-check"); err != nil {
 		return nil, err
 	}
-	lines := strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n")
+	// git cat-file --batch-check emits exactly one newline-terminated line per
+	// requested object. Require exact framing: a trailing newline and precisely
+	// one line per request, so a truncated or padded stream is rejected.
+	raw := stdout.String()
+	if !strings.HasSuffix(raw, "\n") {
+		return nil, fmt.Errorf("%w: batch-check output not newline-terminated", ErrSnapshotMalformedStream)
+	}
+	lines := strings.Split(raw[:len(raw)-1], "\n")
 	if len(lines) != len(order) {
 		return nil, fmt.Errorf("%w: batch-check returned %d lines, want %d", ErrSnapshotMalformedStream, len(lines), len(order))
 	}

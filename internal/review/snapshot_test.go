@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/prowl-agent/prowl-agent/internal/config"
+	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
 	"github.com/prowl-agent/prowl-agent/internal/index"
 	"github.com/prowl-agent/prowl-agent/internal/query"
 	"github.com/prowl-agent/prowl-agent/internal/store"
@@ -71,6 +72,7 @@ func TestMaterializeParseTreeRejectsHostileStreams(t *testing.T) {
 		{"parent file conflict", treeRecord("100644", "blob", fortyHex, "a") + treeRecord("100644", "blob", fortyHex, "a/b"), 10, ErrSnapshotUnsafeEntry},
 		{"unsupported mode", treeRecord("120001", "blob", fortyHex, "x"), 10, ErrSnapshotUnsafeEntry},
 		{"short object id", treeRecord("100644", "blob", "abcd", "x"), 10, ErrSnapshotUnsafeEntry},
+		{"tree short object id", treeRecord("040000", "tree", "abcd", "d"), 10, ErrSnapshotUnsafeEntry},
 		{"malformed record", "100644 blob " + fortyHex + "no-tab\x00", 10, ErrSnapshotMalformedStream},
 		{"missing terminal NUL", "100644 blob " + fortyHex + "\tx", 10, ErrSnapshotMalformedStream},
 		{"empty record", treeRecord("100644", "blob", fortyHex, "a") + "\x00", 10, ErrSnapshotMalformedStream},
@@ -94,11 +96,11 @@ func TestMaterializeHostileStreamWritesNothingOutsideRoot(t *testing.T) {
 	stream := treeRecord("100644", "blob", fortyHex, escaped)
 
 	runner := fakeTreeRunner{
-		onOutput: func(args []string) ([]byte, error) {
+		onPipe: func(_ io.Reader, args []string) ([]byte, error) {
 			if len(args) > 0 && args[0] == "ls-tree" {
 				return []byte(stream), nil
 			}
-			return nil, fmt.Errorf("unexpected Output %v", args)
+			return nil, fmt.Errorf("unexpected Pipe %v", args)
 		},
 	}
 	_, err := OpenHeadView(context.Background(), HeadViewOptions{
@@ -467,7 +469,7 @@ func TestHeadViewReuseVerified(t *testing.T) {
 			BaseTreeish:    base,
 			HeadTreeish:    headTreeish,
 			SnapshotParent: t.TempDir(),
-			Reuse:          &ReusableView{Root: f.root, Store: db, Query: query.New(db)},
+			Reuse:          &ReusableView{Root: f.root, Store: db, Query: query.New(db), Context: &contextpacket.Service{Store: db, Root: f.root}},
 		}
 	}
 
@@ -531,15 +533,57 @@ func TestHeadViewReuseVerified(t *testing.T) {
 		}
 	})
 
+	t.Run("nil context materializes", func(t *testing.T) {
+		db := indexCurrent(t, f.root)
+		defer db.Close()
+		opts := reuseOpts(db, head)
+		opts.Reuse.Context = nil // a reuse without a context service is never trusted
+		hv, err := OpenHeadView(context.Background(), opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer hv.Close()
+		if hv.Store == db {
+			t.Fatal("reuse with a nil context service was reused instead of materialized")
+		}
+	})
+
+	t.Run("stale row with same meta is caught", func(t *testing.T) {
+		db := indexCurrent(t, f.root)
+		defer db.Close()
+		foo := filepath.Join(f.root, "pkg/foo.go")
+		orig, err := os.ReadFile(foo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.WriteFile(foo, orig, 0o644)
+		// Change the file's bytes without re-indexing, then set cli_sig to the
+		// now-current signature. The freshness meta matches, but the store rows
+		// are stale; only a byte-level row validation catches it.
+		if err := os.WriteFile(foo, []byte("package pkg\n\nfunc ReuseFuncV3() int { return 3 }\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sig, err := index.SignatureWithOptionsContext(context.Background(), f.root, index.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.SetMeta("cli_sig", strconv.FormatUint(sig, 16)); err != nil {
+			t.Fatal(err)
+		}
+		// Workspace reuse (no resolved head tree-ish) cannot fall back to a
+		// materialized tree, so a stale row surfaces as unavailable.
+		if _, err := OpenHeadView(context.Background(), reuseOpts(db, "")); !errors.Is(err, ErrReuseUnavailable) {
+			t.Fatalf("stale-row workspace reuse err=%v, want ErrReuseUnavailable", err)
+		}
+	})
+
 	t.Run("ineligible without head is unavailable", func(t *testing.T) {
 		empty, err := store.Open(filepath.Join(t.TempDir(), "empty.db"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer empty.Close()
-		opts := reuseOpts(empty, "")
-		opts.Reuse.Workspace = true
-		if _, err := OpenHeadView(context.Background(), opts); !errors.Is(err, ErrReuseUnavailable) {
+		if _, err := OpenHeadView(context.Background(), reuseOpts(empty, "")); !errors.Is(err, ErrReuseUnavailable) {
 			t.Fatalf("err=%v, want ErrReuseUnavailable", err)
 		}
 	})
@@ -564,6 +608,9 @@ func TestMaterializeSourceResolverStrictCatFileBinding(t *testing.T) {
 		{"ls multiple records", treeRecord("100644", "blob", oid, "x") + treeRecord("100644", "blob", oid, "x"), "", "", ErrSnapshotMalformedStream},
 		{"ls mode/type mismatch", treeRecord("100644", "tree", oid, "x"), "", "", ErrSnapshotUnsafeEntry},
 		{"ls short id", treeRecord("100644", "blob", "abcd", "x"), "", "", ErrSnapshotUnsafeEntry},
+		{"ls tree short id", treeRecord("040000", "tree", "abcd", "x"), "", "", ErrSnapshotUnsafeEntry},
+		{"batch-check missing terminal newline", lsOK, oid + " blob 3", "", ErrSnapshotMalformedStream},
+		{"batch-check extra blank line", lsOK, oid + " blob 3\n\n", "", ErrSnapshotMalformedStream},
 		{"batch-check wrong oid", lsOK, other + " blob 3\n", "", ErrSnapshotMalformedStream},
 		{"batch-check wrong type", lsOK, oid + " tree 3\n", "", ErrSnapshotMalformedStream},
 		{"batch wrong oid", lsOK, oid + " blob 3\n", other + " blob 3\nabc\n", ErrSnapshotMalformedStream},
@@ -607,6 +654,72 @@ func TestMaterializeBatchCheckRejectsBadSizes(t *testing.T) {
 		}
 		if _, err := batchCheck(context.Background(), runner, t.TempDir(), []string{fortyHex}); !errors.Is(err, ErrSnapshotMalformedStream) {
 			t.Fatalf("size %q err=%v, want ErrSnapshotMalformedStream", size, err)
+		}
+	}
+}
+
+// ---- streaming caps / producer-stop (finding 3) ---------------------------
+
+// chunkedPipeRunner writes each ls-tree record to the parser in its own Write
+// and stops as soon as a write is rejected, so a test can prove the producer is
+// halted at the entry cap instead of streaming every record.
+type chunkedPipeRunner struct {
+	records [][]byte
+	written *int
+}
+
+func (r chunkedPipeRunner) Output(context.Context, string, int64, ...string) ([]byte, error) {
+	return nil, fmt.Errorf("unexpected Output")
+}
+
+func (r chunkedPipeRunner) Pipe(_ context.Context, _ string, _ int64, _ io.Reader, stdout io.Writer, args ...string) error {
+	if len(args) == 0 || args[0] != "ls-tree" {
+		return fmt.Errorf("unexpected Pipe %v", args)
+	}
+	for _, rec := range r.records {
+		if _, err := stdout.Write(rec); err != nil {
+			return err // the parser rejected a record: the producer stops here
+		}
+		*r.written++
+	}
+	return nil
+}
+
+// TestMaterializeStreamingParserStopsProducer proves the incremental parser stops
+// consuming the ls-tree stream at maxEntries+1 and reports the cap, rather than
+// buffering the whole stream.
+func TestMaterializeStreamingParserStopsProducer(t *testing.T) {
+	const total = 100
+	records := make([][]byte, 0, total)
+	for i := range total {
+		records = append(records, []byte(treeRecord("100644", "blob", fortyHex, fmt.Sprintf("f%03d", i))))
+	}
+	written := 0
+	runner := chunkedPipeRunner{records: records, written: &written}
+	opts := HeadViewOptions{
+		Runner:       runner,
+		RepoRoot:     t.TempDir(),
+		ObjectFormat: "sha1",
+		HeadTreeish:  fortyHex,
+		MaxEntries:   5,
+	}
+	_, err := materializeTree(context.Background(), opts, 20, t.TempDir())
+	if !errors.Is(err, ErrSnapshotTooManyEntries) {
+		t.Fatalf("materializeTree err=%v, want ErrSnapshotTooManyEntries", err)
+	}
+	if written != 5 {
+		t.Fatalf("producer wrote %d records before stopping, want 5 (cap+stop)", written)
+	}
+}
+
+// TestMaterializeBatchCheckStrictFraming proves exact newline framing is required.
+func TestMaterializeBatchCheckStrictFraming(t *testing.T) {
+	for _, out := range []string{fortyHex + " blob 3", fortyHex + " blob 3\n\n"} {
+		runner := fakeTreeRunner{
+			onPipe: func(_ io.Reader, args []string) ([]byte, error) { return []byte(out), nil },
+		}
+		if _, err := batchCheck(context.Background(), runner, t.TempDir(), []string{fortyHex}); !errors.Is(err, ErrSnapshotMalformedStream) {
+			t.Fatalf("framing %q err=%v, want ErrSnapshotMalformedStream", out, err)
 		}
 	}
 }
