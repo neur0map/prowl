@@ -1,0 +1,999 @@
+{
+  "schema": "review.eval-corpus.v1",
+  "set": "held_out",
+  "sources_manifest_sha256": "36bcecf0aef80492d6a0c359d6cd3d342f5b7c7e3a8f93fe5ac52d091bfc8078",
+  "candidate_pool_sha256": "ecd6b30d29ce7599221221bb9b3d6f928fb71a826dae61f4d69e06c848adbc04",
+  "cases": [],
+  "audit_queue": [
+    {
+      "case_id": "aacr-freecad-freecad-21257",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/FreeCAD/FreeCAD/pull/21257",
+      "source_type": "human_caught",
+      "repository": "FreeCAD/FreeCAD",
+      "base_sha": "eb761fd69cf1fb9c674e385bb1d419814526ba5a",
+      "head_sha": "17e56f6570a97aa9803b502b23cf27dc8be1da70",
+      "selection_key": "02c7dc03ffe3784b241eaa3863c014bc854859ad32a01c8ccc690eb4ada8df28",
+      "language": "C++",
+      "source_reported_churn": 672,
+      "source_row_sha256": "b413bd41bfe61901693fe397cc65fae877e747767a232cc0ec1be4ab15bdd5c1",
+      "evidence_refs": [
+        "https://github.com/FreeCAD/FreeCAD/pull/21257",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/FreeCAD/FreeCAD.git",
+        "ref": "eb761fd69cf1fb9c674e385bb1d419814526ba5a",
+        "oid": "eb761fd69cf1fb9c674e385bb1d419814526ba5a"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/FreeCAD/FreeCAD.git",
+        "ref": "refs/pull/21257/head",
+        "oid": "17e56f6570a97aa9803b502b23cf27dc8be1da70"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-cherryhq-cherry-studio-5540",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/CherryHQ/cherry-studio/pull/5540",
+      "source_type": "human_caught",
+      "repository": "CherryHQ/cherry-studio",
+      "base_sha": "83a25941859179b635105c9b4fd79d5542e3701e",
+      "head_sha": "f258f5b2cb4a4cf9012e106837aba409b383e367",
+      "selection_key": "75f0605321a9bb2f8259ebdc4582c16b6712aa0644b32ee2f07de683bb013e68",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 345,
+      "source_row_sha256": "58afa74ccbb80b525ababb6301c3e24f9968048bd283e2e29dc8850003d3521e",
+      "evidence_refs": [
+        "https://github.com/CherryHQ/cherry-studio/pull/5540",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/CherryHQ/cherry-studio.git",
+        "ref": "83a25941859179b635105c9b4fd79d5542e3701e",
+        "oid": "83a25941859179b635105c9b4fd79d5542e3701e"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/CherryHQ/cherry-studio.git",
+        "ref": "refs/pull/5540/head",
+        "oid": "f258f5b2cb4a4cf9012e106837aba409b383e367"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-gofr-dev-gofr-1395",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/gofr-dev/gofr/pull/1395",
+      "source_type": "human_caught",
+      "repository": "gofr-dev/gofr",
+      "base_sha": "2c0c0997cad66a1ee1e47f95db6a830394157c00",
+      "head_sha": "c2ab1eb3308afa4f29842f0a982751bf65c059d0",
+      "selection_key": "650278652a79dac6bcefe4f0fe4df3c41405ec6de755c29355bf65e244e01513",
+      "language": "Go",
+      "source_reported_churn": 348,
+      "source_row_sha256": "63892a9f927d06c1d11ffa6dd4fe340e2a6e556a2ec5be52f59b4f20ebd36e82",
+      "evidence_refs": [
+        "https://github.com/gofr-dev/gofr/pull/1395",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "2c0c0997cad66a1ee1e47f95db6a830394157c00",
+        "oid": "2c0c0997cad66a1ee1e47f95db6a830394157c00"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "refs/pull/1395/head",
+        "oid": "c2ab1eb3308afa4f29842f0a982751bf65c059d0"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-sveltejs-svelte-16232",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/sveltejs/svelte/pull/16232",
+      "source_type": "human_caught",
+      "repository": "sveltejs/svelte",
+      "base_sha": "44bec4c8b172a47ff300f754463555bbb694bb05",
+      "head_sha": "2af7ba21563f1b7f011ffa9f0c08e4acb473eef3",
+      "selection_key": "dd83298b63518b74274f53eb1ef2ea58947270877932b008503646576d244d22",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 326,
+      "source_row_sha256": "c6e09586ded46f576560b0229dec88e7b7043d2dc5c877528e9abbe648582001",
+      "evidence_refs": [
+        "https://github.com/sveltejs/svelte/pull/16232",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/sveltejs/svelte.git",
+        "ref": "44bec4c8b172a47ff300f754463555bbb694bb05",
+        "oid": "44bec4c8b172a47ff300f754463555bbb694bb05"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/sveltejs/svelte.git",
+        "ref": "refs/pull/16232/head",
+        "oid": "2af7ba21563f1b7f011ffa9f0c08e4acb473eef3"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-cherryhq-cherry-studio-5637",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/CherryHQ/cherry-studio/pull/5637",
+      "source_type": "human_caught",
+      "repository": "CherryHQ/cherry-studio",
+      "base_sha": "5644b00b87e07fa1acd84d4ec93f9f2fb1205090",
+      "head_sha": "636c788e2ba413d21a5fd385c3ea4cc7e134e1be",
+      "selection_key": "5b9a119e89232bd826c3289d60693e73e876c5561fd2f562e35b62322194ffd8",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 687,
+      "source_row_sha256": "2be3db752d905dc4f0f250d962f0406d32acd023ec0f2c6d3973c3499d600342",
+      "evidence_refs": [
+        "https://github.com/CherryHQ/cherry-studio/pull/5637",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/CherryHQ/cherry-studio.git",
+        "ref": "5644b00b87e07fa1acd84d4ec93f9f2fb1205090",
+        "oid": "5644b00b87e07fa1acd84d4ec93f9f2fb1205090"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/CherryHQ/cherry-studio.git",
+        "ref": "refs/pull/5637/head",
+        "oid": "636c788e2ba413d21a5fd385c3ea4cc7e134e1be"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-google-gemini-gemini-cli-4828",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/google-gemini/gemini-cli/pull/4828",
+      "source_type": "human_caught",
+      "repository": "google-gemini/gemini-cli",
+      "base_sha": "77ea28a234023019ddda3f4a5f7a81b3514d3eb8",
+      "head_sha": "de968877895a8ae5f0edb83a43b37fa190cc8ec9",
+      "selection_key": "2d79d26e6b1e792905ee4f45b38acab0a0b70c6de3023ee521aaef6d6f9734f5",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 861,
+      "source_row_sha256": "056e84915ff7568caefc6c4f58e0efee2a7d290866e71f93e2872da70e43414e",
+      "evidence_refs": [
+        "https://github.com/google-gemini/gemini-cli/pull/4828",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/google-gemini/gemini-cli.git",
+        "ref": "77ea28a234023019ddda3f4a5f7a81b3514d3eb8",
+        "oid": "77ea28a234023019ddda3f4a5f7a81b3514d3eb8"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/google-gemini/gemini-cli.git",
+        "ref": "refs/pull/4828/head",
+        "oid": "de968877895a8ae5f0edb83a43b37fa190cc8ec9"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-valkey-io-valkey-1485",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/valkey-io/valkey/pull/1485",
+      "source_type": "human_caught",
+      "repository": "valkey-io/valkey",
+      "base_sha": "8b2137d6cd7c8b898352b8bcb035402958d92707",
+      "head_sha": "7fa784a27562940d2995fc6e3d6938940d81e4b6",
+      "selection_key": "ba0c3f243d7da5b80252f3ef8b837467fecc4a64a8f3a8bcf81d8946541b1281",
+      "language": "C",
+      "source_reported_churn": 540,
+      "source_row_sha256": "99ad686f92508ae54bb9ed3f9341dffca7e99df092406c8a71b35659c6f4be2d",
+      "evidence_refs": [
+        "https://github.com/valkey-io/valkey/pull/1485",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/valkey-io/valkey.git",
+        "ref": "8b2137d6cd7c8b898352b8bcb035402958d92707",
+        "oid": "8b2137d6cd7c8b898352b8bcb035402958d92707"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/valkey-io/valkey.git",
+        "ref": "refs/pull/1485/head",
+        "oid": "7fa784a27562940d2995fc6e3d6938940d81e4b6"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-microsoft-typescript-go-831",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/microsoft/typescript-go/pull/831",
+      "source_type": "human_caught",
+      "repository": "microsoft/typescript-go",
+      "base_sha": "b970689fe86e0b6ef4f5285b18343ddf16b294eb",
+      "head_sha": "bc3195e0f2727d11a48ed9fc61f37a90c9b7deb4",
+      "selection_key": "8391b24ec6414619d3403b50ef3f71092dcd50d476ff9e57875504f6f4b088b6",
+      "language": "Go",
+      "source_reported_churn": 933,
+      "source_row_sha256": "c3fcb26e62644db975ee8e8618c3c1776e915fd76370c06d5c7878094afcaf12",
+      "evidence_refs": [
+        "https://github.com/microsoft/typescript-go/pull/831",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/microsoft/typescript-go.git",
+        "ref": "b970689fe86e0b6ef4f5285b18343ddf16b294eb",
+        "oid": "b970689fe86e0b6ef4f5285b18343ddf16b294eb"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/microsoft/typescript-go.git",
+        "ref": "refs/pull/831/head",
+        "oid": "bc3195e0f2727d11a48ed9fc61f37a90c9b7deb4"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-freecad-freecad-19426",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/FreeCAD/FreeCAD/pull/19426",
+      "source_type": "human_caught",
+      "repository": "FreeCAD/FreeCAD",
+      "base_sha": "e59692501d1a08e7306189fed5c31b02553f7746",
+      "head_sha": "f001b8a10ac2206458f7db457a45c9b2853e7bff",
+      "selection_key": "b1aae796a4cc49dbb1c23018982e1e60f5e3ecb3cc1728caba619ac9c7c7795d",
+      "language": "C++",
+      "source_reported_churn": 725,
+      "source_row_sha256": "776ba7e8411abf85e796ab3fdbe572172b9c491474ee38d8d84b1dde70d7c654",
+      "evidence_refs": [
+        "https://github.com/FreeCAD/FreeCAD/pull/19426",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/FreeCAD/FreeCAD.git",
+        "ref": "e59692501d1a08e7306189fed5c31b02553f7746",
+        "oid": "e59692501d1a08e7306189fed5c31b02553f7746"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/FreeCAD/FreeCAD.git",
+        "ref": "refs/pull/19426/head",
+        "oid": "f001b8a10ac2206458f7db457a45c9b2853e7bff"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-elastic-elasticsearch-126376",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/elastic/elasticsearch/pull/126376",
+      "source_type": "human_caught",
+      "repository": "elastic/elasticsearch",
+      "base_sha": "10d682d9aa4b1c2976e1db769ba04cb15256da9e",
+      "head_sha": "47e352fda0567a682687fe926927cee3f631ea24",
+      "selection_key": "2a78d81f29c8ecff9565f807bd77aa75ed0810d5444df3add9fdc024232963c2",
+      "language": "Java",
+      "source_reported_churn": 476,
+      "source_row_sha256": "94077e9fc6eeaf6bcbad2c569229eb6af2356b619981d543d128fbc6e8529306",
+      "evidence_refs": [
+        "https://github.com/elastic/elasticsearch/pull/126376",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "10d682d9aa4b1c2976e1db769ba04cb15256da9e",
+        "oid": "10d682d9aa4b1c2976e1db769ba04cb15256da9e"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "refs/pull/126376/head",
+        "oid": "47e352fda0567a682687fe926927cee3f631ea24"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-clickhouse-clickhouse-82441",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/ClickHouse/ClickHouse/pull/82441",
+      "source_type": "human_caught",
+      "repository": "ClickHouse/ClickHouse",
+      "base_sha": "314352043db0170026d11475bcaf67c7bb4fc311",
+      "head_sha": "1c01feef2757648e0b1b801cf1f81c59de527bb6",
+      "selection_key": "33938e3dd38f65aabd29e8b8fa8058e02bba0956c6f36ee41d3ebb54169dc079",
+      "language": "C++",
+      "source_reported_churn": 531,
+      "source_row_sha256": "c436b445c68f64c5cfc7998179a5b35e81534d6a463cec916b3dab6d7d66fd4d",
+      "evidence_refs": [
+        "https://github.com/ClickHouse/ClickHouse/pull/82441",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "314352043db0170026d11475bcaf67c7bb4fc311",
+        "oid": "314352043db0170026d11475bcaf67c7bb4fc311"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "refs/pull/82441/head",
+        "oid": "1c01feef2757648e0b1b801cf1f81c59de527bb6"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-laravel-framework-54226",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/laravel/framework/pull/54226",
+      "source_type": "human_caught",
+      "repository": "laravel/framework",
+      "base_sha": "180c25ff94ae2dff26d2ca5f8bf779af1e8fc8c2",
+      "head_sha": "2e5054a19ba55b335bf8df43a8ae7e032244f671",
+      "selection_key": "1e3c3a5e49cda1a74521a612d38cdca52f626406416e021365c0fccf7f0b4e8f",
+      "language": "PHP",
+      "source_reported_churn": 556,
+      "source_row_sha256": "e3fe91adf174faf4f970e9b39433fd4443f7b6220b40c674dd97467029fabc2e",
+      "evidence_refs": [
+        "https://github.com/laravel/framework/pull/54226",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/laravel/framework.git",
+        "ref": "180c25ff94ae2dff26d2ca5f8bf779af1e8fc8c2",
+        "oid": "180c25ff94ae2dff26d2ca5f8bf779af1e8fc8c2"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/laravel/framework.git",
+        "ref": "refs/pull/54226/head",
+        "oid": "2e5054a19ba55b335bf8df43a8ae7e032244f671"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-google-gemini-gemini-cli-8154",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/google-gemini/gemini-cli/pull/8154",
+      "source_type": "human_caught",
+      "repository": "google-gemini/gemini-cli",
+      "base_sha": "0fa1bd7ac417366f321ed2554caeaef550321959",
+      "head_sha": "5a05fb0dd002481343aaab7736a871904bb07c6f",
+      "selection_key": "7f7bf97d092a3bb8c9684788b34a369442f6e0a98f3123628c97e3faaf8eafd9",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 405,
+      "source_row_sha256": "e3df90c86938a99e990b844ff9d935382db20b1584eb37c401ba85061666ed6c",
+      "evidence_refs": [
+        "https://github.com/google-gemini/gemini-cli/pull/8154",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/google-gemini/gemini-cli.git",
+        "ref": "0fa1bd7ac417366f321ed2554caeaef550321959",
+        "oid": "0fa1bd7ac417366f321ed2554caeaef550321959"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/google-gemini/gemini-cli.git",
+        "ref": "refs/pull/8154/head",
+        "oid": "5a05fb0dd002481343aaab7736a871904bb07c6f"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-immich-app-immich-14777",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/immich-app/immich/pull/14777",
+      "source_type": "human_caught",
+      "repository": "immich-app/immich",
+      "base_sha": "91b3b6aebd3a02a4ac158b21ce469138df893178",
+      "head_sha": "10e569cc1c563ece2eb7e2581cef943829a72440",
+      "selection_key": "fc3606d4b4b306aa31d442d4950cf00394931f7b9cf73952c59e86892b365f83",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 312,
+      "source_row_sha256": "15c659dac245d9dfacb6fa7ce20ebb84eff1db3d5c6aa063a5835ddad7bd0797",
+      "evidence_refs": [
+        "https://github.com/immich-app/immich/pull/14777",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/immich-app/immich.git",
+        "ref": "91b3b6aebd3a02a4ac158b21ce469138df893178",
+        "oid": "91b3b6aebd3a02a4ac158b21ce469138df893178"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/immich-app/immich.git",
+        "ref": "refs/pull/14777/head",
+        "oid": "10e569cc1c563ece2eb7e2581cef943829a72440"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-kestra-io-kestra-7191",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/kestra-io/kestra/pull/7191",
+      "source_type": "human_caught",
+      "repository": "kestra-io/kestra",
+      "base_sha": "0ec45f028467c99d8d1efeee6c201210d9433e6d",
+      "head_sha": "bfcfb2ac16dd8f198a99fef43072cb178f9a1d8e",
+      "selection_key": "b46fc82c8f8e6c8e6fb37d134abf92719aac8a4cba1597af4dc361002651b44c",
+      "language": "Java",
+      "source_reported_churn": 458,
+      "source_row_sha256": "6e363fc4c016794497af51ce00a651ff4e73ae85454ead9a18ea2faeb7808c6c",
+      "evidence_refs": [
+        "https://github.com/kestra-io/kestra/pull/7191",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/kestra-io/kestra.git",
+        "ref": "0ec45f028467c99d8d1efeee6c201210d9433e6d",
+        "oid": "0ec45f028467c99d8d1efeee6c201210d9433e6d"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/kestra-io/kestra.git",
+        "ref": "refs/pull/7191/head",
+        "oid": "bfcfb2ac16dd8f198a99fef43072cb178f9a1d8e"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-gofr-dev-gofr-1355",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/gofr-dev/gofr/pull/1355",
+      "source_type": "human_caught",
+      "repository": "gofr-dev/gofr",
+      "base_sha": "dc0b3e630423b72cb9b2f273fdc18a5c11d12984",
+      "head_sha": "44e3eeb2786ad4d333dc1f528fb104236693d060",
+      "selection_key": "3bdb6a0155d58ae3366a8aa1bf4d832276f56a7da58e5038a034c33c18ac6fb6",
+      "language": "Go",
+      "source_reported_churn": 309,
+      "source_row_sha256": "a818be979801c2d48cfefeb84225ee492fa9aec0405b786ef4a38de89bf104a2",
+      "evidence_refs": [
+        "https://github.com/gofr-dev/gofr/pull/1355",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "dc0b3e630423b72cb9b2f273fdc18a5c11d12984",
+        "oid": "dc0b3e630423b72cb9b2f273fdc18a5c11d12984"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "refs/pull/1355/head",
+        "oid": "44e3eeb2786ad4d333dc1f528fb104236693d060"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-clickhouse-clickhouse-73546",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/ClickHouse/ClickHouse/pull/73546",
+      "source_type": "human_caught",
+      "repository": "ClickHouse/ClickHouse",
+      "base_sha": "40a4654d7b114f1d42f48680d57007ae80897cd1",
+      "head_sha": "83afa5c6704737ed4afc5a178f96bf49c39e5e4c",
+      "selection_key": "c1d3ad9c9ca5fbca3e67c39553c9d2b04b916adceac7f80cbac5f009a24f488a",
+      "language": "C++",
+      "source_reported_churn": 498,
+      "source_row_sha256": "a570d62de527594d51b69c261ebcea2ea7516740b73f6ff8b3c68c4bd2cbe76c",
+      "evidence_refs": [
+        "https://github.com/ClickHouse/ClickHouse/pull/73546",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "40a4654d7b114f1d42f48680d57007ae80897cd1",
+        "oid": "40a4654d7b114f1d42f48680d57007ae80897cd1"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "refs/pull/73546/head",
+        "oid": "83afa5c6704737ed4afc5a178f96bf49c39e5e4c"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-google-gemini-gemini-cli-8797",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/google-gemini/gemini-cli/pull/8797",
+      "source_type": "human_caught",
+      "repository": "google-gemini/gemini-cli",
+      "base_sha": "d64b61ef89f01ecdc0e095a995d47522245a0065",
+      "head_sha": "6e4236bf7681b2a2cba5630a8dd0a0d5a200a0df",
+      "selection_key": "82c8603968cb0d7fa04c12f1893d72a3108cf31c186a51f9fcaec85441018cd4",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 436,
+      "source_row_sha256": "b7d28f9e719474a0a022fe946b924875bb54b18d9fc77502bfc3b9d42e8f9385",
+      "evidence_refs": [
+        "https://github.com/google-gemini/gemini-cli/pull/8797",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/google-gemini/gemini-cli.git",
+        "ref": "d64b61ef89f01ecdc0e095a995d47522245a0065",
+        "oid": "d64b61ef89f01ecdc0e095a995d47522245a0065"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/google-gemini/gemini-cli.git",
+        "ref": "refs/pull/8797/head",
+        "oid": "6e4236bf7681b2a2cba5630a8dd0a0d5a200a0df"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-gofr-dev-gofr-1617",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/gofr-dev/gofr/pull/1617",
+      "source_type": "human_caught",
+      "repository": "gofr-dev/gofr",
+      "base_sha": "49ab39432cf4892ee84569099b8065dfe45fae92",
+      "head_sha": "ba0316277a22f508ed645951705f53d151552916",
+      "selection_key": "05dc57af450fe1c2fe945ea2c238daaf7917fc80d207a60de33600af201ca72b",
+      "language": "Go",
+      "source_reported_churn": 554,
+      "source_row_sha256": "1cd4ca540e2f3af8a861f8273ae0536e9366b06a07360a687170f762c0dd4216",
+      "evidence_refs": [
+        "https://github.com/gofr-dev/gofr/pull/1617",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "49ab39432cf4892ee84569099b8065dfe45fae92",
+        "oid": "49ab39432cf4892ee84569099b8065dfe45fae92"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "refs/pull/1617/head",
+        "oid": "ba0316277a22f508ed645951705f53d151552916"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-clickhouse-clickhouse-80345",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/ClickHouse/ClickHouse/pull/80345",
+      "source_type": "human_caught",
+      "repository": "ClickHouse/ClickHouse",
+      "base_sha": "5fb6ee38d2d7d2fc6e1a67005b12d3b9aaac418f",
+      "head_sha": "e29021aed71bfebb76c0305f554375061adb8bf9",
+      "selection_key": "7ca02fa90ba42534c4ea445e15abde6d6800fb1879f7e448797b8c8e00f66068",
+      "language": "C++",
+      "source_reported_churn": 373,
+      "source_row_sha256": "08d6c4853c2e5db85a8dcd1d6eca5f546174dc727d65e4b4ecc24e516c7ef466",
+      "evidence_refs": [
+        "https://github.com/ClickHouse/ClickHouse/pull/80345",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "5fb6ee38d2d7d2fc6e1a67005b12d3b9aaac418f",
+        "oid": "5fb6ee38d2d7d2fc6e1a67005b12d3b9aaac418f"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "refs/pull/80345/head",
+        "oid": "e29021aed71bfebb76c0305f554375061adb8bf9"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-keycloak-keycloak-40283",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/keycloak/keycloak/pull/40283",
+      "source_type": "human_caught",
+      "repository": "keycloak/keycloak",
+      "base_sha": "04ad5d530007517b60e2bf8706542556078d17f7",
+      "head_sha": "ad511cbc538f1d9727d17cc423420abc50367af4",
+      "selection_key": "91e480a4d7e67e304f7d5689cb8ebfcbb6c5a51f0042a26cc0069a69c54f024c",
+      "language": "Java",
+      "source_reported_churn": 596,
+      "source_row_sha256": "d1751b087d0afa16870d48d87c851a8e949a7cb6d9762194dd60dd0cf630c223",
+      "evidence_refs": [
+        "https://github.com/keycloak/keycloak/pull/40283",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/keycloak/keycloak.git",
+        "ref": "04ad5d530007517b60e2bf8706542556078d17f7",
+        "oid": "04ad5d530007517b60e2bf8706542556078d17f7"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/keycloak/keycloak.git",
+        "ref": "refs/pull/40283/head",
+        "oid": "ad511cbc538f1d9727d17cc423420abc50367af4"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-cline-cline-5524",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/cline/cline/pull/5524",
+      "source_type": "human_caught",
+      "repository": "cline/cline",
+      "base_sha": "ca7f02b8cf8cd36d832a63e1c9ad892356c7df66",
+      "head_sha": "8f4c6038dd70ce02caaf7ae924dc28d5be63968e",
+      "selection_key": "11ab451b4917fa23c7bd162096ea2d7683cb87a93a1b842e38b2d87c40344fb1",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 333,
+      "source_row_sha256": "495720f4a4c175eb2b4477a64f1c4d27de8ce3db6847b5eda6b41362116a5066",
+      "evidence_refs": [
+        "https://github.com/cline/cline/pull/5524",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/cline/cline.git",
+        "ref": "ca7f02b8cf8cd36d832a63e1c9ad892356c7df66",
+        "oid": "ca7f02b8cf8cd36d832a63e1c9ad892356c7df66"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/cline/cline.git",
+        "ref": "refs/pull/5524/head",
+        "oid": "8f4c6038dd70ce02caaf7ae924dc28d5be63968e"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-opencv-opencv-27284",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/opencv/opencv/pull/27284",
+      "source_type": "human_caught",
+      "repository": "opencv/opencv",
+      "base_sha": "79afad939ecfaa332af0541db473fa94f8f425b6",
+      "head_sha": "868fc5c581228f8f47bf4bc3ee84427acc99226a",
+      "selection_key": "cffa203bb45a6ebdc5e0727fbe4b9d58095648445ad29033b8c5ea10820e0443",
+      "language": "C++",
+      "source_reported_churn": 307,
+      "source_row_sha256": "c5cbafdbefe5d8d5e7546f246d002c484b1c940d949a2bbe5d5f235265ff1796",
+      "evidence_refs": [
+        "https://github.com/opencv/opencv/pull/27284",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/opencv/opencv.git",
+        "ref": "79afad939ecfaa332af0541db473fa94f8f425b6",
+        "oid": "79afad939ecfaa332af0541db473fa94f8f425b6"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/opencv/opencv.git",
+        "ref": "refs/pull/27284/head",
+        "oid": "868fc5c581228f8f47bf4bc3ee84427acc99226a"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-ollama-ollama-9654",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/ollama/ollama/pull/9654",
+      "source_type": "human_caught",
+      "repository": "ollama/ollama",
+      "base_sha": "498792c9be023ebfdaa1e0dbc6ac85c0ff8c75b1",
+      "head_sha": "56dc316a57f07fbed80723d1ecd589da0906018e",
+      "selection_key": "114e8433934101037fc204a0d202764f94b1a3b59c65f4e2c0ab2ff065146185",
+      "language": "Go",
+      "source_reported_churn": 776,
+      "source_row_sha256": "f61db9dcec23f8820be3cc4dd1bc05751057cae5973a8ed4c4aff467fea226a9",
+      "evidence_refs": [
+        "https://github.com/ollama/ollama/pull/9654",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/ollama/ollama.git",
+        "ref": "498792c9be023ebfdaa1e0dbc6ac85c0ff8c75b1",
+        "oid": "498792c9be023ebfdaa1e0dbc6ac85c0ff8c75b1"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/ollama/ollama.git",
+        "ref": "refs/pull/9654/head",
+        "oid": "56dc316a57f07fbed80723d1ecd589da0906018e"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-n8n-io-n8n-15362",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/n8n-io/n8n/pull/15362",
+      "source_type": "human_caught",
+      "repository": "n8n-io/n8n",
+      "base_sha": "77ece2e572096e6ad267e7f9363ebbf9f8ba46e8",
+      "head_sha": "3eb1c1c783a45a150fa7229d8f2590d3786f58ad",
+      "selection_key": "6ede35dab9fb073cffd5d6391d906765f42f66269ef82ca30d95538de9e75b5b",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 683,
+      "source_row_sha256": "299afcf93c632626766fc385b171d42945221a4a4f16c9e392c17bfd53add5b9",
+      "evidence_refs": [
+        "https://github.com/n8n-io/n8n/pull/15362",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/n8n-io/n8n.git",
+        "ref": "77ece2e572096e6ad267e7f9363ebbf9f8ba46e8",
+        "oid": "77ece2e572096e6ad267e7f9363ebbf9f8ba46e8"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/n8n-io/n8n.git",
+        "ref": "refs/pull/15362/head",
+        "oid": "3eb1c1c783a45a150fa7229d8f2590d3786f58ad"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-gofr-dev-gofr-1696",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/gofr-dev/gofr/pull/1696",
+      "source_type": "human_caught",
+      "repository": "gofr-dev/gofr",
+      "base_sha": "5e284aec0447be34c96a252e959067c8bcd9cd4c",
+      "head_sha": "de79ab765d0d34d78a42ebdd50a21a6f26841b7f",
+      "selection_key": "d6ded284b2e7b8c22cb16d9ef534888ba214d420e28f5cc92a84117265fa4094",
+      "language": "Go",
+      "source_reported_churn": 356,
+      "source_row_sha256": "23ebe5fbbb8d556e135be817a02678654305aa10aed68e11f65dba29f1cebb49",
+      "evidence_refs": [
+        "https://github.com/gofr-dev/gofr/pull/1696",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "5e284aec0447be34c96a252e959067c8bcd9cd4c",
+        "oid": "5e284aec0447be34c96a252e959067c8bcd9cd4c"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/gofr-dev/gofr.git",
+        "ref": "refs/pull/1696/head",
+        "oid": "de79ab765d0d34d78a42ebdd50a21a6f26841b7f"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-lvgl-lvgl-8689",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/lvgl/lvgl/pull/8689",
+      "source_type": "human_caught",
+      "repository": "lvgl/lvgl",
+      "base_sha": "e526b2a1faa4672eeb3610b466ecc25b1abb220b",
+      "head_sha": "244b3b996e0b331468cf5967c937029535af569c",
+      "selection_key": "84bf6367c84080fc2978e3113744db278afeff0f89b3eacac89318a41c73ad37",
+      "language": "C",
+      "source_reported_churn": 804,
+      "source_row_sha256": "73db160a86b6268a27861c08a60e0e9053db5d8b147bd3a04120f72c55d64700",
+      "evidence_refs": [
+        "https://github.com/lvgl/lvgl/pull/8689",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/lvgl/lvgl.git",
+        "ref": "e526b2a1faa4672eeb3610b466ecc25b1abb220b",
+        "oid": "e526b2a1faa4672eeb3610b466ecc25b1abb220b"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/lvgl/lvgl.git",
+        "ref": "refs/pull/8689/head",
+        "oid": "244b3b996e0b331468cf5967c937029535af569c"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-clickhouse-clickhouse-75474",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/ClickHouse/ClickHouse/pull/75474",
+      "source_type": "human_caught",
+      "repository": "ClickHouse/ClickHouse",
+      "base_sha": "3eee8866fb55acab61eaba6dc9eebd847f483913",
+      "head_sha": "1ac5c4a6a23b4742624d64db210f10ca95133b11",
+      "selection_key": "dcbc4e6b926d40fb2b1ba09789e90163422a8c5a22b2399a406bdb6f2f6f79fa",
+      "language": "C++",
+      "source_reported_churn": 412,
+      "source_row_sha256": "37cb89c061d505da1f3916db1210b2f35a393bc578752226b50be49cdab74047",
+      "evidence_refs": [
+        "https://github.com/ClickHouse/ClickHouse/pull/75474",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "3eee8866fb55acab61eaba6dc9eebd847f483913",
+        "oid": "3eee8866fb55acab61eaba6dc9eebd847f483913"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "refs/pull/75474/head",
+        "oid": "1ac5c4a6a23b4742624d64db210f10ca95133b11"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-comfyanonymous-comfyui-8446",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/comfyanonymous/ComfyUI/pull/8446",
+      "source_type": "human_caught",
+      "repository": "comfyanonymous/ComfyUI",
+      "base_sha": "4dcd698e489da69294ee01de0350a9a02e3e4b41",
+      "head_sha": "c7b25784b141a298d8ee5f0d830a29da6e8a3d54",
+      "selection_key": "af951dc72e64a689fca77c245842d76354c752959609674b60efdda6a6b7222b",
+      "language": "Python",
+      "source_reported_churn": 971,
+      "source_row_sha256": "abf69533cd853308ebef5538493ca44b2b1478902f65a2fef6f729d00b9609c4",
+      "evidence_refs": [
+        "https://github.com/comfyanonymous/ComfyUI/pull/8446",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/comfyanonymous/ComfyUI.git",
+        "ref": "4dcd698e489da69294ee01de0350a9a02e3e4b41",
+        "oid": "4dcd698e489da69294ee01de0350a9a02e3e4b41"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/comfyanonymous/ComfyUI.git",
+        "ref": "refs/pull/8446/head",
+        "oid": "c7b25784b141a298d8ee5f0d830a29da6e8a3d54"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-wavetermdev-waveterm-1793",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/wavetermdev/waveterm/pull/1793",
+      "source_type": "human_caught",
+      "repository": "wavetermdev/waveterm",
+      "base_sha": "90a57d552d15f1b2a4d92cdfc3a4308efcf5c57b",
+      "head_sha": "286783fb8e71cec6d2294bd871e5ccf8c798c646",
+      "selection_key": "73e17df4dd181c5e2a3d11df14e7244d491b60c7697a50e8119c15c38b37f43c",
+      "language": "Go",
+      "source_reported_churn": 522,
+      "source_row_sha256": "a03e5f5c6a9672e631b673148055b204702497820a6dbfdd3a8d824c1ad5b9ad",
+      "evidence_refs": [
+        "https://github.com/wavetermdev/waveterm/pull/1793",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/wavetermdev/waveterm.git",
+        "ref": "90a57d552d15f1b2a4d92cdfc3a4308efcf5c57b",
+        "oid": "90a57d552d15f1b2a4d92cdfc3a4308efcf5c57b"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/wavetermdev/waveterm.git",
+        "ref": "refs/pull/1793/head",
+        "oid": "286783fb8e71cec6d2294bd871e5ccf8c798c646"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    }
+  ]
+}

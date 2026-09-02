@@ -1,0 +1,55 @@
+{
+  "schema": "review.eval-sources.v1",
+  "sources": [
+    {
+      "id": "codereviewbench-goldens",
+      "url": "https://raw.githubusercontent.com/kodustech/codereviewbench/577b0de8d5b933b0688128c74e089a4afaf9c290/goldens.json",
+      "path": "codereviewbench-goldens.json",
+      "sha256": "1c9efcf6b9795f27557dc508f0a214848e15c3e4cc46d0d8fdde5e42e34cf8ae",
+      "license": "NOASSERTION (upstream repository publishes no license)",
+      "parser": "json",
+      "revision": "577b0de8d5b933b0688128c74e089a4afaf9c290",
+      "max_bytes": 65536
+    },
+    {
+      "id": "codereviewbench-pr-size",
+      "url": "https://raw.githubusercontent.com/kodustech/codereviewbench/577b0de8d5b933b0688128c74e089a4afaf9c290/pr-size.json",
+      "path": "codereviewbench-pr-size.json",
+      "sha256": "d10dffa9722694a99bdf338d1c8529c2a5d4deaed4458a854a2f580a25226e3d",
+      "license": "NOASSERTION (upstream repository publishes no license)",
+      "parser": "json",
+      "revision": "577b0de8d5b933b0688128c74e089a4afaf9c290",
+      "max_bytes": 16384
+    },
+    {
+      "id": "aacr-bench",
+      "url": "https://huggingface.co/datasets/Alibaba-Aone/aacr-bench/resolve/47be1d6df1e7faf222cf531587772d92f79fe6b2/dataset.json",
+      "path": "aacr-dataset.json",
+      "sha256": "0804505f0a474765ce2840c832cfeaa6c4f0250dd6ccb169fe73c6758b245a86",
+      "license": "Apache-2.0",
+      "parser": "json",
+      "revision": "47be1d6df1e7faf222cf531587772d92f79fe6b2",
+      "max_bytes": 3145728
+    },
+    {
+      "id": "qodo-pr-mapping",
+      "url": "https://raw.githubusercontent.com/agentic-review-benchmarks/benchmark-pr-mapping/81cb96a3a2781186a446bf9fb8dd06d5314fb1a1/README.md",
+      "path": "qodo-mapping-readme.md",
+      "sha256": "7e70a94771a8dd5c5e8b1153691c9fc113a87b61968c4b0ac9463ca3884edb7d",
+      "license": "NOASSERTION (upstream repository publishes no license)",
+      "parser": "markdown",
+      "revision": "81cb96a3a2781186a446bf9fb8dd06d5314fb1a1",
+      "max_bytes": 131072
+    },
+    {
+      "id": "swr",
+      "url": "https://raw.githubusercontent.com/ZZR0/SWRench/67ae1d4395ac05f800d62b0e13678eadeb9fa5c7/data/swr_datasets_d5c5.jsonl",
+      "path": "swr-datasets.jsonl",
+      "sha256": "7048e7a92ea9f7a1e6812646694a040582448cc1dd9d515264a4b55071aff95d",
+      "license": "MIT",
+      "parser": "jsonl",
+      "revision": "67ae1d4395ac05f800d62b0e13678eadeb9fa5c7",
+      "max_bytes": 94371840
+    }
+  ]
+}
