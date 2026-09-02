@@ -67,8 +67,8 @@ func pathRecord(digest func([]byte) Digest) (StableID, IDRecord) {
 	return pathRecordFor(digest, "a.go")
 }
 
-func mustJSON(v any) []byte {
-	b, err := json.Marshal(v)
+func mustCanonicalUnit(u Unit) []byte {
+	b, err := u.CanonicalMandatoryJSON()
 	if err != nil {
 		panic(err)
 	}
@@ -216,7 +216,7 @@ func makeStructuredArtifacts(name string) PlanArtifacts {
 		IDRecords:         []IDRecord{pRec, hRec, uRec, cRec, lRec, tRec},
 		Citations:         citations,
 		UnitCandidates:    map[string][]contextpacket.Candidate{unitID.Public: nil},
-		MandatoryUnits:    map[string][]byte{unitID.Public: mustJSON(unit)},
+		MandatoryUnits:    map[string][]byte{unitID.Public: mustCanonicalUnit(unit)},
 	}
 }
 

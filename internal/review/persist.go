@@ -21,6 +21,7 @@ package review
 // for the store's lifetime.
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -225,12 +226,7 @@ func (l *SnapshotLease) Release() error {
 		return err
 	}
 	l.consumed = true
-	sroot, err := os.OpenRoot(l.store.snapshotsDir)
-	if err != nil {
-		return err
-	}
-	defer sroot.Close()
-	return sroot.RemoveAll(filepath.Base(l.dir))
+	return l.store.snapshotsRoot.RemoveAll(filepath.Base(l.dir))
 }
 
 // PlanStore persists plans beneath the Git common directory. It is safe to open
@@ -241,9 +237,13 @@ type PlanStore struct {
 	rootDir      *os.Root
 	locksDir     string
 	snapshotsDir string
-	lockPath     string
-	lockTimeout  time.Duration
-	maxManifest  int64
+	// snapshotsRoot pins the snapshots directory so lease validation, release, and
+	// consumption operate relative to a fixed capability that a swap or symlink of
+	// the absolute snapshots path cannot redirect.
+	snapshotsRoot *os.Root
+	lockPath      string
+	lockTimeout   time.Duration
+	maxManifest   int64
 	// digest derives content-ID full digests; it is injectable so a test can
 	// force prefix collisions during construction and manifest loading. Plan
 	// identity and manifest integrity always use a fixed SHA-256 independent of
@@ -294,31 +294,43 @@ func OpenPlanStore(ctx context.Context, runner GitRunner, repoRoot string) (*Pla
 	if err != nil {
 		return nil, err
 	}
+	snapshotsRoot, err := os.OpenRoot(snapshots)
+	if err != nil {
+		_ = rootDir.Close()
+		return nil, err
+	}
 	return &PlanStore{
-		root:         root,
-		rootDir:      rootDir,
-		locksDir:     locks,
-		snapshotsDir: snapshots,
-		lockPath:     filepath.Join(prowlDir, storeLockName),
-		lockTimeout:  defaultLockTimeout,
-		maxManifest:  maxManifestBytesV1,
-		digest:       func(b []byte) Digest { return sha256.Sum256(b) },
-		now:          time.Now,
-		sameDevice:   sameDevice,
-		renameFn:     os.Rename,
+		root:          root,
+		rootDir:       rootDir,
+		locksDir:      locks,
+		snapshotsDir:  snapshots,
+		snapshotsRoot: snapshotsRoot,
+		lockPath:      filepath.Join(prowlDir, storeLockName),
+		lockTimeout:   defaultLockTimeout,
+		maxManifest:   maxManifestBytesV1,
+		digest:        func(b []byte) Digest { return sha256.Sum256(b) },
+		now:           time.Now,
+		sameDevice:    sameDevice,
+		renameFn:      os.Rename,
 	}, nil
 }
 
 // Root returns the review-state root directory.
 func (s *PlanStore) Root() string { return s.root }
 
-// Close releases the pinned reviews-root descriptor.
+// Close releases the pinned reviews-root and snapshots-root descriptors.
 func (s *PlanStore) Close() error {
-	if s.rootDir == nil {
-		return nil
+	var err error
+	if s.rootDir != nil {
+		err = s.rootDir.Close()
+		s.rootDir = nil
 	}
-	err := s.rootDir.Close()
-	s.rootDir = nil
+	if s.snapshotsRoot != nil {
+		if cerr := s.snapshotsRoot.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+		s.snapshotsRoot = nil
+	}
 	return err
 }
 
@@ -329,14 +341,24 @@ func (s *PlanStore) NewSnapshotLease(ctx context.Context) (*SnapshotLease, error
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(s.snapshotsDir, 0o700); err != nil {
-		return nil, err
+	// Create the lease through the pinned snapshots capability with a unique name,
+	// so the directory is minted on the fixed inode a later validation/consume/
+	// release resolves, not via a swappable absolute path.
+	for range 100 {
+		var b [12]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return nil, err
+		}
+		name := leasePrefix + hex.EncodeToString(b[:])
+		err := s.snapshotsRoot.Mkdir(name, 0o700)
+		if err == nil {
+			return &SnapshotLease{dir: filepath.Join(s.snapshotsDir, name), store: s}, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, err
+		}
 	}
-	dir, err := os.MkdirTemp(s.snapshotsDir, leasePrefix)
-	if err != nil {
-		return nil, err
-	}
-	return &SnapshotLease{dir: dir, store: s}, nil
+	return nil, errors.New("review: could not create a unique snapshot lease directory")
 }
 
 // Save persists artifacts atomically under the plan's review id. It recomputes
@@ -385,16 +407,13 @@ func (s *PlanStore) Save(ctx context.Context, artifacts PlanArtifacts, lease *Sn
 		return SaveResult{}, err
 	}
 
-	// Cap before allocation: the mandatory unit bytes dominate manifest size, so
-	// reject an over-ceiling payload before decoding/marshaling, and again the
-	// marshaled bytes before publication, so Save never persists a review its own
-	// Load would reject as oversized.
-	var artifactBytes int64
-	for _, v := range artifacts.MandatoryUnits {
-		artifactBytes += int64(len(v))
-	}
-	if artifactBytes > s.maxManifest {
-		return SaveResult{}, fmt.Errorf("%w: mandatory unit bytes exceed the %d-byte ceiling", ErrManifestCorrupt, s.maxManifest)
+	// Incrementally bound every manifest content contributor (identity bytes,
+	// records, mandatory units, citations, unit candidates, and the plan) with
+	// overflow-safe remaining checks before marshaling, so Save never allocates or
+	// persists a review its own Load would reject as oversized. The post-marshal
+	// length check below remains a defense-in-depth backstop.
+	if err := boundManifestContent(artifacts, s.maxManifest); err != nil {
+		return SaveResult{}, err
 	}
 
 	registry, err := s.buildDomainRegistry(ctx, reviewID)
@@ -489,10 +508,13 @@ func (s *PlanStore) publish(reviewID string, payload []byte, lease *SnapshotLeas
 		return werr
 	}
 	if lease != nil {
-		if cerr := s.consumeLease(lease, tmpName); cerr != nil {
+		// consumeLease may move the source before a post-move check fails; capture
+		// moved even on error so the defer restores/preserves the sole snapshot.
+		var cerr error
+		moved, cerr = s.consumeLease(lease, tmpName)
+		if cerr != nil {
 			return cerr
 		}
-		moved = true
 	}
 	if rerr := s.rootDir.Rename(tmpName, reviewID); rerr != nil {
 		return fmt.Errorf("%w: %v", ErrSnapshotOwnership, rerr)
@@ -541,12 +563,7 @@ func (s *PlanStore) validateLease(lease *SnapshotLease) error {
 	if !strings.HasPrefix(base, leasePrefix) {
 		return fmt.Errorf("%w: %q is not a lease directory", ErrSnapshotLease, lease.dir)
 	}
-	sroot, err := os.OpenRoot(s.snapshotsDir)
-	if err != nil {
-		return err
-	}
-	defer sroot.Close()
-	info, err := sroot.Lstat(base)
+	info, err := s.snapshotsRoot.Lstat(base)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrSnapshotLease, err)
 	}
@@ -560,35 +577,37 @@ func (s *PlanStore) validateLease(lease *SnapshotLease) error {
 // as the review root, moves it into <tmpName>/snapshot, and then re-verifies the
 // published entry with a no-follow stat through the pinned root, so a source
 // swapped for a symlink between validation and the move cannot be published.
-func (s *PlanStore) consumeLease(lease *SnapshotLease, tmpName string) error {
+func (s *PlanStore) consumeLease(lease *SnapshotLease, tmpName string) (moved bool, err error) {
 	if err := s.validateLease(lease); err != nil {
-		return err
+		return false, err
 	}
 	same, err := s.sameDevice(s.root, lease.dir)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrSnapshotLease, err)
+		return false, fmt.Errorf("%w: %v", ErrSnapshotLease, err)
 	}
 	if !same {
-		return fmt.Errorf("%w: %q is on a different device", ErrSnapshotLease, lease.dir)
+		return false, fmt.Errorf("%w: %q is on a different device", ErrSnapshotLease, lease.dir)
 	}
 	dest := filepath.Join(s.root, tmpName, snapshotName)
 	if err := s.renameFn(lease.dir, dest); err != nil {
-		return fmt.Errorf("%w: %v", ErrSnapshotOwnership, err)
+		return false, fmt.Errorf("%w: %v", ErrSnapshotOwnership, err)
 	}
+	// The source has been moved; report moved=true from here on so a caller can
+	// restore/preserve it and never delete the sole snapshot on a later failure.
 	lease.consumed = true
 	tr, err := s.rootDir.OpenRoot(tmpName)
 	if err != nil {
-		return err
+		return true, err
 	}
 	defer tr.Close()
 	info, err := tr.Lstat(snapshotName)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrSnapshotLease, err)
+		return true, fmt.Errorf("%w: %v", ErrSnapshotLease, err)
 	}
 	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
-		return fmt.Errorf("%w: published snapshot is not a real directory", ErrSnapshotLease)
+		return true, fmt.Errorf("%w: published snapshot is not a real directory", ErrSnapshotLease)
 	}
-	return nil
+	return true, nil
 }
 
 // Load reads and fully verifies a persisted plan: bounded context-aware manifest
@@ -874,6 +893,19 @@ func collectPlanIDs(plan Plan, citations map[string]CitationProof, unitCandidate
 		set[id] = struct{}{}
 		return nil
 	}
+	addOneOf := func(id string, kinds ...string) error {
+		k, ok := contentKindOf(id)
+		if !ok {
+			return fmt.Errorf("%w: malformed content id %q", ErrIDRegistry, id)
+		}
+		for _, want := range kinds {
+			if k == want {
+				set[id] = struct{}{}
+				return nil
+			}
+		}
+		return fmt.Errorf("%w: id %q is kind %q, not one of %v", ErrIDRegistry, id, k, kinds)
+	}
 	for _, p := range plan.ChangedPaths {
 		if err := addKind(p.PathID, PathIDPrefixV1); err != nil {
 			return nil, err
@@ -917,7 +949,7 @@ func collectPlanIDs(plan Plan, citations map[string]CitationProof, unitCandidate
 	}
 	for _, a := range plan.RequiredAudits {
 		for _, target := range a.TargetIDs {
-			if err := addKind(target, TargetIDPrefixV1); err != nil {
+			if err := addOneOf(target, HunkIDPrefixV1, PathIDPrefixV1, CohortIDPrefixV1, UnitIDPrefixV1, TargetIDPrefixV1); err != nil {
 				return nil, err
 			}
 		}
@@ -954,10 +986,14 @@ func verifyArtifactIntegrity(plan Plan, records []IDRecord, identityBytes []byte
 }
 
 // verifyIdentityBinding proves the canonical identity bytes describe exactly this
-// plan: (a) the content-ID digests embedded in the identity encoding equal the
-// set of record full digests, and (b) each changed-path's visible old/new/status
-// equal the values encoded in its p_ record's canonical input, so the public
-// review id can never name content different from what it was derived over.
+// plan. For every category the plan also carries it compares, in order, each
+// identity-bearing field: paths (id, review_class, coverage, reason, role_ids and
+// the p_ record's old/new/status), audits (audit_id and target ids), cohorts
+// (cohort/layer ids and member unit ids over the plan's flattened cohort x layer
+// order), and primary units (unit id). It also requires the full set of content
+// digests embedded in the identity to equal the record full set, so hunks and any
+// extras are bound too. The public review id can therefore never name content
+// different from what ReviewPlanIdentityV1 encoded.
 func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) error {
 	top, err := decodeFramedFields(identityBytes)
 	if err != nil {
@@ -966,6 +1002,183 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) 
 	if string(top["schema"]) != PlanSchemaV1 {
 		return fmt.Errorf("%w: identity schema %q", ErrPlanIdentityMismatch, top["schema"])
 	}
+	byPublic := make(map[string]IDRecord, len(records))
+	for _, r := range records {
+		byPublic[r.Public] = r
+	}
+	fullOf := func(public string) (Digest, error) {
+		r, ok := byPublic[public]
+		if !ok {
+			return Digest{}, fmt.Errorf("%w: plan references %s with no identity record", ErrIDRegistry, public)
+		}
+		return r.Full, nil
+	}
+	digField := func(f map[string][]byte, name string, want Digest) error {
+		got, err := asDigest(f[name])
+		if err != nil {
+			return err
+		}
+		if got != want {
+			return fmt.Errorf("%w: identity %s digest disagrees with the plan", ErrPlanIdentityMismatch, name)
+		}
+		return nil
+	}
+	digListMatches := func(raw []byte, publics []string) error {
+		items, err := decodeFrameList(raw)
+		if err != nil {
+			return err
+		}
+		if len(items) != len(publics) {
+			return fmt.Errorf("%w: identity digest list length disagrees with the plan", ErrPlanIdentityMismatch)
+		}
+		for i, it := range items {
+			want, err := fullOf(publics[i])
+			if err != nil {
+				return err
+			}
+			got, err := asDigest(it)
+			if err != nil {
+				return err
+			}
+			if got != want {
+				return fmt.Errorf("%w: identity member digest disagrees with the plan", ErrPlanIdentityMismatch)
+			}
+		}
+		return nil
+	}
+
+	// --- paths: ordered, every identity-bearing field plus record old/new/status.
+	pathItems, err := decodeFrameList(top["paths"])
+	if err != nil {
+		return fmt.Errorf("%w: identity paths: %v", ErrPlanIdentityMismatch, err)
+	}
+	if len(pathItems) != len(plan.ChangedPaths) {
+		return fmt.Errorf("%w: identity has %d paths, plan has %d", ErrPlanIdentityMismatch, len(pathItems), len(plan.ChangedPaths))
+	}
+	for i, it := range pathItems {
+		f, err := decodeFramedFields(it)
+		if err != nil {
+			return fmt.Errorf("%w: identity path %d: %v", ErrPlanIdentityMismatch, i, err)
+		}
+		cp := plan.ChangedPaths[i]
+		want, err := fullOf(cp.PathID)
+		if err != nil {
+			return err
+		}
+		if err := digField(f, "path_id", want); err != nil {
+			return err
+		}
+		if string(f["review_class"]) != cp.ReviewClass || string(f["coverage"]) != cp.Coverage || string(f["reason"]) != cp.Reason {
+			return fmt.Errorf("%w: changed path %s class/coverage/reason disagrees with the identity", ErrPlanIdentityMismatch, cp.PathID)
+		}
+		roles, err := decodeStringList(f["role_ids"])
+		if err != nil {
+			return err
+		}
+		if !stringSlicesEqual(roles, cp.Roles) {
+			return fmt.Errorf("%w: changed path %s roles disagree with the identity", ErrPlanIdentityMismatch, cp.PathID)
+		}
+		// The p_ record canonical must encode the same old/new/status.
+		rf, err := decodeFramedFields(byPublic[cp.PathID].Canonical)
+		if err != nil {
+			return fmt.Errorf("%w: undecodable path record %s: %v", ErrPlanIdentityMismatch, cp.PathID, err)
+		}
+		rec, err := decodeFramedFields(rf["record"])
+		if err != nil {
+			return fmt.Errorf("%w: undecodable path record body %s: %v", ErrPlanIdentityMismatch, cp.PathID, err)
+		}
+		if string(rec["new_path"]) != cp.NewPath || string(rec["old_path"]) != cp.OldPath || string(rec["status"]) != cp.Status {
+			return fmt.Errorf("%w: changed path %s disagrees with its identity record", ErrPlanIdentityMismatch, cp.PathID)
+		}
+	}
+
+	// --- primary units: ordered unit id.
+	unitItems, err := decodeFrameList(top["units"])
+	if err != nil {
+		return fmt.Errorf("%w: identity units: %v", ErrPlanIdentityMismatch, err)
+	}
+	if len(unitItems) != len(plan.PrimaryUnits) {
+		return fmt.Errorf("%w: identity has %d units, plan has %d", ErrPlanIdentityMismatch, len(unitItems), len(plan.PrimaryUnits))
+	}
+	for i, it := range unitItems {
+		f, err := decodeFramedFields(it)
+		if err != nil {
+			return fmt.Errorf("%w: identity unit %d: %v", ErrPlanIdentityMismatch, i, err)
+		}
+		want, err := fullOf(plan.PrimaryUnits[i].UnitID)
+		if err != nil {
+			return err
+		}
+		if err := digField(f, "unit_id", want); err != nil {
+			return err
+		}
+	}
+
+	// --- cohorts: ordered over the plan's flattened cohort x layer sequence.
+	type flatCohort struct {
+		cohort string
+		layer  string
+		units  []string
+	}
+	var flat []flatCohort
+	for _, c := range plan.Cohorts {
+		for _, l := range c.Layers {
+			flat = append(flat, flatCohort{cohort: c.CohortID, layer: l.LayerID, units: l.UnitIDs})
+		}
+	}
+	cohortItems, err := decodeFrameList(top["cohorts"])
+	if err != nil {
+		return fmt.Errorf("%w: identity cohorts: %v", ErrPlanIdentityMismatch, err)
+	}
+	if len(cohortItems) != len(flat) {
+		return fmt.Errorf("%w: identity has %d cohort rows, plan flattens to %d", ErrPlanIdentityMismatch, len(cohortItems), len(flat))
+	}
+	for i, it := range cohortItems {
+		f, err := decodeFramedFields(it)
+		if err != nil {
+			return fmt.Errorf("%w: identity cohort %d: %v", ErrPlanIdentityMismatch, i, err)
+		}
+		cwant, err := fullOf(flat[i].cohort)
+		if err != nil {
+			return err
+		}
+		if err := digField(f, "cohort_id", cwant); err != nil {
+			return err
+		}
+		lwant, err := fullOf(flat[i].layer)
+		if err != nil {
+			return err
+		}
+		if err := digField(f, "layer_id", lwant); err != nil {
+			return err
+		}
+		if err := digListMatches(f["unit_ids"], flat[i].units); err != nil {
+			return err
+		}
+	}
+
+	// --- audits: ordered audit id and target ids.
+	auditItems, err := decodeFrameList(top["audits"])
+	if err != nil {
+		return fmt.Errorf("%w: identity audits: %v", ErrPlanIdentityMismatch, err)
+	}
+	if len(auditItems) != len(plan.RequiredAudits) {
+		return fmt.Errorf("%w: identity has %d audits, plan has %d", ErrPlanIdentityMismatch, len(auditItems), len(plan.RequiredAudits))
+	}
+	for i, it := range auditItems {
+		f, err := decodeFramedFields(it)
+		if err != nil {
+			return fmt.Errorf("%w: identity audit %d: %v", ErrPlanIdentityMismatch, i, err)
+		}
+		if string(f["audit_id"]) != plan.RequiredAudits[i].AuditID {
+			return fmt.Errorf("%w: identity audit %d id disagrees with the plan", ErrPlanIdentityMismatch, i)
+		}
+		if err := digListMatches(f["target_ids"], plan.RequiredAudits[i].TargetIDs); err != nil {
+			return err
+		}
+	}
+
+	// --- full content-digest set equality (binds hunks and rejects extras).
 	embedded := map[Digest]bool{}
 	collect := func(section string, fields ...string) error {
 		items, err := decodeFrameList(top[section])
@@ -1027,53 +1240,56 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, identityBytes []byte) 
 			return fmt.Errorf("%w: a record digest is absent from the identity bytes", ErrPlanIdentityMismatch)
 		}
 	}
-	// (b) Each changed path's visible fields must match its p_ record canonical.
-	byPublic := make(map[string]IDRecord, len(records))
-	for _, r := range records {
-		byPublic[r.Public] = r
-	}
-	for _, cp := range plan.ChangedPaths {
-		r, ok := byPublic[cp.PathID]
-		if !ok {
-			continue // absence is caught by the registry set-equality check
-		}
-		fields, err := decodeFramedFields(r.Canonical)
-		if err != nil {
-			return fmt.Errorf("%w: undecodable path record %s: %v", ErrPlanIdentityMismatch, cp.PathID, err)
-		}
-		rec, err := decodeFramedFields(fields["record"])
-		if err != nil {
-			return fmt.Errorf("%w: undecodable path record body %s: %v", ErrPlanIdentityMismatch, cp.PathID, err)
-		}
-		if string(rec["new_path"]) != cp.NewPath || string(rec["old_path"]) != cp.OldPath || string(rec["status"]) != cp.Status {
-			return fmt.Errorf("%w: changed path %s disagrees with its identity record", ErrPlanIdentityMismatch, cp.PathID)
-		}
-	}
 	return nil
 }
 
-// validateMandatoryUnits decodes each mandatory unit payload, validates its
-// review.unit.v1 shape, and requires its key to equal its unit id and to name a
-// primary unit of the plan, so a persisted mandatory object is always a real,
-// plan-bound unit rather than arbitrary bytes.
+// decodeStringList decodes a FrameListV1 of UTF-8 strings.
+func decodeStringList(raw []byte) ([]string, error) {
+	items, err := decodeFrameList(raw)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = string(it)
+	}
+	return out, nil
+}
+
+// stringSlicesEqual reports whether two string slices are element-wise equal.
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// validateMandatoryUnits requires each mandatory unit payload to be byte-equal to
+// the canonical serialization (CanonicalMandatoryJSON) of the corresponding
+// primary unit of the plan, so a persisted mandatory object is exactly the
+// plan-bound, already-validated unit rather than arbitrary or merely
+// shape-compatible bytes.
 func validateMandatoryUnits(plan Plan, mandatory map[string][]byte) error {
-	primary := make(map[string]bool, len(plan.PrimaryUnits))
+	primary := make(map[string]Unit, len(plan.PrimaryUnits))
 	for _, u := range plan.PrimaryUnits {
-		primary[u.UnitID] = true
+		primary[u.UnitID] = u
 	}
 	for key, raw := range mandatory {
-		var u Unit
-		if err := json.Unmarshal(raw, &u); err != nil {
-			return fmt.Errorf("%w: mandatory unit %s: %v", ErrManifestCorrupt, key, err)
-		}
-		if err := u.Validate(); err != nil {
-			return fmt.Errorf("%w: mandatory unit %s: %v", ErrManifestCorrupt, key, err)
-		}
-		if u.UnitID != key {
-			return fmt.Errorf("%w: mandatory unit key %s does not match unit id %s", ErrManifestCorrupt, key, u.UnitID)
-		}
-		if !primary[key] {
+		u, ok := primary[key]
+		if !ok {
 			return fmt.Errorf("%w: mandatory unit %s is not a primary unit of the plan", ErrManifestCorrupt, key)
+		}
+		canonical, err := u.CanonicalMandatoryJSON()
+		if err != nil {
+			return fmt.Errorf("%w: mandatory unit %s: %v", ErrManifestCorrupt, key, err)
+		}
+		if !bytes.Equal(raw, canonical) {
+			return fmt.Errorf("%w: mandatory unit %s is not byte-equal to its primary unit canonical form", ErrManifestCorrupt, key)
 		}
 	}
 	return nil
@@ -1116,6 +1332,12 @@ func decodeFrameList(b []byte) ([][]byte, error) {
 	}
 	n := binary.BigEndian.Uint64(b[:8])
 	b = b[8:]
+	// Every item carries at least an 8-byte length prefix, so a count larger than
+	// the remaining bytes / 8 is malformed. Bounding it before any allocation
+	// prevents a hostile count from triggering a huge make or an out-of-range panic.
+	if n > uint64(len(b)/8) {
+		return nil, errors.New("list count exceeds available bytes")
+	}
 	items := make([][]byte, 0, n)
 	for i := uint64(0); i < n; i++ {
 		if len(b) < 8 {
@@ -1281,6 +1503,90 @@ func (c *ctxLimitReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.remaining -= int64(n)
 	return n, err
+}
+
+// boundManifestContent charges each manifest content contributor against a fixed
+// budget with overflow-safe remaining checks, so an over-ceiling artifact is
+// rejected before the full manifest is marshaled or persisted. Variable-size
+// struct contributors (unit candidates and the plan) are measured with a
+// size-limited encoder so a single giant value cannot allocate past the ceiling.
+func boundManifestContent(a PlanArtifacts, max int64) error {
+	remaining := max
+	charge := func(n int64) error {
+		if n < 0 || n > remaining {
+			return fmt.Errorf("%w: manifest content exceeds the %d-byte ceiling", ErrManifestCorrupt, max)
+		}
+		remaining -= n
+		return nil
+	}
+	if err := charge(int64(len(a.PlanIdentityBytes))); err != nil {
+		return err
+	}
+	if err := charge(int64(len(a.WorkspaceFingerprint) + len(a.PublishedIndexSignature))); err != nil {
+		return err
+	}
+	for _, r := range a.IDRecords {
+		if err := charge(int64(len(r.Kind) + len(r.Public) + len(r.Canonical) + len(r.Full))); err != nil {
+			return err
+		}
+	}
+	for k, v := range a.MandatoryUnits {
+		if err := charge(int64(len(k) + len(v))); err != nil {
+			return err
+		}
+	}
+	for k, c := range a.Citations {
+		if err := charge(int64(len(k) + len(c.ID) + len(c.Side) + len(c.Path) + len(c.ContentHash) + 32)); err != nil {
+			return err
+		}
+	}
+	for k, cands := range a.UnitCandidates {
+		if err := charge(int64(len(k))); err != nil {
+			return err
+		}
+		n, err := jsonSizeWithin(cands, remaining)
+		if err != nil {
+			return err
+		}
+		if err := charge(n); err != nil {
+			return err
+		}
+	}
+	n, err := jsonSizeWithin(a.Plan, remaining)
+	if err != nil {
+		return err
+	}
+	return charge(n)
+}
+
+// jsonSizeWithin returns the JSON-encoded size of v, failing closed as soon as
+// the encoding would exceed limit so a hostile value cannot allocate without
+// bound.
+func jsonSizeWithin(v any, limit int64) (int64, error) {
+	w := &countingLimitWriter{limit: limit}
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		if errors.Is(err, errManifestTooLarge) {
+			return 0, fmt.Errorf("%w: manifest content exceeds its ceiling", ErrManifestCorrupt)
+		}
+		return 0, fmt.Errorf("%w: %v", ErrManifestCorrupt, err)
+	}
+	return w.n, nil
+}
+
+// countingLimitWriter counts bytes written and fails once it would exceed limit.
+type countingLimitWriter struct {
+	n     int64
+	limit int64
+}
+
+func (w *countingLimitWriter) Write(p []byte) (int, error) {
+	w.n += int64(len(p))
+	if w.n > w.limit {
+		return 0, errManifestTooLarge
+	}
+	return len(p), nil
 }
 
 // marshalManifest computes the integrity digest and returns the serialized bytes.

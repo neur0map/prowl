@@ -407,19 +407,18 @@ type HeadView struct {
 	Close     func() error
 }
 
-// ReusableView carries the current project services a HeadView may reuse when the
+// ReusableView carries the current project store a HeadView may reuse when the
 // reviewed content is exactly the current clean worktree at the resolved head
-// (or the live workspace). The HeadView does not own these services, so its
-// Close never touches them. Eligibility is always verified by OpenHeadView from
-// observed state (index completeness, published signature, on-disk row bytes,
-// and - for a committed head - HEAD equality over a clean worktree); a caller
-// never asserts reuse. Workspace vs committed reuse is derived from whether a
-// resolved head tree-ish is supplied, not from a caller flag.
+// (or the live workspace). The HeadView does not own the store, so its Close
+// never touches it. Eligibility is always verified by OpenHeadView from observed
+// state (index completeness, published signature, on-disk row bytes, and - for a
+// committed head - HEAD equality over a clean worktree); a caller never asserts
+// reuse. The Query and Context services are constructed by OpenHeadView from this
+// verified Store and Root, never accepted from the caller, so they can never be
+// bound to a different index than the one that was verified.
 type ReusableView struct {
-	Root    string
-	Store   *store.Store
-	Query   *query.Querier
-	Context *contextpacket.Service
+	Root  string
+	Store *store.Store
 }
 
 // symlinkFunc creates a symbolic link rooted in a snapshot. It is a seam so a
@@ -559,14 +558,16 @@ func newSourceResolver(opts HeadViewOptions, width int, workspaceHead bool) *sid
 	return resolver
 }
 
-// newReuseHeadView wraps verified current services.
+// newReuseHeadView wraps the verified reused store, constructing the query and
+// context services from that store and root so they can never be bound to a
+// different index than the one eligibleReuse verified.
 func newReuseHeadView(opts HeadViewOptions, width int) *HeadView {
 	reuse := opts.Reuse
 	return &HeadView{
 		Root:    reuse.Root,
 		Store:   reuse.Store,
-		Query:   reuse.Query,
-		Context: reuse.Context,
+		Query:   query.New(reuse.Store),
+		Context: &contextpacket.Service{Store: reuse.Store, Root: reuse.Root},
 		Sources: newSourceResolver(opts, width, opts.HeadTreeish == ""),
 		Close:   func() error { return nil },
 	}
@@ -585,7 +586,7 @@ func newReuseHeadView(opts HeadViewOptions, width int) *HeadView {
 // (cancellation, git/index failure) returns an error.
 func eligibleReuse(ctx context.Context, opts HeadViewOptions, opt index.Options, width int) (bool, error) {
 	r := opts.Reuse
-	if r.Root == "" || r.Store == nil || r.Query == nil || r.Context == nil || r.Root != opts.RepoRoot {
+	if r.Root == "" || r.Store == nil || r.Root != opts.RepoRoot {
 		return false, nil
 	}
 	state, err := r.Store.GetMeta("index_state")

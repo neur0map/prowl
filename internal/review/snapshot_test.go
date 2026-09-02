@@ -16,9 +16,7 @@ import (
 	"testing"
 
 	"github.com/prowl-agent/prowl-agent/internal/config"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
 	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/query"
 	"github.com/prowl-agent/prowl-agent/internal/store"
 )
 
@@ -469,7 +467,7 @@ func TestHeadViewReuseVerified(t *testing.T) {
 			BaseTreeish:    base,
 			HeadTreeish:    headTreeish,
 			SnapshotParent: t.TempDir(),
-			Reuse:          &ReusableView{Root: f.root, Store: db, Query: query.New(db), Context: &contextpacket.Service{Store: db, Root: f.root}},
+			Reuse:          &ReusableView{Root: f.root, Store: db},
 		}
 	}
 
@@ -486,6 +484,11 @@ func TestHeadViewReuseVerified(t *testing.T) {
 		}
 		if hits, err := hv.Query.FindSymbol("ReuseFuncV2"); err != nil || len(hits) == 0 {
 			t.Fatalf("reused index query=%v err=%v", hits, err)
+		}
+		// The query/context services are constructed from the verified store/root,
+		// never accepted from the caller.
+		if hv.Context == nil || hv.Context.Store != db || hv.Context.Root != f.root {
+			t.Fatalf("reuse context not built from the verified store/root: %+v", hv.Context)
 		}
 	})
 
@@ -533,18 +536,19 @@ func TestHeadViewReuseVerified(t *testing.T) {
 		}
 	})
 
-	t.Run("nil context materializes", func(t *testing.T) {
+	t.Run("reuse services are built from the verified store", func(t *testing.T) {
 		db := indexCurrent(t, f.root)
 		defer db.Close()
-		opts := reuseOpts(db, head)
-		opts.Reuse.Context = nil // a reuse without a context service is never trusted
-		hv, err := OpenHeadView(context.Background(), opts)
+		hv, err := OpenHeadView(context.Background(), reuseOpts(db, head))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer hv.Close()
-		if hv.Store == db {
-			t.Fatal("reuse with a nil context service was reused instead of materialized")
+		if hv.Store != db {
+			t.Fatalf("reuse did not use the verified store")
+		}
+		if hv.Query == nil || hv.Context == nil || hv.Context.Store != db || hv.Context.Root != f.root {
+			t.Fatalf("reuse services not constructed from the verified store/root")
 		}
 	})
 
