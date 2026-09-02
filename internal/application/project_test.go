@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/prowl-agent/prowl-agent/internal/config"
 	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
 	"github.com/prowl-agent/prowl-agent/internal/index"
+	"github.com/prowl-agent/prowl-agent/internal/review"
 	"github.com/prowl-agent/prowl-agent/internal/store"
 	"github.com/prowl-agent/prowl-agent/internal/workspace"
 )
@@ -37,12 +39,53 @@ func TestOpenProjectResolvesWorkspaceFromParentDirectory(t *testing.T) {
 	if project.Workspace.Root != root {
 		t.Fatalf("workspace root = %q, want %q", project.Workspace.Root, root)
 	}
-	if project.Store == nil || project.Query == nil || project.Knowledge == nil || project.Context == nil || project.Capabilities == nil {
+	if project.Store == nil || project.Query == nil || project.Knowledge == nil || project.Context == nil || project.Review == nil || project.Capabilities == nil {
 		t.Fatalf("incomplete project assembly: %+v", project)
 	}
 	packet, err := project.Context.Search(contextpacket.Request{Question: "OriginalSymbol", Mode: contextpacket.ModeCompact, BudgetTokens: 1000})
 	if err != nil || len(packet.Items) == 0 {
 		t.Fatalf("context search after assembly = %+v, %v", packet, err)
+	}
+}
+
+func TestOpenProjectAssemblesReviewWithoutInferencer(t *testing.T) {
+	root := newProjectFixture(t, config.Default())
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".prowl/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		command := exec.Command("git", args...)
+		command.Dir = root
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, output)
+		}
+	}
+	git("init", "-q")
+	git("config", "user.email", "review@example.com")
+	git("config", "user.name", "Review Test")
+	git("add", "sample.go", ".gitignore")
+	git("commit", "-qm", "base")
+	writeSource(t, root, "package sample\n\nfunc OriginalSymbol() int { return 1 }\n")
+
+	project, err := OpenProject(context.Background(), root, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer project.Close()
+
+	if project.Review == nil {
+		t.Fatal("project review service is nil")
+	}
+	if project.Inferencer != nil {
+		t.Fatalf("review project inferencer = %#v, want nil", project.Inferencer)
+	}
+	plan, err := project.Review.Plan(context.Background(), review.PlanRequest{})
+	if err != nil {
+		t.Fatalf("review plan through assembled project: %v", err)
+	}
+	if plan.Scope.Kind != review.ScopeWorkspace || plan.ReviewID == "" {
+		t.Fatalf("assembled review plan = %+v", plan)
 	}
 }
 

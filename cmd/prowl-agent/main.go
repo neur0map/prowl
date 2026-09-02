@@ -25,6 +25,7 @@ Agent quickstart (TOON output is token-lean; add --json for machine parsing):
   prowl-agent peek <file:start-end>             read a bounded, cited line range of any hit
   prowl-agent impact <path>                     what breaks if you change a file
   prowl-agent capabilities search "<intent>"    find the right command by intent
+  prowl-agent review plan                       capture and partition the current change
 
 Every command accepts --format {toon,json,human,markdown} and --json.`,
 		SilenceUsage:  true,
