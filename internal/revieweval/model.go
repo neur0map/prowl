@@ -31,15 +31,26 @@ type Location struct {
 	EndLine   int    `json:"end_line"`
 }
 
+type GroundTruthProvenance struct {
+	SourceID       string   `json:"source_id"`
+	SourceRecordID string   `json:"source_record_id"`
+	SourceDigest   string   `json:"source_digest"`
+	EvidenceRefs   []string `json:"evidence_refs"`
+}
+
 type GroundTruth struct {
-	ID          string     `json:"id"`
-	DefectClass string     `json:"defect_class"`
-	Summary     string     `json:"summary"`
-	Scenario    string     `json:"scenario"`
-	Critical    bool       `json:"critical,omitempty"`
-	CrossFile   bool       `json:"cross_file,omitempty"`
-	Deletion    bool       `json:"deletion,omitempty"`
-	Locations   []Location `json:"locations"`
+	ID              string                 `json:"id"`
+	DefectClass     string                 `json:"defect_class"`
+	Severity        string                 `json:"severity,omitempty"`
+	Summary         string                 `json:"summary"`
+	Scenario        string                 `json:"scenario"`
+	Verifier        string                 `json:"verifier,omitempty"`
+	Provenance      *GroundTruthProvenance `json:"provenance,omitempty"`
+	CanonicalDigest string                 `json:"canonical_digest,omitempty"`
+	Critical        bool                   `json:"critical,omitempty"`
+	CrossFile       bool                   `json:"cross_file,omitempty"`
+	Deletion        bool                   `json:"deletion,omitempty"`
+	Locations       []Location             `json:"locations"`
 }
 
 type Case struct {

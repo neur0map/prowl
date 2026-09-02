@@ -1,0 +1,405 @@
+{
+  "schema": "review.eval-corpus.v1",
+  "set": "tuning",
+  "sources_manifest_sha256": "36bcecf0aef80492d6a0c359d6cd3d342f5b7c7e3a8f93fe5ac52d091bfc8078",
+  "candidate_pool_sha256": "ecd6b30d29ce7599221221bb9b3d6f928fb71a826dae61f4d69e06c848adbc04",
+  "cases": [],
+  "audit_queue": [
+    {
+      "case_id": "aacr-langflow-ai-langflow-6652",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/langflow-ai/langflow/pull/6652",
+      "source_type": "human_caught",
+      "repository": "langflow-ai/langflow",
+      "base_sha": "623929065f9ae45792afce2eb3185dad353df78e",
+      "head_sha": "a8f6ee4af97fe594eb2c84b655abc549f6d7c741",
+      "selection_key": "c46d61fbf6a9e33b531f42426ce30bbbdb2da132b99877c3e62f3d4554de9e83",
+      "language": "Python",
+      "source_reported_churn": 387,
+      "source_row_sha256": "3fa659a9706ed68134cd419f5f12c3fd3fbe7428fe77d8f638441908860d055a",
+      "evidence_refs": [
+        "https://github.com/langflow-ai/langflow/pull/6652",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/langflow-ai/langflow.git",
+        "ref": "623929065f9ae45792afce2eb3185dad353df78e",
+        "oid": "623929065f9ae45792afce2eb3185dad353df78e"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/langflow-ai/langflow.git",
+        "ref": "refs/pull/6652/head",
+        "oid": "a8f6ee4af97fe594eb2c84b655abc549f6d7c741"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-bluewave-labs-checkmate-2883",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/bluewave-labs/Checkmate/pull/2883",
+      "source_type": "human_caught",
+      "repository": "bluewave-labs/Checkmate",
+      "base_sha": "32b54ddf11ea27b8ed85d2139fe38e0dcb7f3d43",
+      "head_sha": "05dd5f7de27ae7f2139714f0bc577484642e2c77",
+      "selection_key": "b7c0461ec0707ccdaaba75620750a2f208c402c63bd68b830d82fe3e1e4549fd",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 847,
+      "source_row_sha256": "ec0426d05f82a1590efe2e9f3fc45498ca737aa55f15ec3f5ff46a9c7c746dff",
+      "evidence_refs": [
+        "https://github.com/bluewave-labs/Checkmate/pull/2883",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/bluewave-labs/Checkmate.git",
+        "ref": "32b54ddf11ea27b8ed85d2139fe38e0dcb7f3d43",
+        "oid": "32b54ddf11ea27b8ed85d2139fe38e0dcb7f3d43"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/bluewave-labs/Checkmate.git",
+        "ref": "refs/pull/2883/head",
+        "oid": "05dd5f7de27ae7f2139714f0bc577484642e2c77"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-comfyanonymous-comfyui-7952",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/comfyanonymous/ComfyUI/pull/7952",
+      "source_type": "human_caught",
+      "repository": "comfyanonymous/ComfyUI",
+      "base_sha": "4936d01872b8719ede33f9a11dc8e898c33d39e4",
+      "head_sha": "924d771e18000f4cb223575189daa6d2c6c5a9c1",
+      "selection_key": "331e7bfb7fc38a9a9cb9c842d97c9dfb005f00305d83e5ebe7dd1f1b7be793ce",
+      "language": "Python",
+      "source_reported_churn": 323,
+      "source_row_sha256": "c0714064cc7fc44a7ec3e9be0d30f7aa3b731c03d223684339970e5ee1232656",
+      "evidence_refs": [
+        "https://github.com/comfyanonymous/ComfyUI/pull/7952",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/comfyanonymous/ComfyUI.git",
+        "ref": "4936d01872b8719ede33f9a11dc8e898c33d39e4",
+        "oid": "4936d01872b8719ede33f9a11dc8e898c33d39e4"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/comfyanonymous/ComfyUI.git",
+        "ref": "refs/pull/7952/head",
+        "oid": "924d771e18000f4cb223575189daa6d2c6c5a9c1"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-elastic-elasticsearch-119759",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/elastic/elasticsearch/pull/119759",
+      "source_type": "human_caught",
+      "repository": "elastic/elasticsearch",
+      "base_sha": "a3bac5f2d4020183019a47d8d64c08123f7ec25d",
+      "head_sha": "4ac8d55ff7c5612413e4a45e14a2b39f3e85f3a9",
+      "selection_key": "4992d38229fe97e95007fa63e33896c48ea488c3502310a250bff1ae9c3a7e61",
+      "language": "Java",
+      "source_reported_churn": 494,
+      "source_row_sha256": "60370f0ff7c5efa3c26f1ef27898ff8048c8ff3177dcfb20255180a09071c510",
+      "evidence_refs": [
+        "https://github.com/elastic/elasticsearch/pull/119759",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "a3bac5f2d4020183019a47d8d64c08123f7ec25d",
+        "oid": "a3bac5f2d4020183019a47d8d64c08123f7ec25d"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "refs/pull/119759/head",
+        "oid": "4ac8d55ff7c5612413e4a45e14a2b39f3e85f3a9"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-facebook-react-32499",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/facebook/react/pull/32499",
+      "source_type": "human_caught",
+      "repository": "facebook/react",
+      "base_sha": "b045f18e378341876ee69e729fc855cab501c3cd",
+      "head_sha": "99563e91736e9de473c4865d5cb6fd9eb1a26bcb",
+      "selection_key": "a4795c18420fa10578c6d19ae9cc64c3d3d800ac676d1d0f2ddcd7ac340aa6b0",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 599,
+      "source_row_sha256": "c529c17e4750454aca6e9d22ebda33629779359f17ed780c48989b760c34bd09",
+      "evidence_refs": [
+        "https://github.com/facebook/react/pull/32499",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/facebook/react.git",
+        "ref": "b045f18e378341876ee69e729fc855cab501c3cd",
+        "oid": "b045f18e378341876ee69e729fc855cab501c3cd"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/facebook/react.git",
+        "ref": "refs/pull/32499/head",
+        "oid": "99563e91736e9de473c4865d5cb6fd9eb1a26bcb"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-freecad-freecad-20825",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/FreeCAD/FreeCAD/pull/20825",
+      "source_type": "human_caught",
+      "repository": "FreeCAD/FreeCAD",
+      "base_sha": "870d7f5385af5d377994479ce6ad017465bdad3d",
+      "head_sha": "01241245a1d92a8db69fab0db4c2053b5e1227c1",
+      "selection_key": "6fcc30a32dee5e22f846ed2f84fe4e7be9005de4f2a085b11c7530470135d108",
+      "language": "C++",
+      "source_reported_churn": 776,
+      "source_row_sha256": "573edc56f2ee801a943c1bbd243a5d2b25cf611f0670b22a4e7442cf48c6d428",
+      "evidence_refs": [
+        "https://github.com/FreeCAD/FreeCAD/pull/20825",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/FreeCAD/FreeCAD.git",
+        "ref": "870d7f5385af5d377994479ce6ad017465bdad3d",
+        "oid": "870d7f5385af5d377994479ce6ad017465bdad3d"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/FreeCAD/FreeCAD.git",
+        "ref": "refs/pull/20825/head",
+        "oid": "01241245a1d92a8db69fab0db4c2053b5e1227c1"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-clickhouse-clickhouse-74070",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/ClickHouse/ClickHouse/pull/74070",
+      "source_type": "human_caught",
+      "repository": "ClickHouse/ClickHouse",
+      "base_sha": "cc962559c45fcee9706d86c6425d48e794676a67",
+      "head_sha": "39fba894af99b367fe5c1f9375b3dc2c8fc25bd3",
+      "selection_key": "4d1942fa3154938551df1eb669c84cda455f7c7a6320b79fd66e1491bfedb398",
+      "language": "C++",
+      "source_reported_churn": 871,
+      "source_row_sha256": "ad97b12bb5ccab8f77f462b162bc54d2e22379c556441154a2f81d4d60c68299",
+      "evidence_refs": [
+        "https://github.com/ClickHouse/ClickHouse/pull/74070",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "cc962559c45fcee9706d86c6425d48e794676a67",
+        "oid": "cc962559c45fcee9706d86c6425d48e794676a67"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/ClickHouse/ClickHouse.git",
+        "ref": "refs/pull/74070/head",
+        "oid": "39fba894af99b367fe5c1f9375b3dc2c8fc25bd3"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-langflow-ai-langflow-6044",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/langflow-ai/langflow/pull/6044",
+      "source_type": "human_caught",
+      "repository": "langflow-ai/langflow",
+      "base_sha": "bcfe6f9ded091cd360b3212b6e9f5a58cbcdac5e",
+      "head_sha": "5bcf4d001f1174ed9e63b7115f10e5dbe1bcca9f",
+      "selection_key": "b6b481339e82e98fc13ff7e1bea8209e521a1fba13d1e28af5346e017c7d0ebc",
+      "language": "Python",
+      "source_reported_churn": 882,
+      "source_row_sha256": "3516c4a2ac7f78ad6e66a4027113e848b6dd87245dfc63b7c88f48223ad3157c",
+      "evidence_refs": [
+        "https://github.com/langflow-ai/langflow/pull/6044",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/langflow-ai/langflow.git",
+        "ref": "bcfe6f9ded091cd360b3212b6e9f5a58cbcdac5e",
+        "oid": "bcfe6f9ded091cd360b3212b6e9f5a58cbcdac5e"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/langflow-ai/langflow.git",
+        "ref": "refs/pull/6044/head",
+        "oid": "5bcf4d001f1174ed9e63b7115f10e5dbe1bcca9f"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-immich-app-immich-17535",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/immich-app/immich/pull/17535",
+      "source_type": "human_caught",
+      "repository": "immich-app/immich",
+      "base_sha": "5f4759196534661bd332085514878d0efbb7ce84",
+      "head_sha": "584e5894bfd4fe356e790fa9781ccee4e5224874",
+      "selection_key": "57a19ac60249b7534bf8945a4dfb5f22a535fd6a279a9b1b5073d9bbda414fa0",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 692,
+      "source_row_sha256": "2d2cf7b9ecf7077d5951663020c576ea56555c4c906f3d29eb2a1534791808a6",
+      "evidence_refs": [
+        "https://github.com/immich-app/immich/pull/17535",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/immich-app/immich.git",
+        "ref": "5f4759196534661bd332085514878d0efbb7ce84",
+        "oid": "5f4759196534661bd332085514878d0efbb7ce84"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/immich-app/immich.git",
+        "ref": "refs/pull/17535/head",
+        "oid": "584e5894bfd4fe356e790fa9781ccee4e5224874"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-elastic-elasticsearch-118183",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/elastic/elasticsearch/pull/118183",
+      "source_type": "human_caught",
+      "repository": "elastic/elasticsearch",
+      "base_sha": "bef908cb3aaf20210b267551df1210ad881722c5",
+      "head_sha": "4b868b0e11f4a59d608523c57d1a62b870ac8e0e",
+      "selection_key": "f2bdcb9daf09bed6613cec25fd3a0ee090d20bb8de942fd91ba1b61db15fe696",
+      "language": "Java",
+      "source_reported_churn": 674,
+      "source_row_sha256": "b2977350a96577cbb300285221bc31d72d6770600dab571c6cdef894ffb1cb1b",
+      "evidence_refs": [
+        "https://github.com/elastic/elasticsearch/pull/118183",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "bef908cb3aaf20210b267551df1210ad881722c5",
+        "oid": "bef908cb3aaf20210b267551df1210ad881722c5"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "refs/pull/118183/head",
+        "oid": "4b868b0e11f4a59d608523c57d1a62b870ac8e0e"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-wavetermdev-waveterm-1998",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/wavetermdev/waveterm/pull/1998",
+      "source_type": "human_caught",
+      "repository": "wavetermdev/waveterm",
+      "base_sha": "4b7637fb17fb0f937d67f12a63f3f370a3343117",
+      "head_sha": "ce9775c00c36ba290c7a6f5134c0ff7759def6eb",
+      "selection_key": "ef1e49a0b6b8c5227ecdc6aa26f7b3e93eeb88374e5477576372c0dbec8e36b4",
+      "language": "Go",
+      "source_reported_churn": 792,
+      "source_row_sha256": "496cb95aafb38ae119f7e98b4c49bb5dc133012d4c4b2497b369b73766c19502",
+      "evidence_refs": [
+        "https://github.com/wavetermdev/waveterm/pull/1998",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/wavetermdev/waveterm.git",
+        "ref": "4b7637fb17fb0f937d67f12a63f3f370a3343117",
+        "oid": "4b7637fb17fb0f937d67f12a63f3f370a3343117"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/wavetermdev/waveterm.git",
+        "ref": "refs/pull/1998/head",
+        "oid": "ce9775c00c36ba290c7a6f5134c0ff7759def6eb"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    },
+    {
+      "case_id": "aacr-n8n-io-n8n-20210",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/n8n-io/n8n/pull/20210",
+      "source_type": "human_caught",
+      "repository": "n8n-io/n8n",
+      "base_sha": "ebe680fbcacd9210aa219ab01d98012ac1d6faae",
+      "head_sha": "291a39c87eb2bc228816d02c55a1f6857822006f",
+      "selection_key": "9cbb534674faeede699e953bca27da7ba18c230353f8bf19b1d43f6fe071a561",
+      "language": "TypeScript/JavaScript",
+      "source_reported_churn": 761,
+      "source_row_sha256": "dbf29aabe6778ddb7f42cbf7d28e4e06a9a93d3f49151298830de71cf8fff003",
+      "evidence_refs": [
+        "https://github.com/n8n-io/n8n/pull/20210",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/n8n-io/n8n.git",
+        "ref": "ebe680fbcacd9210aa219ab01d98012ac1d6faae",
+        "oid": "ebe680fbcacd9210aa219ab01d98012ac1d6faae"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/n8n-io/n8n.git",
+        "ref": "refs/pull/20210/head",
+        "oid": "291a39c87eb2bc228816d02c55a1f6857822006f"
+      },
+      "reasons": [
+        "exact ThresholdTextV1 churn not yet recomputed from the pinned repository",
+        "ground-truth causal path and range not yet validated against the pinned BaseSHA..HeadSHA diff",
+        "two evidenced independent reviewer decisions and any required evidenced approved adjudication are not recorded"
+      ]
+    }
+  ]
+}
