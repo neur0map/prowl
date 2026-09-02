@@ -19,7 +19,7 @@ import (
 // an invocation that now exits non-zero, and the agent pays for it.
 func TestAgentFacingCommandsResolveAgainstTheCommandTree(t *testing.T) {
 	root := &cobra.Command{Use: "prowl-agent"}
-	Register(root, "test")
+	Register(root, "test", "")
 	commands := commandPaths(root)
 	if len(commands) == 0 {
 		t.Fatal("no commands registered")
@@ -51,7 +51,7 @@ func TestAgentFacingCommandsResolveAgainstTheCommandTree(t *testing.T) {
 // human -- is registered but hidden.
 func TestAgentFacingCommandTreeIncludesSkills(t *testing.T) {
 	root := &cobra.Command{Use: "prowl-agent"}
-	Register(root, "test")
+	Register(root, "test", "")
 	commands := commandPaths(root)
 
 	skillsCmd, ok := commands["skills"]

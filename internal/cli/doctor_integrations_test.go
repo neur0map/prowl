@@ -62,7 +62,7 @@ func TestDoctorIntegrationsHonorsInheritedRootFormat(t *testing.T) {
 	for _, flags := range cases {
 		t.Run(strings.Join(flags, "_"), func(t *testing.T) {
 			root := &cobra.Command{Use: "prowl-agent"}
-			Register(root, "v9.9.9")
+			Register(root, "v9.9.9", "")
 			var out bytes.Buffer
 			root.SetOut(&out)
 			root.SetErr(&out)

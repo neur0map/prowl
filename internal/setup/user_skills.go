@@ -254,7 +254,7 @@ func normalizeUserClients(clients []string) []string {
 	var out []string
 	for _, client := range clients {
 		switch client {
-		case IntegrationClaude, IntegrationOMP:
+		case IntegrationClaude, IntegrationOMP, IntegrationHermes:
 			if !seen[client] {
 				seen[client] = true
 				out = append(out, client)
@@ -272,8 +272,21 @@ func userClientRoot(client string) string {
 		return ".claude/skills/prowl"
 	case IntegrationOMP:
 		return ".omp/agent"
+	case IntegrationHermes:
+		return ".hermes/skills/prowl"
 	}
 	return ""
+}
+
+// nativeAssetClient maps a user client to the client whose embedded native
+// assets it installs. Hermes has no native asset tree of its own: it reads
+// user-level skills, so it mirrors Claude's plugin, agent, command, and hook
+// files under its own root. Every other client uses its own assets.
+func nativeAssetClient(client string) string {
+	if client == IntegrationHermes {
+		return IntegrationClaude
+	}
+	return client
 }
 
 // userStateBase resolves the XDG state base: the explicit StateDir override,
@@ -390,7 +403,7 @@ func buildUserCandidates(opts UserInstallOptions) []userCandidate {
 	var out []userCandidate
 	for _, client := range normalizeUserClients(opts.Clients) {
 		root := userClientRoot(client)
-		for _, asset := range skills.Native(client) {
+		for _, asset := range skills.Native(nativeAssetClient(client)) {
 			content := strings.ReplaceAll(asset.Content, userVersionToken, opts.Version)
 			out = append(out, userCandidate{
 				client:   client,

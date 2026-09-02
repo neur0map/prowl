@@ -6,8 +6,9 @@ package cli
 
 import "github.com/spf13/cobra"
 
-// Register adds all subcommands to the root command.
-func Register(root *cobra.Command, version string) {
+// Register adds all subcommands to the root command. managedBy is the build-time
+// package-manager stamp (empty for a self-built binary) that gates self-update.
+func Register(root *cobra.Command, version string, managedBy string) {
 	// One predictable output surface: --format / --json are persistent on the
 	// root, so every subcommand accepts them in any position. Operator commands
 	// that predate this keep their own local --json (cobra lets the local flag
@@ -15,7 +16,7 @@ func Register(root *cobra.Command, version string) {
 	// these through resolveFormat.
 	root.PersistentFlags().String("format", "", "output format: human, toon, json, or markdown (default: human on a terminal, toon when piped)")
 	root.PersistentFlags().Bool("json", false, "output JSON (shorthand for --format json)")
-	root.AddCommand(newInitCmd(), newStatusCmd(version), newDoctorCmd(version), newKnowledgeCmd(), newContextCmd(), newCapabilitiesCmd(), newServeCmd(version), newLSPCmd(version), newUpdateCmd(version), newRestartCmd(version), newVersionCmd(version), newSkillsCmd(version), newSearchAdvisoryCmd())
+	root.AddCommand(newInitCmd(), newStatusCmd(version), newDoctorCmd(version), newKnowledgeCmd(), newContextCmd(), newCapabilitiesCmd(), newServeCmd(version), newLSPCmd(version), newUpdateCmd(version, managedBy), newRestartCmd(version), newVersionCmd(version), newSkillsCmd(version), newSearchAdvisoryCmd())
 	// Read-only query commands: the CLI-first path. Any agent can shell out to
 	// these (token-lean TOON output) with no MCP server and no `serve`.
 	root.AddCommand(

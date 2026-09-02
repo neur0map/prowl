@@ -203,6 +203,60 @@ func Apply() (string, error) {
 	return "updated to the latest " + channel.Name + " build (" + shortSum(want) + ")", nil
 }
 
+// Managed reports whether prowl-agent must defer updates to a package manager,
+// and the message to print when it must. A binary is managed when a build-time
+// managedBy value is set (packaged builds stamp "-X main.managedBy=pacman") or
+// when the running executable's directory is not writable by the current user
+// (a system install a self-update could never replace anyway). The caller wires
+// managedBy from main; keeping the decision here lets it stay network- and
+// download-free and unit-testable.
+func Managed(managedBy string) (message string, managed bool) {
+	return managedGuard(managedBy, execDirWritable())
+}
+
+// managedGuard is the pure decision core: given the build-time managedBy and
+// whether the install directory is writable, it returns the guard message and
+// whether the update must be deferred. It names managedBy when set and otherwise
+// falls back to "your package manager".
+func managedGuard(managedBy string, dirWritable bool) (message string, managed bool) {
+	if managedBy == "" && dirWritable {
+		return "", false
+	}
+	name := managedBy
+	if name == "" {
+		name = "your package manager"
+	}
+	return "prowl-agent is managed by " + name + "; update it with your package manager (on Ryoku: ryoku update)", true
+}
+
+// execDirWritable reports whether the directory holding the running executable
+// is writable by the current user, resolving the executable symlink first so the
+// check targets the real install directory.
+func execDirWritable() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return dirWritable(filepath.Dir(exe))
+}
+
+// dirWritable probes a directory for writability the same way Apply does -- by
+// creating and removing a private temp file -- so the guard's verdict matches
+// what an actual replacement would find, across every OS and permission model.
+func dirWritable(dir string) bool {
+	f, err := os.CreateTemp(dir, ".prowl-agent-writable-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
+	return true
+}
+
 // parseChecksum extracts the hex digest from a "sha256sum" line.
 func parseChecksum(data []byte) (string, error) {
 	fields := strings.Fields(string(data))

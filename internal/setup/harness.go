@@ -18,9 +18,9 @@ import (
 // .mcp.json are always written regardless; this adds the harness-native layer on
 // top so every agent -- not only MCP-aware ones -- knows prowl out of the box.
 //
-// Scope is deliberately limited to omp and claude (the harnesses with a native
-// skill system prowl targets); other clients stay project-directory detected so
-// a bare init does not scatter unused tool configs into every repo.
+// Scope is deliberately limited to omp, claude, and hermes (the harnesses with a
+// native skill system prowl targets); other clients stay project-directory
+// detected so a bare init does not scatter unused tool configs into every repo.
 func DetectInstalledHarnesses() []string {
 	home, _ := os.UserHomeDir()
 	var out []string
@@ -29,6 +29,9 @@ func DetectInstalledHarnesses() []string {
 	}
 	if harnessPresent(home, ".claude", "claude") {
 		out = append(out, IntegrationClaude)
+	}
+	if harnessPresent(home, ".hermes", "hermes") {
+		out = append(out, IntegrationHermes)
 	}
 	return out
 }

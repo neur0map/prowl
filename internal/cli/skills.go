@@ -33,36 +33,61 @@ import (
 	"github.com/prowl-agent/prowl-agent/internal/setup"
 )
 
-// newSkillsCmd installs Prowl's agent-native skills under the user's own Claude
-// and OMP configuration roots. It takes no positional arguments, has no
-// subcommand, and deliberately exposes no confirmation-bypass flag: the review
-// prompt is the only path to a write, and a non-interactive invocation is always
-// a preview. version stamps the version-templated assets (only Claude's plugin
-// manifest carries it).
+// newSkillsCmd installs Prowl's agent-native skills under the user's own Claude,
+// OMP, and Hermes configuration roots. It takes no positional arguments and has
+// no subcommand. --clients selects which detected clients to target; --yes
+// applies the reviewed plan without a prompt, which is the only way a
+// non-interactive run (a pipe, a provisioning script) writes. version stamps the
+// version-templated assets (only Claude's plugin manifest carries it).
 func newSkillsCmd(version string) *cobra.Command {
-	return &cobra.Command{
+	var assumeYes bool
+	var clientsFlag string
+	cmd := &cobra.Command{
 		Use:   "skills",
-		Short: "Install Prowl's agent-native skills into your Claude and OMP config",
-		Long: "Install Prowl's release-matched agent skills into your own Claude and OMP\n" +
-			"configuration roots (~/.claude/skills/prowl and ~/.omp/agent). The command\n" +
-			"shows a full preview of every file it would write and every destination it\n" +
-			"refuses to touch, then asks once before changing anything. Piped or\n" +
-			"non-interactive runs are always a preview and never write.",
+		Short: "Install Prowl's agent-native skills into your Claude, OMP, and Hermes config",
+		Long: "Install Prowl's release-matched agent skills into your own Claude, OMP,\n" +
+			"and Hermes configuration roots (~/.claude/skills/prowl, ~/.omp/agent, and\n" +
+			"~/.hermes/skills/prowl). The command shows a full preview of every file it\n" +
+			"would write and every destination it refuses to touch, then asks once\n" +
+			"before changing anything. Pass --yes to apply without prompting (the only\n" +
+			"way a piped or non-interactive run writes) and --clients to target a\n" +
+			"specific subset of the detected clients.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return err
 			}
+			clients := setup.DetectInstalledHarnesses()
+			if clientsFlag != "" {
+				clients = splitClients(clientsFlag)
+			}
 			opts := setup.UserInstallOptions{
 				Home:    home,
 				Version: version,
-				Clients: setup.DetectInstalledHarnesses(),
+				Clients: clients,
 			}
 			in, out := cmd.InOrStdin(), cmd.OutOrStdout()
-			return runSkills(opts, in, out, streamsInteractive(in, out))
+			return runSkills(opts, in, out, streamsInteractive(in, out), assumeYes)
 		},
 	}
+	cmd.Flags().BoolVar(&assumeYes, "yes", false, "apply the plan without prompting (also writes in a non-interactive run)")
+	cmd.Flags().StringVar(&clientsFlag, "clients", "", "comma-separated clients to target (claude,omp,hermes); default: detected")
+	return cmd
+}
+
+// splitClients parses the --clients flag: a comma-separated list, trimmed of
+// surrounding whitespace, with empty entries dropped. The setup planner
+// normalizes the result (unknown names are ignored, duplicates removed), so this
+// only has to tokenize.
+func splitClients(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 // userVerifier is the post-apply verification dependency. Production is
@@ -70,20 +95,20 @@ func newSkillsCmd(version string) *cobra.Command {
 // surfaced -- no shared mutable package state, no race.
 type userVerifier func(setup.UserInstallOptions) (setup.UserHealth, error)
 
-// runSkills is the presenter seam: injected input, output, and interactivity make
-// the preview, TTY gate, prompt, single apply, and restart guidance observable in
-// a unit test without a real terminal. It plans, renders, and -- only when
-// interactive and explicitly approved -- applies exactly once, verifying with the
-// production verifier.
-func runSkills(opts setup.UserInstallOptions, in io.Reader, out io.Writer, interactive bool) error {
-	return runSkillsWithVerifier(opts, in, out, interactive, setup.VerifyUserSkills)
+// runSkills is the presenter seam: injected input, output, interactivity, and
+// assumeYes make the preview, TTY gate, prompt, single apply, and restart
+// guidance observable in a unit test without a real terminal. It plans, renders,
+// and -- when assumeYes is set, or interactively on an explicit approval --
+// applies exactly once, verifying with the production verifier.
+func runSkills(opts setup.UserInstallOptions, in io.Reader, out io.Writer, interactive, assumeYes bool) error {
+	return runSkillsWithVerifier(opts, in, out, interactive, assumeYes, setup.VerifyUserSkills)
 }
 
 // runSkillsWithVerifier is the injectable core; runSkills wires the production
 // verifier and tests wire a failing one.
-func runSkillsWithVerifier(opts setup.UserInstallOptions, in io.Reader, out io.Writer, interactive bool, verify userVerifier) error {
+func runSkillsWithVerifier(opts setup.UserInstallOptions, in io.Reader, out io.Writer, interactive, assumeYes bool, verify userVerifier) error {
 	if len(opts.Clients) == 0 {
-		fmt.Fprintln(out, "No supported agent detected (looked for Claude and OMP); nothing to install.")
+		fmt.Fprintln(out, "No supported agent detected (looked for Claude, OMP, and Hermes); nothing to install.")
 		return nil
 	}
 
@@ -97,15 +122,18 @@ func runSkillsWithVerifier(opts setup.UserInstallOptions, in io.Reader, out io.W
 		fmt.Fprintln(out, "\nEverything is already up to date; nothing to apply.")
 		return nil
 	}
-	if !interactive {
-		fmt.Fprintln(out, "\nPreview only: no interactive terminal attached, so nothing was written. Re-run in a terminal to apply.")
-		return nil
-	}
-
-	fmt.Fprint(out, "\nApply these changes? [y/N] ")
-	if !confirmYes(in) {
-		fmt.Fprintln(out, "No changes applied.")
-		return nil
+	// --yes applies without a prompt, in a pipe or a terminal alike. Without it,
+	// a non-interactive run stays a preview and an interactive run asks once.
+	if !assumeYes {
+		if !interactive {
+			fmt.Fprintln(out, "\nPreview only: no interactive terminal attached, so nothing was written. Re-run in a terminal or pass --yes to apply.")
+			return nil
+		}
+		fmt.Fprint(out, "\nApply these changes? [y/N] ")
+		if !confirmYes(in) {
+			fmt.Fprintln(out, "No changes applied.")
+			return nil
+		}
 	}
 
 	result, err := setup.ApplyUserSkills(opts, plan, true)
@@ -160,6 +188,8 @@ func renderRestart(out io.Writer, clients []string) {
 			fmt.Fprintln(out, "  - Restart Claude Code so it loads the prowl skills plugin.")
 		case setup.IntegrationOMP:
 			fmt.Fprintln(out, "  - Reload OMP so it picks up the prowl agent skills.")
+		case setup.IntegrationHermes:
+			fmt.Fprintln(out, "  - Reload Hermes so it picks up the prowl agent skills.")
 		}
 	}
 }

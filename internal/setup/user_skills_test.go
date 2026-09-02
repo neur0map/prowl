@@ -1386,3 +1386,73 @@ func main() {
 		})
 	}
 }
+
+// TestNormalizeUserClientsIncludesHermes proves hermes is a supported user
+// client: normalization keeps it alongside claude and omp, drops unknown names,
+// deduplicates, and sorts, so planning is deterministic regardless of detection
+// order.
+func TestNormalizeUserClientsIncludesHermes(t *testing.T) {
+	got := normalizeUserClients([]string{"omp", "hermes", "claude", "hermes", "bogus", ""})
+	want := []string{"claude", "hermes", "omp"}
+	if len(got) != len(want) {
+		t.Fatalf("normalizeUserClients = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("normalizeUserClients = %v, want %v", got, want)
+		}
+	}
+	if root := userClientRoot(IntegrationHermes); root != ".hermes/skills/prowl" {
+		t.Fatalf("userClientRoot(hermes) = %q, want .hermes/skills/prowl", root)
+	}
+	if src := nativeAssetClient(IntegrationHermes); src != IntegrationClaude {
+		t.Fatalf("nativeAssetClient(hermes) = %q, want claude", src)
+	}
+}
+
+// TestUserSkillHermesMirrorsClaude proves the hermes client installs Claude's
+// exact asset bodies under .hermes/skills/prowl: every destination sits under
+// that root, and each native/skill asset's content matches Claude's byte for
+// byte, only the destination root and the ownership assetID differ.
+func TestUserSkillHermesMirrorsClaude(t *testing.T) {
+	opts := UserInstallOptions{
+		Home:     t.TempDir(),
+		StateDir: t.TempDir(),
+		Version:  "9.9.9",
+		Clients:  []string{"hermes"},
+	}
+	plan := mustPlan(t, opts)
+	if len(plan.Actions) == 0 {
+		t.Fatal("hermes plan produced no actions")
+	}
+	// Build Claude's expected asset set, then re-root it under hermes: the two
+	// clients must ship identical bodies at parallel paths.
+	claude := wantUserAssets("9.9.9", []string{"claude"})
+	wantByDest := map[string]wantAsset{}
+	for _, a := range claude {
+		dest := strings.Replace(a.Dest, ".claude/skills/prowl", ".hermes/skills/prowl", 1)
+		wantByDest[dest] = a
+	}
+	for _, action := range plan.Actions {
+		if !strings.HasPrefix(action.Destination, ".hermes/skills/prowl/") {
+			t.Errorf("hermes action escaped its root: %q", action.Destination)
+		}
+		want, ok := wantByDest[action.Destination]
+		if !ok {
+			t.Errorf("hermes action has no Claude counterpart: %q", action.Destination)
+			continue
+		}
+		if action.Checksum != want.Checksum {
+			t.Errorf("hermes %q checksum %q, want Claude's %q", action.Destination, action.Checksum, want.Checksum)
+		}
+	}
+	if len(plan.Actions) != len(wantByDest) {
+		t.Errorf("hermes installed %d assets, Claude ships %d", len(plan.Actions), len(wantByDest))
+	}
+	// Applying with --yes-equivalent approval lands the files under the hermes root.
+	mustApply(t, opts)
+	probe := filepath.Join(opts.Home, ".hermes", "skills", "prowl", ".claude-plugin", "plugin.json")
+	if _, err := os.Stat(probe); err != nil {
+		t.Errorf("hermes apply did not install %s: %v", probe, err)
+	}
+}

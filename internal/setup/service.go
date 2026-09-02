@@ -35,6 +35,10 @@ const (
 	// Agent and other standard-compliant harnesses discover, not a per-client dir.
 	IntegrationAgentSkills = "agent-skills"
 	IntegrationClaude      = "claude"
+	// IntegrationHermes is a user-level-only client (Hermes reads user-level
+	// skills, so it needs no project integration). Its user assets mirror
+	// Claude's, installed under ~/.hermes/skills/prowl.
+	IntegrationHermes = "hermes"
 
 	// integrationSkill marks an Action that installs one embedded agent skill.
 	integrationSkill = "skill"

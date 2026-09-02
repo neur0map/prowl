@@ -45,7 +45,7 @@ func manifestPresent(opts setup.UserInstallOptions) bool {
 func TestSkillsNonInteractivePreviewWritesNothing(t *testing.T) {
 	opts := skillsOpts(t)
 	var out bytes.Buffer
-	if err := runSkills(opts, strings.NewReader(""), &out, false); err != nil {
+	if err := runSkills(opts, strings.NewReader(""), &out, false, false); err != nil {
 		t.Fatalf("runSkills: %v", err)
 	}
 	if !strings.Contains(strings.ToLower(out.String()), "nothing was written") {
@@ -66,7 +66,7 @@ func TestSkillsDefaultNoKeepsFilesystemUntouched(t *testing.T) {
 	for _, answer := range []string{"", "\n", "n\n", "N\n", "no\n"} {
 		opts := skillsOpts(t)
 		var out bytes.Buffer
-		if err := runSkills(opts, strings.NewReader(answer), &out, true); err != nil {
+		if err := runSkills(opts, strings.NewReader(answer), &out, true, false); err != nil {
 			t.Fatalf("runSkills(%q): %v", answer, err)
 		}
 		if manifestPresent(opts) {
@@ -85,7 +85,7 @@ func TestSkillsYesAppliesPlanOnce(t *testing.T) {
 	for _, answer := range []string{"y\n", "yes\n", "Y\n", "YES\n"} {
 		opts := skillsOpts(t)
 		var out bytes.Buffer
-		if err := runSkills(opts, strings.NewReader(answer), &out, true); err != nil {
+		if err := runSkills(opts, strings.NewReader(answer), &out, true, false); err != nil {
 			t.Fatalf("runSkills(%q): %v", answer, err)
 		}
 		if !manifestPresent(opts) {
@@ -116,7 +116,7 @@ func TestSkillsConflictsPreservedAndPrinted(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := runSkills(opts, strings.NewReader("y\n"), &out, true); err != nil {
+	if err := runSkills(opts, strings.NewReader("y\n"), &out, true, false); err != nil {
 		t.Fatalf("runSkills: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func TestSkillsConflictsPreservedAndPrinted(t *testing.T) {
 func TestSkillsOutputNamesRestartReload(t *testing.T) {
 	opts := skillsOpts(t, "claude", "omp")
 	var out bytes.Buffer
-	if err := runSkills(opts, strings.NewReader("y\n"), &out, true); err != nil {
+	if err := runSkills(opts, strings.NewReader("y\n"), &out, true, false); err != nil {
 		t.Fatalf("runSkills: %v", err)
 	}
 	lower := strings.ToLower(out.String())
@@ -153,10 +153,11 @@ func TestSkillsOutputNamesRestartReload(t *testing.T) {
 	}
 }
 
-// TestSkillsCommandHasNoArgsFlagsOrSubcommands proves the public command is a
-// single, argument-free installer: no positional arguments, no subcommand, and
-// no confirmation-bypass flag that would let a caller skip the review prompt.
-func TestSkillsCommandHasNoArgsFlagsOrSubcommands(t *testing.T) {
+// TestSkillsCommandArgsAndFlags proves the public command is an argument-free,
+// subcommand-free installer that exposes exactly the two documented flags: --yes
+// (the sanctioned non-interactive apply) and --clients (client selection). Any
+// other flag would be an undocumented surface.
+func TestSkillsCommandArgsAndFlags(t *testing.T) {
 	cmd := newSkillsCmd("test")
 	if cmd.Args == nil {
 		t.Fatal("skills command accepts arbitrary positional arguments")
@@ -170,10 +171,16 @@ func TestSkillsCommandHasNoArgsFlagsOrSubcommands(t *testing.T) {
 	if subs := cmd.Commands(); len(subs) != 0 {
 		t.Errorf("skills command exposes subcommands: %v", subs)
 	}
-	var flags []string
-	cmd.Flags().VisitAll(func(f *pflag.Flag) { flags = append(flags, f.Name) })
-	if len(flags) != 0 {
-		t.Errorf("skills command defines local flags (possible confirmation bypass): %v", flags)
+	got := map[string]bool{}
+	cmd.Flags().VisitAll(func(f *pflag.Flag) { got[f.Name] = true })
+	want := map[string]bool{"yes": true, "clients": true}
+	if len(got) != len(want) {
+		t.Errorf("skills command flags = %v, want exactly %v", got, want)
+	}
+	for name := range want {
+		if !got[name] {
+			t.Errorf("skills command missing the %q flag", name)
+		}
 	}
 }
 
@@ -330,7 +337,7 @@ func TestSkillsPropagatesVerifyError(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	err := runSkillsWithVerifier(opts, strings.NewReader("y\n"), &out, true, verify)
+	err := runSkillsWithVerifier(opts, strings.NewReader("y\n"), &out, true, false, verify)
 	if err == nil {
 		t.Fatal("runSkills swallowed a verification failure")
 	}
@@ -352,7 +359,7 @@ func TestSkillsPreviewRendersUnchanged(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := runSkills(opts, strings.NewReader(""), &out, false); err != nil {
+	if err := runSkills(opts, strings.NewReader(""), &out, false, false); err != nil {
 		t.Fatalf("runSkills: %v", err)
 	}
 	rendered := out.String()
@@ -507,4 +514,46 @@ func mustJSON(t *testing.T, s string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// TestSkillsYesAppliesNonInteractively proves --yes (assumeYes) applies the
+// reviewed plan without a prompt even when no terminal is attached: the exact
+// path an agent or a provisioning script uses. The manifest is committed and the
+// assets land, unlike a plain non-interactive preview.
+func TestSkillsYesAppliesNonInteractively(t *testing.T) {
+	opts := skillsOpts(t)
+	var out bytes.Buffer
+	// interactive=false, assumeYes=true, and an empty reader: no prompt is read.
+	if err := runSkills(opts, strings.NewReader(""), &out, false, true); err != nil {
+		t.Fatalf("runSkills: %v", err)
+	}
+	if !manifestPresent(opts) {
+		t.Error("--yes non-interactive run did not commit the ownership manifest")
+	}
+	asset := filepath.Join(opts.Home, ".claude", "skills", "prowl", "commands", "search.md")
+	if _, err := os.Stat(asset); err != nil {
+		t.Errorf("--yes non-interactive run did not install %s: %v", asset, err)
+	}
+	if !strings.Contains(strings.ToLower(out.String()), "installed") {
+		t.Errorf("--yes run did not report the apply:\n%s", out.String())
+	}
+	if strings.Contains(strings.ToLower(out.String()), "preview only") {
+		t.Errorf("--yes run fell through to the preview path:\n%s", out.String())
+	}
+}
+
+// TestSplitClients proves the --clients tokenizer trims whitespace and drops
+// empty entries, leaving normalization (unknown-name filtering, dedup) to the
+// planner.
+func TestSplitClients(t *testing.T) {
+	got := splitClients(" claude , omp,hermes ,, ")
+	want := []string{"claude", "omp", "hermes"}
+	if len(got) != len(want) {
+		t.Fatalf("splitClients = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("splitClients = %v, want %v", got, want)
+		}
+	}
 }

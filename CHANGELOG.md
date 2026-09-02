@@ -7,6 +7,18 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- `prowl-agent skills` gained a non-interactive apply path and client
+  selection. `--yes` applies the reviewed plan without a prompt, the only way a
+  piped or provisioning run writes (a plain non-interactive run stays a
+  preview); `--clients claude,omp,hermes` targets a subset of the detected
+  clients. Hermes is now a supported user client: it mirrors Claude's assets
+  under `~/.hermes/skills/prowl`, and `DetectInstalledHarnesses` recognizes it
+  by a `~/.hermes` directory or a `hermes` launcher on PATH.
+- Packaged builds no longer self-update. A build-time `main.managedBy` stamp
+  (`-ldflags "-X main.managedBy=pacman"`), or a running executable whose install
+  directory the user cannot write, makes `prowl-agent update` print that the
+  binary is managed by the package manager (on Ryoku: `ryoku update`) and exit 0
+  without downloading. `version` and `status` still report update availability.
 - Added a CLI-first adoption package for Claude and OMP. `prowl-agent skills`
   previews release-matched user assets, defaults to No, never writes from a
   non-interactive session, refuses foreign-file conflicts, and tracks each owned

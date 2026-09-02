@@ -11,6 +11,12 @@ import (
 
 var version = "v0.15.6"
 
+// managedBy is stamped at build time for packaged binaries
+// (-ldflags "-X main.managedBy=pacman"). When set, `prowl-agent update` defers
+// to the package manager instead of self-updating. It is empty for a self-built
+// or downloaded binary.
+var managedBy = ""
+
 func main() {
 	root := &cobra.Command{
 		Use:   "prowl-agent",
@@ -32,7 +38,7 @@ Every command accepts --format {toon,json,human,markdown} and --json.`,
 		Version:       version,
 	}
 	root.CompletionOptions.HiddenDefaultCmd = true
-	cli.Register(root, version)
+	cli.Register(root, version, managedBy)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
