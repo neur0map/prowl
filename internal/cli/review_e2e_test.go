@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -26,12 +25,7 @@ func TestReviewCLIE2E(t *testing.T) {
 	}
 
 	temp := t.TempDir()
-	binary := filepath.Join(temp, "prowl-agent")
-	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", binary, "./cmd/prowl-agent")
-	build.Dir = filepath.Join("..", "..")
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build prowl-agent: %v\n%s", err, output)
-	}
+	binary := buildReviewE2EBinary(t, temp)
 
 	repository := filepath.Join(temp, "repository")
 	if err := os.Mkdir(repository, 0o755); err != nil {
@@ -123,8 +117,7 @@ func TestReviewCLIE2E(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hunkIDs := captureReviewE2EHunkIDs(t, repository)
-	complete := completeReviewE2EReport(t, plan, packets, hunkIDs)
+	complete := completeReviewE2EReport(t, plan, packets)
 	completeJSON, err := json.Marshal(complete)
 	if err != nil {
 		t.Fatal(err)
@@ -176,6 +169,145 @@ func TestReviewCLIE2E(t *testing.T) {
 	}
 	if boundary.Stats.RawChurn != 300 || boundary.Mode != review.ModeDirect || boundary.StructuredRequired {
 		t.Fatalf("300-line plan churn/mode/required = %d/%s/%v", boundary.Stats.RawChurn, boundary.Mode, boundary.StructuredRequired)
+	}
+}
+
+func TestReviewCLILinkedWorktreeE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping built-binary linked-worktree review e2e in short mode")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	temp := t.TempDir()
+	binary := buildReviewE2EBinary(t, temp)
+	primary := filepath.Join(temp, "primary")
+	if err := os.Mkdir(primary, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit := func(directory string, args ...string) []byte {
+		t.Helper()
+		command := exec.Command("git", append([]string{
+			"-c", "user.email=linked-review@example.com",
+			"-c", "user.name=Linked Review E2E",
+		}, args...)...)
+		command.Dir = directory
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, output)
+		}
+		return output
+	}
+	runGit(primary, "init", "-q")
+	if err := os.WriteFile(filepath.Join(primary, "source.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", filepath.Join(temp, "home"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(temp, "state"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(temp, "config"))
+	if stdout, stderr, err := runReviewBinary(binary, primary, nil, "init", "--no-input", "--integrations", "none", "--ai-provider", "agent", "--ai-command", "false", "--json"); err != nil {
+		t.Fatalf("initialize prowl: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	runGit(primary, "add", "--", "source.go")
+	runGit(primary, "commit", "-qm", "base")
+	base := strings.TrimSpace(string(runGit(primary, "rev-parse", "HEAD")))
+
+	linked := filepath.Join(primary, ".worktrees", "review")
+	runGit(primary, "worktree", "add", "-q", "-b", "linked-review-e2e", linked, base)
+	source, err := os.OpenFile(filepath.Join(linked, "source.go"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := 0; line < 301; line++ {
+		if _, err := fmt.Fprintf(source, "// linked change %03d\n", line); err != nil {
+			source.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	runGit(linked, "add", "--", "source.go")
+	runGit(linked, "commit", "-qm", "linked head")
+	head := strings.TrimSpace(string(runGit(linked, "rev-parse", "HEAD")))
+
+	invocation := filepath.Join(linked, "nested")
+	if err := os.Mkdir(invocation, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rangeJSON, stderr, err := runReviewBinary(binary, invocation, nil,
+		"review", "plan", "--base", base, "--head", head, "--format", "json")
+	if err != nil {
+		t.Fatalf("linked range plan: %v\nstdout:\n%s\nstderr:\n%s", err, rangeJSON, stderr)
+	}
+	var rangePlan review.Plan
+	if err := json.Unmarshal(rangeJSON, &rangePlan); err != nil {
+		t.Fatalf("decode linked range plan: %v\n%s", err, rangeJSON)
+	}
+	if rangePlan.Scope.Kind != review.ScopeRange || rangePlan.Mode != review.ModeStructured || !rangePlan.StructuredRequired {
+		t.Fatalf("linked range kind/mode/required = %s/%s/%v", rangePlan.Scope.Kind, rangePlan.Mode, rangePlan.StructuredRequired)
+	}
+	if rangePlan.Stats.ChangedPaths != 1 || len(rangePlan.ChangedPaths) != 1 || rangePlan.ChangedPaths[0].NewPath != "source.go" {
+		t.Fatalf("linked range changed paths = %+v", rangePlan.ChangedPaths)
+	}
+	derived := filepath.Join(primary, ".git", "worktrees", "review", "prowl")
+	for _, name := range []string{"index.db", "index-refresh.lock"} {
+		if _, err := os.Stat(filepath.Join(derived, name)); err != nil {
+			t.Fatalf("linked derived %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(linked, ".prowl")); !os.IsNotExist(err) {
+		t.Fatalf("linked worktree unexpectedly has local state: %v", err)
+	}
+	assertReviewE2EManifest(t, primary, rangePlan.ReviewID)
+
+	source, err = os.OpenFile(filepath.Join(linked, "source.go"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.WriteString("// workspace change\n"); err != nil {
+		source.Close()
+		t.Fatal(err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	workspaceJSON, stderr, err := runReviewBinary(binary, invocation, nil,
+		"review", "plan", "--structured", "--format", "json")
+	if err != nil {
+		t.Fatalf("linked workspace plan: %v\nstdout:\n%s\nstderr:\n%s", err, workspaceJSON, stderr)
+	}
+	var workspacePlan review.Plan
+	if err := json.Unmarshal(workspaceJSON, &workspacePlan); err != nil {
+		t.Fatalf("decode linked workspace plan: %v\n%s", err, workspaceJSON)
+	}
+	if workspacePlan.Scope.Kind != review.ScopeWorkspace || workspacePlan.Mode != review.ModeStructured || workspacePlan.StructuredRequired {
+		t.Fatalf("linked workspace kind/mode/required = %s/%s/%v", workspacePlan.Scope.Kind, workspacePlan.Mode, workspacePlan.StructuredRequired)
+	}
+	if workspacePlan.Stats.ChangedPaths != 1 || len(workspacePlan.ChangedPaths) != 1 || workspacePlan.ChangedPaths[0].NewPath != "source.go" {
+		t.Fatalf("linked workspace changed paths = %+v", workspacePlan.ChangedPaths)
+	}
+	assertReviewE2EManifest(t, primary, workspacePlan.ReviewID)
+}
+
+func buildReviewE2EBinary(t *testing.T, temp string) string {
+	t.Helper()
+	binary := filepath.Join(temp, "prowl-agent")
+	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", binary, "./cmd/prowl-agent")
+	build.Dir = filepath.Join("..", "..")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build prowl-agent: %v\n%s", err, output)
+	}
+	return binary
+}
+
+func assertReviewE2EManifest(t *testing.T, primary, reviewID string) {
+	t.Helper()
+	manifest := filepath.Join(primary, ".git", "prowl", "reviews", reviewID, "manifest.json")
+	if _, err := os.Stat(manifest); err != nil {
+		t.Fatalf("shared review manifest %q: %v", manifest, err)
 	}
 }
 
@@ -251,7 +383,7 @@ func assertReviewE2EPaths(t *testing.T, plan review.Plan) {
 	}
 }
 
-func completeReviewE2EReport(t *testing.T, plan review.Plan, packets map[string]review.UnitPacket, hunkIDs map[string]string) review.Report {
+func completeReviewE2EReport(t *testing.T, plan review.Plan, packets map[string]review.UnitPacket) review.Report {
 	t.Helper()
 	report := review.Report{
 		Schema: review.ReportSchemaV1, ReviewID: plan.ReviewID, PlanDigest: plan.PlanDigest,
@@ -264,11 +396,10 @@ func completeReviewE2EReport(t *testing.T, plan review.Plan, packets map[string]
 		packet := packets[unit.UnitID]
 		owned := make([]string, 0, len(packet.Mandatory.Hunks))
 		for _, hunk := range packet.Mandatory.Hunks {
-			id := hunkIDs[hunk.PathID+":"+fmt.Sprint(hunk.Ordinal)]
-			if id == "" {
-				t.Fatalf("no captured hunk ID for unit %s path %s ordinal %d", unit.UnitID, hunk.PathID, hunk.Ordinal)
+			if hunk.HunkID == "" {
+				t.Fatalf("public unit %s omitted hunk_id", unit.UnitID)
 			}
-			owned = append(owned, id)
+			owned = append(owned, hunk.HunkID)
 		}
 		sort.Strings(owned)
 		report.PrimaryReceipts = append(report.PrimaryReceipts, review.PrimaryReceipt{
@@ -282,25 +413,4 @@ func completeReviewE2EReport(t *testing.T, plan review.Plan, packets map[string]
 		})
 	}
 	return report
-}
-
-func captureReviewE2EHunkIDs(t *testing.T, root string) map[string]string {
-	t.Helper()
-	scope, err := review.ResolveScope(context.Background(), review.ExecGit{}, root, review.PlanRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	capture, err := (&review.Capturer{Root: root, Runner: review.ExecGit{}}).CaptureOnce(context.Background(), scope)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids := make(map[string]string)
-	for _, record := range capture.Paths {
-		pathID := review.PathID(capture.Scope.Digest, record)
-		for _, hunk := range record.Hunks {
-			hunkID := review.HunkID(capture.Scope.Digest, pathID.Full, hunk)
-			ids[pathID.Public+":"+fmt.Sprint(hunk.Ordinal)] = hunkID.Public
-		}
-	}
-	return ids
 }

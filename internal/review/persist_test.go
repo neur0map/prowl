@@ -203,7 +203,7 @@ func makeStructuredArtifacts(name string) PlanArtifacts {
 		Schema: UnitSchemaV1, ReviewID: reviewID, UnitID: unitID.Public,
 		CohortID: cohortID.Public, LayerID: layerID.Public,
 		ScopeKind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20,
-		Hunks: []UnitHunk{{PathID: pathID.Public, OldPath: "svc.go", NewPath: "svc.go", Status: "M", Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 3, PatchBase64: base64.StdEncoding.EncodeToString(hunk.Payload)}},
+		Hunks: []UnitHunk{{HunkID: hunkID.Public, PathID: pathID.Public, OldPath: "svc.go", NewPath: "svc.go", Status: "M", Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 3, PatchBase64: base64.StdEncoding.EncodeToString(hunk.Payload)}},
 	}
 	plan := Plan{
 		Schema:             PlanSchemaV1,
@@ -1415,6 +1415,13 @@ func TestPlanStoreDeepIdentityBinding(t *testing.T) {
 		a.Plan.PrimaryUnits[0].Hunks[0].PatchBase64 = base64.StdEncoding.EncodeToString([]byte("tampered patch bytes"))
 		if err := verifyIdentityBinding(a.Plan, a.IDRecords, a.PlanIdentity, a.PlanIdentityBytes); !errors.Is(err, ErrPlanIdentityMismatch) {
 			t.Fatalf("mutated unit patch err=%v, want ErrPlanIdentityMismatch", err)
+		}
+	})
+	t.Run("unit public hunk id mutation rejected", func(t *testing.T) {
+		a := makeStructuredArtifacts("hunk-public-id")
+		a.Plan.PrimaryUnits[0].Hunks[0].HunkID = HunkIDPrefixV1 + strings.Repeat("f", 32)
+		if err := verifyIdentityBinding(a.Plan, a.IDRecords, a.PlanIdentity, a.PlanIdentityBytes); !errors.Is(err, ErrPlanIdentityMismatch) {
+			t.Fatalf("mutated public hunk id err=%v, want ErrPlanIdentityMismatch", err)
 		}
 	})
 	t.Run("published index signature must bind identity", func(t *testing.T) {

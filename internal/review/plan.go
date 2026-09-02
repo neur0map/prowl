@@ -289,7 +289,7 @@ func makePackedUnit(scope Scope, defaultPathID, cohortID, layerID, kind string, 
 			full := sha256.Sum256(Frame(Field{Name: "path", Value: []byte(pathID)}, Field{Name: "hunk", Value: item.Hunk.Frame()}))
 			hunkID = PublicID(HunkIDPrefixV1, full, PublicIDContentBytesV1)
 		}
-		unit.Hunks = append(unit.Hunks, UnitHunk{PathID: pathID, OldPath: item.Path.OldPath, NewPath: item.Path.NewPath, Status: item.Path.Status, Ordinal: int(item.Hunk.Ordinal), OldStart: int(item.Hunk.OldStart), OldCount: int(item.Hunk.OldLines), NewStart: int(item.Hunk.NewStart), NewCount: int(item.Hunk.NewLines), NoFinalNewlineOld: item.Hunk.NoFinalNewlineOld, NoFinalNewlineNew: item.Hunk.NoFinalNewlineNew, PatchBase64: base64.StdEncoding.EncodeToString(item.Hunk.Payload)})
+		unit.Hunks = append(unit.Hunks, UnitHunk{HunkID: hunkID.Public, PathID: pathID, OldPath: item.Path.OldPath, NewPath: item.Path.NewPath, Status: item.Path.Status, Ordinal: int(item.Hunk.Ordinal), OldStart: int(item.Hunk.OldStart), OldCount: int(item.Hunk.OldLines), NewStart: int(item.Hunk.NewStart), NewCount: int(item.Hunk.NewLines), NoFinalNewlineOld: item.Hunk.NoFinalNewlineOld, NoFinalNewlineNew: item.Hunk.NoFinalNewlineNew, PatchBase64: base64.StdEncoding.EncodeToString(item.Hunk.Payload)})
 		out.HunkIDs = append(out.HunkIDs, hunkID)
 		out.Hunks = append(out.Hunks, item.Hunk)
 		out.PathIDs = append(out.PathIDs, pathID)

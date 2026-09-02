@@ -28,6 +28,7 @@ func serviceUnitArtifacts(kind ScopeKind) PlanArtifacts {
 	cohortID := stable(CohortIDPrefixV1, 0x22)
 	layerID := stable(LayerIDPrefixV1, 0x33)
 	pathID := stable(PathIDPrefixV1, 0x44)
+	hunkID := stable(HunkIDPrefixV1, 0x55)
 	headKind := SideGitOID
 	head := make([]byte, 20)
 	fingerprint := ""
@@ -50,7 +51,7 @@ func serviceUnitArtifacts(kind ScopeKind) PlanArtifacts {
 		IndexSchema:    "prowl.index.v1",
 		IndexVersion:   "1",
 		Paths:          []PlanPathEntry{{PathID: pathID, ReviewClass: string(ReviewClassFull), Coverage: string(PathCoverageFull), RoleIDs: []string{RoleImplementation}}},
-		Units:          []PlanUnitEntry{{UnitID: unitID}},
+		Units:          []PlanUnitEntry{{UnitID: unitID, HunkIDs: []StableID{hunkID}}},
 		Cohorts:        []PlanCohortEntry{{CohortID: cohortID, LayerID: layerID, UnitIDs: []StableID{unitID}}},
 	}
 	identityBytes := ReviewPlanIdentityV1(identity)
@@ -59,7 +60,7 @@ func serviceUnitArtifacts(kind ScopeKind) PlanArtifacts {
 	unit := Unit{
 		Schema: UnitSchemaV1, ReviewID: reviewID, UnitID: unitID.Public, CohortID: cohortID.Public, LayerID: layerID.Public,
 		ScopeKind: kind, ObjectFormat: "sha1", Base: scope.Base, Head: scope.Head,
-		Hunks: []UnitHunk{{PathID: pathID.Public, OldPath: "a.go", NewPath: "a.go", Status: "M", Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 1, PatchBase64: base64.StdEncoding.EncodeToString([]byte("-old\n+new\n"))}},
+		Hunks: []UnitHunk{{HunkID: hunkID.Public, PathID: pathID.Public, OldPath: "a.go", NewPath: "a.go", Status: "M", Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 1, PatchBase64: base64.StdEncoding.EncodeToString([]byte("-old\n+new\n"))}},
 	}
 	mandatory, err := unit.CanonicalMandatoryJSON()
 	if err != nil {

@@ -423,8 +423,10 @@ func (p Plan) Validate() error {
 	return nil
 }
 
-// UnitHunk is one owned hunk in a review.unit.v1 mandatory object.
+// UnitHunk is one owned hunk in a review.unit.v1 mandatory object. HunkID is
+// the stable public ID reviewers acknowledge in primary coverage receipts.
 type UnitHunk struct {
+	HunkID            string `json:"hunk_id"`
 	PathID            string `json:"path_id"`
 	OldPath           string `json:"old_path"`
 	NewPath           string `json:"new_path"`
@@ -480,6 +482,9 @@ func (u Unit) Validate() error {
 		return fmt.Errorf("review: unit %s owns no hunks", u.UnitID)
 	}
 	for i, h := range u.Hunks {
+		if h.HunkID == "" {
+			return fmt.Errorf("review: unit %s hunk %d missing hunk_id", u.UnitID, i)
+		}
 		if h.PathID == "" {
 			return fmt.Errorf("review: unit %s hunk %d missing path_id", u.UnitID, i)
 		}

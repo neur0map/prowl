@@ -310,7 +310,7 @@ func validUnit() Unit {
 		Base:         testGitSide(),
 		Head:         testWSSide(),
 		Hunks: []UnitHunk{{
-			PathID: "p_1", NewPath: "a.go", Status: "M", Ordinal: 0,
+			HunkID: "h_1", PathID: "p_1", NewPath: "a.go", Status: "M", Ordinal: 0,
 			OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 2, PatchBase64: "K3gK",
 		}},
 	}
@@ -329,6 +329,11 @@ func TestUnitValidate(t *testing.T) {
 	u.Hunks = nil
 	if err := u.Validate(); err == nil {
 		t.Fatal("unit without hunks accepted")
+	}
+	u = validUnit()
+	u.Hunks[0].HunkID = ""
+	if err := u.Validate(); err == nil {
+		t.Fatal("unit hunk without hunk_id accepted")
 	}
 	u = validUnit()
 	u.Hunks[0].PatchBase64 = ""
@@ -548,17 +553,17 @@ func TestUnitHunkFieldsAlwaysPresent(t *testing.T) {
 	// field, including old_path/old_start/old_count.
 	addition := validUnit()
 	addition.Hunks = []UnitHunk{{
-		PathID: "p_1", OldPath: "", NewPath: "a.go", Status: "A", Ordinal: 0,
+		HunkID: "h_1", PathID: "p_1", OldPath: "", NewPath: "a.go", Status: "A", Ordinal: 0,
 		OldStart: 0, OldCount: 0, NewStart: 1, NewCount: 3, PatchBase64: "K3gK",
 	}}
 	// A pure-deletion hunk (empty new side).
 	deletion := validUnit()
 	deletion.Hunks = []UnitHunk{{
-		PathID: "p_1", OldPath: "a.go", NewPath: "", Status: "D", Ordinal: 0,
+		HunkID: "h_1", PathID: "p_1", OldPath: "a.go", NewPath: "", Status: "D", Ordinal: 0,
 		OldStart: 1, OldCount: 3, NewStart: 0, NewCount: 0, PatchBase64: "LXgK",
 	}}
 	required := []string{
-		`"path_id"`, `"old_path"`, `"new_path"`, `"status"`, `"ordinal"`,
+		`"hunk_id"`, `"path_id"`, `"old_path"`, `"new_path"`, `"status"`, `"ordinal"`,
 		`"old_start"`, `"old_count"`, `"new_start"`, `"new_count"`,
 		`"old_no_final_newline"`, `"new_no_final_newline"`, `"patch_base64"`,
 	}
@@ -606,6 +611,7 @@ func TestUnitCanonicalMandatoryJSON(t *testing.T) {
 	placeholder.CohortID = CohortIDPrefixV1 + strings.Repeat("0", 32)
 	placeholder.LayerID = LayerIDPrefixV1 + strings.Repeat("0", 32)
 	placeholder.Hunks[0].PathID = PathIDPrefixV1 + strings.Repeat("0", 32)
+	placeholder.Hunks[0].HunkID = HunkIDPrefixV1 + strings.Repeat("0", 32)
 	real := placeholder
 	real.ReviewID = ReviewIDPrefixV1 + strings.Repeat("a", 40)
 	real.UnitID = UnitIDPrefixV1 + strings.Repeat("b", 32)
@@ -613,6 +619,7 @@ func TestUnitCanonicalMandatoryJSON(t *testing.T) {
 	real.LayerID = LayerIDPrefixV1 + strings.Repeat("d", 32)
 	real.Hunks = []UnitHunk{placeholder.Hunks[0]}
 	real.Hunks[0].PathID = PathIDPrefixV1 + strings.Repeat("e", 32)
+	real.Hunks[0].HunkID = HunkIDPrefixV1 + strings.Repeat("f", 32)
 	pj, err := placeholder.CanonicalMandatoryJSON()
 	if err != nil {
 		t.Fatalf("marshal placeholder: %v", err)

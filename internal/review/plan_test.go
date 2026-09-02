@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -61,8 +62,35 @@ func TestUnitChangedLineBoundaryAndOversizedAtomic(t *testing.T) {
 	}
 }
 
+func TestUnitMandatoryJSONExposesStableHunkID(t *testing.T) {
+	record := RawPathRecord{Kind: "tracked", Status: "A", NewPath: "x.go", TextClass: string(TextClassText), Additions: 1, Hunks: []RawHunk{additionHunk(0, 1, 1)}}
+	hunkID := StableID{Public: "h_" + strings.Repeat("a", 32)}
+	packed, large, err := PackReviewPartition(testScope(), "p_"+strings.Repeat("b", 32), "c_"+strings.Repeat("c", 32), "l_"+strings.Repeat("d", 32), []PackHunk{{Path: record, Hunk: record.Hunks[0], HunkID: hunkID}}, MaxUnitChangedLinesV1, MaxUnitMandatoryJSONBytesV1)
+	if err != nil || len(large) != 0 || len(packed) != 1 {
+		t.Fatalf("pack unit: packed=%d large=%d err=%v", len(packed), len(large), err)
+	}
+	if want := UnitID(UnitKindNormal, []StableID{hunkID}).Public; packed[0].Unit.UnitID != want {
+		t.Fatalf("unit identity = %q, want existing hunk-derived identity %q", packed[0].Unit.UnitID, want)
+	}
+	mandatory, err := packed[0].Unit.CanonicalMandatoryJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var public struct {
+		Hunks []struct {
+			HunkID string `json:"hunk_id"`
+		} `json:"hunks"`
+	}
+	if err := json.Unmarshal(mandatory, &public); err != nil {
+		t.Fatal(err)
+	}
+	if len(public.Hunks) != 1 || public.Hunks[0].HunkID != hunkID.Public {
+		t.Fatalf("mandatory hunk_id = %q, want %q\n%s", public.Hunks[0].HunkID, hunkID.Public, mandatory)
+	}
+}
+
 func TestUnitMandatoryJSONExactCapMinusAtPlusOne(t *testing.T) {
-	unit := Unit{Schema: UnitSchemaV1, ReviewID: "rvw_" + strings.Repeat("0", 40), UnitID: "u_" + strings.Repeat("0", 32), CohortID: "c_" + strings.Repeat("0", 32), LayerID: "l_" + strings.Repeat("0", 32), ScopeKind: ScopeRange, ObjectFormat: "sha1", Base: testScope().Base, Head: testScope().Head, Hunks: []UnitHunk{{PathID: "p", NewPath: "x", Status: "M", PatchBase64: ""}}}
+	unit := Unit{Schema: UnitSchemaV1, ReviewID: "rvw_" + strings.Repeat("0", 40), UnitID: "u_" + strings.Repeat("0", 32), CohortID: "c_" + strings.Repeat("0", 32), LayerID: "l_" + strings.Repeat("0", 32), ScopeKind: ScopeRange, ObjectFormat: "sha1", Base: testScope().Base, Head: testScope().Head, Hunks: []UnitHunk{{HunkID: "h_" + strings.Repeat("0", 32), PathID: "p", NewPath: "x", Status: "M", PatchBase64: ""}}}
 	base, err := unit.CanonicalMandatoryJSON()
 	if err != nil {
 		t.Fatal(err)

@@ -27,8 +27,11 @@ func aggregateSavings() (perProject []projSaving, combined query.Savings) {
 		return nil, combined
 	}
 	for _, e := range entries {
-		db := filepath.Join(e.Root, workspace.Dir, "index.db")
-		s, err := store.Open(db)
+		ws, err := workspace.Resolve(e.Root)
+		if err != nil {
+			continue
+		}
+		s, err := store.Open(ws.DB)
 		if err != nil {
 			continue
 		}

@@ -356,7 +356,7 @@ func TestProjectRefreshCancellationWhileProcessLockContended(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer project.Close()
-	lock := flock.New(filepath.Join(project.Workspace.Path, "index-refresh.lock"))
+	lock := flock.New(filepath.Join(project.Workspace.Derived, "index-refresh.lock"))
 	if err := lock.Lock(); err != nil {
 		t.Fatal(err)
 	}

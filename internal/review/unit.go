@@ -746,6 +746,9 @@ func replayArtifacts(ctx context.Context, planner *Planner, capture Capture, vie
 			if hid.Public == "" {
 				return PlanArtifacts{}, state, fmt.Errorf("review: unit %s references unknown hunk", unit.UnitID)
 			}
+			if hid.Public != h.HunkID {
+				return PlanArtifacts{}, state, fmt.Errorf("review: unit %s hunk_id %s does not match %s", unit.UnitID, h.HunkID, hid.Public)
+			}
 			hunks = append(hunks, hid)
 			pathSet[h.PathID] = true
 		}
@@ -783,8 +786,8 @@ func replayArtifacts(ctx context.Context, planner *Planner, capture Capture, vie
 				members = append(members, u.stable)
 			}
 		}
-		cid := CohortID(capture.Scope.Digest, cohort.Label, members)
-		addReplayID(&state, CohortIDPrefixV1, cid, Frame(Field{Name: "scope", Value: capture.Scope.Digest[:]}, Field{Name: "label", Value: []byte(cohort.Label)}, Field{Name: "units", Value: fullDigestList(members)}))
+		cid := CohortID(capture.Scope.Digest, cohort.Key, members)
+		addReplayID(&state, CohortIDPrefixV1, cid, Frame(Field{Name: "scope", Value: capture.Scope.Digest[:]}, Field{Name: "label", Value: []byte(cohort.Key)}, Field{Name: "units", Value: fullDigestList(members)}))
 		for _, layer := range cohort.Layers {
 			var layerUnits []StableID
 			for _, u := range units {

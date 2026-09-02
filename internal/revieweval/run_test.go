@@ -523,7 +523,7 @@ func validStructuredReviewArtifacts(t *testing.T, baseSHA, headSHA string) (revi
 		Schema: review.UnitSchemaV1, ReviewID: reviewID, UnitID: unitID.Public, CohortID: cohortID.Public, LayerID: layerID.Public,
 		ScopeKind: review.ScopeRange, ObjectFormat: "sha1", Base: base, Head: head,
 		Hunks: []review.UnitHunk{{
-			PathID: pathID.Public, OldPath: pathName, NewPath: pathName, Status: "M",
+			HunkID: hunkID.Public, PathID: pathID.Public, OldPath: pathName, NewPath: pathName, Status: "M",
 			Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 302,
 			PatchBase64: base64.StdEncoding.EncodeToString(rawHunk.Payload),
 		}},

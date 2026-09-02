@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/prowl-agent/prowl-agent/internal/config"
+	"github.com/prowl-agent/prowl-agent/internal/query"
 )
 
 type serviceTestStore struct {
@@ -282,7 +283,9 @@ func TestServiceBuildArtifactsPersistAndUnitRoundTrip(t *testing.T) {
 		},
 	}
 	svc := NewService(ServiceOptions{Root: "."})
-	svc.graph = basicGraph("a.go")
+	graph := basicGraph("a.go")
+	graph.clusters = []query.Cluster{{Label: "cluster-a", Files: []string{"a.go"}}}
+	svc.graph = graph
 	artifacts, err := svc.buildArtifacts(context.Background(), capture, view, "sig", true)
 	if err != nil {
 		t.Fatal(err)

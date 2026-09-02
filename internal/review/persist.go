@@ -1170,7 +1170,10 @@ func verifyIdentityBinding(plan Plan, records []IDRecord, pi PlanIdentity, ident
 			if HunkID(pi.ScopeDigest, pathFull, raw).Full != hid.Full {
 				return fmt.Errorf("%w: unit %s hunk %d identity disagrees with its patch bytes", ErrPlanIdentityMismatch, u.UnitID, j)
 			}
-			if err := wantFull(hid, hid.Public); err != nil {
+			if uh.HunkID != hid.Public {
+				return fmt.Errorf("%w: unit %s hunk %d exposes hunk_id %s, want %s", ErrPlanIdentityMismatch, u.UnitID, j, uh.HunkID, hid.Public)
+			}
+			if err := wantFull(hid, uh.HunkID); err != nil {
 				return err
 			}
 		}
