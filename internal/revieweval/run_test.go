@@ -3,6 +3,8 @@ package revieweval
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
+	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
 	"github.com/prowl-agent/prowl-agent/internal/review"
 )
 
@@ -321,13 +324,36 @@ func TestCheckerArtifactsRequireStrictBoundProwlEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	base, head := strings.Repeat("a", 40), strings.Repeat("b", 40)
-	plan, report, check, identityBytes := validStructuredReviewArtifacts(t, base, head)
-	store, err := review.OpenPlanStore(context.Background(), review.ExecGit{Binary: "git", Timeout: time.Second}, root)
+	artifacts, report, check := validStructuredReviewArtifacts(t, base, head)
+	plan := artifacts.Plan
+	ctx := context.Background()
+	store, err := review.OpenPlanStore(ctx, review.ExecGit{Binary: "git", Timeout: time.Second}, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(context.Background(), review.PlanArtifacts{Plan: plan, PlanIdentityBytes: identityBytes}, ""); err != nil {
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("close plan store: %v", err)
+		}
+	})
+	lease, err := store.NewSnapshotLease(ctx)
+	if err != nil {
 		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := lease.Release(); err != nil {
+			t.Errorf("release snapshot lease: %v", err)
+		}
+	})
+	result, err := store.Save(ctx, artifacts, lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ReviewID != plan.ReviewID || result.Reused {
+		t.Fatalf("save result = %#v", result)
+	}
+	if result.PruneWarning != nil {
+		t.Fatalf("save prune warning: %v", result.PruneWarning)
 	}
 	for name, value := range map[string]any{"plan.json": plan, "report.json": report, "check.json": check} {
 		if err := writeJSON(filepath.Join(artifactRoot, name), value); err != nil {
@@ -388,7 +414,7 @@ func TestEvalReportBindingRequiresCanonicalVerifierEvidence(t *testing.T) {
 	}
 }
 
-func validStructuredReviewArtifacts(t *testing.T, baseSHA, headSHA string) (review.Plan, review.Report, review.CheckResult, []byte) {
+func validStructuredReviewArtifacts(t *testing.T, baseSHA, headSHA string) (review.PlanArtifacts, review.Report, review.CheckResult) {
 	t.Helper()
 	baseBytes, err := hex.DecodeString(baseSHA)
 	if err != nil {
@@ -398,36 +424,164 @@ func validStructuredReviewArtifacts(t *testing.T, baseSHA, headSHA string) (revi
 	if err != nil {
 		t.Fatal(err)
 	}
-	identityBytes := []byte("review-eval-persisted-plan-fixture")
-	sum := sha256.Sum256(identityBytes)
-	digest := hex.EncodeToString(sum[:])
-	reviewID := "rvw_" + hex.EncodeToString(sum[:20])
 	base := review.SideIdentity{Kind: review.SideGitOID, Value: baseBytes}
 	head := review.SideIdentity{Kind: review.SideGitOID, Value: headBytes}
+
+	const (
+		pathName       = "a.go"
+		cohortLabel    = "code"
+		unitKind       = "normal"
+		indexSignature = "review-eval-fixture-index-v1"
+	)
+	baseContent := []byte("package a\n")
+	var headContent, patch strings.Builder
+	headContent.Write(baseContent)
+	patch.WriteString(" package a\n")
+	for index := range 301 {
+		fmt.Fprintf(&headContent, "var Value%03d = %d\n", index, index)
+		fmt.Fprintf(&patch, "+var Value%03d = %d\n", index, index)
+	}
+	oldContentDigest := review.Digest(sha256.Sum256(baseContent))
+	newContentDigest := review.Digest(sha256.Sum256([]byte(headContent.String())))
+	rawHunk := review.RawHunk{
+		Ordinal: 0, OldStart: 1, OldLines: 1, NewStart: 1, NewLines: 302,
+		Payload: []byte(patch.String()),
+	}
+	rawPath := review.RawPathRecord{
+		Kind: "tracked", Status: "M", OldPath: pathName, NewPath: pathName,
+		OldMode: 0o100644, NewMode: 0o100644, OldSide: base, NewSide: head,
+		TextClass: string(review.TextClassText), Additions: 301,
+		OldContentDigest: &oldContentDigest, NewContentDigest: &newContentDigest,
+		Hunks: []review.RawHunk{rawHunk},
+	}
+	scopeDigest := review.ScopeDigest("sha1", base, head, review.ScopeRange, review.CanonicalPatchDigest([]review.RawPathRecord{rawPath}))
+
+	pathCanonical := review.Frame(
+		review.Field{Name: "scope", Value: scopeDigest[:]},
+		review.Field{Name: "record", Value: rawPath.Frame()},
+	)
+	pathID := review.PathID(scopeDigest, rawPath)
+	pathRecord := fixtureIDRecord(review.PathIDPrefixV1, pathID, pathCanonical)
+
+	hunkCanonical := review.Frame(
+		review.Field{Name: "scope", Value: scopeDigest[:]},
+		review.Field{Name: "path", Value: pathID.Full[:]},
+		review.Field{Name: "ordinal", Value: fixtureUint64(rawHunk.Ordinal)},
+		review.Field{Name: "hunk", Value: rawHunk.Frame()},
+	)
+	hunkID := review.HunkID(scopeDigest, pathID.Full, rawHunk)
+	hunkRecord := fixtureIDRecord(review.HunkIDPrefixV1, hunkID, hunkCanonical)
+
+	unitIDs := []review.StableID{hunkID}
+	unitCanonical := review.Frame(
+		review.Field{Name: "kind", Value: []byte(unitKind)},
+		review.Field{Name: "hunks", Value: fixtureStableIDList(unitIDs)},
+	)
+	unitID := review.UnitID(unitKind, unitIDs)
+	unitRecord := fixtureIDRecord(review.UnitIDPrefixV1, unitID, unitCanonical)
+
+	cohortUnits := []review.StableID{unitID}
+	cohortCanonical := review.Frame(
+		review.Field{Name: "scope", Value: scopeDigest[:]},
+		review.Field{Name: "label", Value: []byte(cohortLabel)},
+		review.Field{Name: "units", Value: fixtureStableIDList(cohortUnits)},
+	)
+	cohortID := review.CohortID(scopeDigest, cohortLabel, cohortUnits)
+	cohortRecord := fixtureIDRecord(review.CohortIDPrefixV1, cohortID, cohortCanonical)
+
+	layerCanonical := review.Frame(
+		review.Field{Name: "cohort", Value: cohortID.Full[:]},
+		review.Field{Name: "ordinal", Value: fixtureUint64(0)},
+		review.Field{Name: "units", Value: fixtureStableIDList(cohortUnits)},
+	)
+	layerID := review.LayerID(cohortID, 0, cohortUnits)
+	layerRecord := fixtureIDRecord(review.LayerIDPrefixV1, layerID, layerCanonical)
+
+	identity := review.PlanIdentity{
+		PlannerVersion: "1", ScopeDigest: scopeDigest, IndexSchema: "prowl.index.v1", IndexVersion: "1",
+		HeadIndexSignature: []byte(indexSignature),
+		Paths:              []review.PlanPathEntry{{PathID: pathID, ReviewClass: string(review.ReviewClassFull), Coverage: string(review.PathCoverageFull), RoleIDs: []string{review.RoleImplementation}}},
+		Hunks:              []review.PlanHunkEntry{{HunkID: hunkID, Reviewability: string(review.HunkReviewable)}},
+		Units:              []review.PlanUnitEntry{{UnitID: unitID, Kind: unitKind, HunkIDs: unitIDs}},
+		Cohorts:            []review.PlanCohortEntry{{CohortID: cohortID, LayerID: layerID, UnitIDs: cohortUnits}},
+		Constants: review.PlanConstants{
+			StructuredThreshold:   review.StructuredThresholdV1,
+			UnitLineCap:           uint64(review.MaxUnitChangedLinesV1),
+			MandatoryJSONCap:      uint64(review.MaxUnitMandatoryJSONBytesV1),
+			TextClassifierVersion: "text.v1",
+			ContextRankerVersion:  "rank.v1",
+		},
+	}
+	for _, auditID := range review.RequiredAuditsV1() {
+		identity.Audits = append(identity.Audits, review.PlanAuditEntry{AuditID: auditID})
+	}
+	identityBytes := review.ReviewPlanIdentityV1(identity)
+	planDigest := review.ReviewPlanDigest(identity)
+	reviewID := review.ReviewID(identity).Public
+
 	unit := review.Unit{
-		Schema: review.UnitSchemaV1, ReviewID: reviewID, UnitID: "u_1", CohortID: "c_1", LayerID: "l_1",
+		Schema: review.UnitSchemaV1, ReviewID: reviewID, UnitID: unitID.Public, CohortID: cohortID.Public, LayerID: layerID.Public,
 		ScopeKind: review.ScopeRange, ObjectFormat: "sha1", Base: base, Head: head,
-		Hunks: []review.UnitHunk{{PathID: "p_1", OldPath: "a.go", NewPath: "a.go", Status: "M", Ordinal: 1, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 302, PatchBase64: "eA=="}},
+		Hunks: []review.UnitHunk{{
+			PathID: pathID.Public, OldPath: pathName, NewPath: pathName, Status: "M",
+			Ordinal: 0, OldStart: 1, OldCount: 1, NewStart: 1, NewCount: 302,
+			PatchBase64: base64.StdEncoding.EncodeToString(rawHunk.Payload),
+		}},
+	}
+	mandatoryUnit, err := unit.CanonicalMandatoryJSON()
+	if err != nil {
+		t.Fatal(err)
 	}
 	plan := review.Plan{
-		Schema: review.PlanSchemaV1, ReviewID: reviewID, PlanDigest: digest, Mode: review.ModeStructured, StructuredRequired: true,
+		Schema: review.PlanSchemaV1, ReviewID: reviewID, PlanDigest: hex.EncodeToString(planDigest[:]), Mode: review.ModeStructured, StructuredRequired: true,
 		Scope:        review.Scope{Kind: review.ScopeRange, ObjectFormat: "sha1", Base: base, Head: head},
 		Stats:        review.PlanStats{RawAdditions: 301, RawChurn: 301, ReviewableChurn: 301, ChangedPaths: 1},
-		ChangedPaths: []review.PlanPath{{PathID: "p_1", OldPath: "a.go", NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
-		Cohorts:      []review.PlanCohort{{CohortID: "c_1", Label: "code", Layers: []review.PlanLayer{{LayerID: "l_1", Ordinal: 1, UnitIDs: []string{"u_1"}}}, UnitIDs: []string{"u_1"}}},
+		ChangedPaths: []review.PlanPath{{PathID: pathID.Public, OldPath: pathName, NewPath: pathName, Status: "M", ReviewClass: string(review.ReviewClassFull), Coverage: string(review.PathCoverageFull), Roles: []string{review.RoleImplementation}}},
+		Cohorts:      []review.PlanCohort{{CohortID: cohortID.Public, Label: cohortLabel, Layers: []review.PlanLayer{{LayerID: layerID.Public, Ordinal: 0, UnitIDs: []string{unitID.Public}}}, UnitIDs: []string{unitID.Public}}},
 		PrimaryUnits: []review.Unit{unit},
 		NextCommands: []review.NextCommand{{Label: "check", Command: "prowl-agent review check"}},
 	}
 	report := review.Report{
-		Schema: review.ReportSchemaV1, ReviewID: reviewID, PlanDigest: digest, Base: base, Head: head, Recommendation: "approve",
-		PrimaryReceipts: []review.PrimaryReceipt{{UnitID: "u_1", AcknowledgedPrimaryHunkIDs: []string{"h_1"}, Reviewer: "agent"}},
+		Schema: review.ReportSchemaV1, ReviewID: reviewID, PlanDigest: plan.PlanDigest, Base: base, Head: head, Recommendation: "approve",
+		PrimaryReceipts: []review.PrimaryReceipt{{UnitID: unitID.Public, AcknowledgedPrimaryHunkIDs: []string{hunkID.Public}, Reviewer: "agent"}},
 	}
 	for _, auditID := range review.RequiredAuditsV1() {
 		plan.RequiredAudits = append(plan.RequiredAudits, review.PlanAudit{AuditID: auditID})
 		report.AuditReceipts = append(report.AuditReceipts, review.AuditReceipt{AuditID: auditID, Reviewer: "agent"})
 	}
 	check := review.CheckResult{Schema: review.CheckSchemaV1, ReviewID: reviewID, Mode: review.ModeStructured, Status: review.CheckComplete, Coverage: review.CoverageComplete, Recommendation: "approve"}
-	return plan, report, check, identityBytes
+	return review.PlanArtifacts{
+		Plan:           plan,
+		UnitCandidates: map[string][]contextpacket.Candidate{unitID.Public: nil},
+		MandatoryUnits: map[string][]byte{unitID.Public: mandatoryUnit},
+		Citations: map[string]review.CitationProof{
+			hunkID.Public: {ID: hunkID.Public, Side: review.SideHead, Path: pathName, ContentHash: hex.EncodeToString(newContentDigest[:]), Start: 1, End: 302},
+		},
+		PublishedIndexSignature:     indexSignature,
+		PlanIdentityBytes:           identityBytes,
+		PlanIdentity:                identity,
+		IDRecords:                   []review.IDRecord{pathRecord, hunkRecord, unitRecord, cohortRecord, layerRecord},
+		WorkspaceFingerprint:        "",
+		WorkspaceCaptureFingerprint: "",
+	}, report, check
+}
+
+func fixtureIDRecord(kind string, id review.StableID, canonical []byte) review.IDRecord {
+	return review.IDRecord{Kind: kind, Public: id.Public, Full: id.Full, Canonical: canonical}
+}
+
+func fixtureUint64(value uint64) []byte {
+	var encoded [8]byte
+	binary.BigEndian.PutUint64(encoded[:], value)
+	return encoded[:]
+}
+
+func fixtureStableIDList(ids []review.StableID) []byte {
+	items := make([][]byte, len(ids))
+	for index := range ids {
+		items[index] = ids[index].Full[:]
+	}
+	return review.FrameList(items...)
 }
 
 func mustJSON(t *testing.T, value any) json.RawMessage {
