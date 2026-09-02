@@ -1,6 +1,7 @@
 package agenteval
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -292,5 +293,33 @@ func TestClaudeArgsPreapproveReadOnlyDiscoveryTools(t *testing.T) {
 		if strings.Contains(joined, forbidden) {
 			t.Errorf("Claude args contain prompt override %q: %v", forbidden, args)
 		}
+	}
+}
+
+func TestRunClientPreservesOMPStreamAndArguments(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	binary := filepath.Join(t.TempDir(), "omp")
+	script := "#!/bin/sh\nprintf '%s' \"$*\" > \"$AGENTEVAL_ARGS\"\nprintf '%s\\n' '{\"type\":\"result\",\"result\":\"ok\"}'\nprintf 'warning' >&2\n"
+	if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AGENTEVAL_ARGS", argsFile)
+	stdout, stderr, _, err := runClient(context.Background(), Config{Model: "fixed", OMPBinary: binary, Timeout: time.Second}, t.TempDir(), t.TempDir(), "omp", "control", "prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(stdout), "{\"type\":\"result\",\"result\":\"ok\"}\n"; got != want {
+		t.Fatalf("stdout = %q", got)
+	}
+	if got, want := string(stderr), "warning"; got != want {
+		t.Fatalf("stderr = %q", got)
+	}
+	args, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs := "-p --mode json --no-session --no-title --tools read,bash,grep,glob,lsp --model fixed --no-skills --no-extensions --no-rules prompt"
+	if string(args) != wantArgs {
+		t.Fatalf("args = %q", args)
 	}
 }
