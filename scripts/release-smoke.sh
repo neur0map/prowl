@@ -54,8 +54,11 @@ assert report['integrations'] == ['agents', 'cursor'], report
 PY
 test -f .cursor/mcp.json
 test -f AGENTS.md
-review_skill=.agents/skills/prowl-pr-review/SKILL.md
-test -f "$review_skill" || { echo "standard agent install omitted prowl-pr-review" >&2; exit 1; }
+# Skills install under each selected integration's own dir; cursor was requested
+# above, so the review skill lands in .cursor/skills (the agents integration
+# writes AGENTS.md, and .agents/skills is the separate agent-skills integration).
+review_skill=.cursor/skills/prowl-pr-review/SKILL.md
+test -f "$review_skill" || { echo "standard integration install omitted prowl-pr-review" >&2; exit 1; }
 grep -q '^name: prowl-pr-review$' "$review_skill" || { echo "installed review skill has invalid frontmatter" >&2; exit 1; }
 grep -q 'prowl-agent review check --review <id> --report <regular-file|->' "$review_skill" || {
   echo "installed review skill omitted the native coverage check contract" >&2
