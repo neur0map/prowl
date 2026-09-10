@@ -1,7 +1,7 @@
 {
   "name": "prowl",
   "version": "{{VERSION}}",
-  "description": "Route repository discovery through the read-only prowl-agent CLI: locate features and symbols, read definitions, trace callers, map structure and architecture, and estimate change impact from a cited index instead of grepping and reading many files.",
+  "description": "Route repository discovery through the read-only prowl-agent CLI and run graph-aware large-change review with bounded units, coverage audits, and a final verifier check.",
   "author": {
     "name": "Prowl Agent"
   },

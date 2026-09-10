@@ -21,6 +21,7 @@ import (
 	"github.com/prowl-agent/prowl-agent/internal/knowledge"
 	"github.com/prowl-agent/prowl-agent/internal/knowledge/okfv01"
 	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/prowl-agent/prowl-agent/internal/review"
 	"github.com/prowl-agent/prowl-agent/internal/store"
 	"github.com/prowl-agent/prowl-agent/internal/workspace"
 )
@@ -82,6 +83,7 @@ type Project struct {
 	Query        *query.Querier
 	Context      *contextpacket.Service
 	Knowledge    *knowledge.Repository
+	Review       *review.Service
 	Inferencer   assist.Inferencer
 	ReadGuard    store.ReadGuard
 	// InitialRefresh is non-zero when OpenProject repaired or refreshed stale
@@ -168,7 +170,7 @@ func assembleProject(
 	if inferencer != nil {
 		querier = query.NewWithAssist(database, inferencer)
 	}
-	readGuard := generationReadGuard(filepath.Join(state.Path, "index-refresh.lock"))
+	readGuard := generationReadGuard(filepath.Join(state.Derived, "index-refresh.lock"))
 	querier.RequirePublishedGeneration().WithReadGuard(readGuard)
 	contextService := &contextpacket.Service{Store: database, Knowledge: knowledgeRepo, Root: state.Root, Tracer: contextpacket.StoreTracer{Store: database}, RequirePublished: true, ReadGuard: readGuard}
 	if inferencer != nil {
@@ -194,6 +196,22 @@ func assembleProject(
 		refreshGate:    make(chan struct{}, 1),
 		vectorProgress: opts.VectorProgress,
 	}
+	project.Review = review.NewService(review.ServiceOptions{
+		Root:          state.Root,
+		WorkspacePath: state.Path,
+		Config:        cfg,
+		Store:         database,
+		Query:         querier,
+		Context:       contextService,
+		Knowledge:     knowledgeRepo,
+		Git:           review.ExecGit{},
+		Refresh: func(ctx context.Context) (string, error) {
+			if _, err := project.Refresh(ctx); err != nil {
+				return "", err
+			}
+			return database.GetMetaContext(ctx, "cli_sig")
+		},
+	})
 	if err := database.SetMetaContext(ctx, "ai_enabled", strconv.FormatBool(cfg.AI.Enabled)); err != nil {
 		return fail(fmt.Errorf("record AI state: %w", err))
 	}
@@ -234,7 +252,7 @@ func (p *Project) withRefreshLock(ctx context.Context, mutate func() error) erro
 	if p.closed.Load() {
 		return errors.New("project is closed")
 	}
-	fileLock := flock.New(filepath.Join(p.Workspace.Path, "index-refresh.lock"))
+	fileLock := flock.New(filepath.Join(p.Workspace.Derived, "index-refresh.lock"))
 	locked, err := fileLock.TryLockContext(ctx, 25*time.Millisecond)
 	if err != nil {
 		return err

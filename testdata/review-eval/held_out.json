@@ -1,0 +1,744 @@
+{
+  "schema": "review.eval-corpus.v1",
+  "set": "held_out",
+  "sources_manifest_sha256": "36bcecf0aef80492d6a0c359d6cd3d342f5b7c7e3a8f93fe5ac52d091bfc8078",
+  "candidate_pool_sha256": "e2b11bef00c46967e937124956890a567e2aededf600da52c9aff2b8a09ba666",
+  "cases": [],
+  "audit_queue": [
+    {
+      "case_id": "aacr-elastic-elasticsearch-132077",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/elastic/elasticsearch/pull/132077",
+      "source_type": "human_caught",
+      "repository": "elastic/elasticsearch",
+      "source_base_sha": "fcf040857f04ef064a06d80191fca112d0ba8f04",
+      "source_base_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "fcf040857f04ef064a06d80191fca112d0ba8f04",
+        "oid": "fcf040857f04ef064a06d80191fca112d0ba8f04"
+      },
+      "eligible_claim_sha256s": [
+        "0b49416e5c432636a4580710eec682948d0d40f0bc0418a5d80cc06db7d5ac74",
+        "37f4fdeebdce57abca666069a747994fc9fa8d59e49a7a53cccb091cbe22f022",
+        "6e980484ce3d8e9210fe67667cfe8a05c03be78fcaf2511f81a0d7fd1f85a575",
+        "c5fe91f2abfda97be3dd14de4d226c42c6f268cfa849a46d4c7a2fdb20eed06d",
+        "ca04b935c32cad6ad1d62c67c175eaf5648c34065f885e6a87cafdfc93d65393",
+        "cd8885ea2c11e6dcd785e3a65e7327384e536cb7f5db040b69542fab48eebf1e"
+      ],
+      "base_sha": "63258f49bfc4a9895f40fac8da7ae676a1840aeb",
+      "head_sha": "5e318eba16c2327289af2e96b9c099ec7469acfa",
+      "range_semantics": "github_merge_base_to_head",
+      "selection_key": "9c157bb8b052cd16accf237a6156d11cf55d4b437ac2e95c34125f8a7c9a813a",
+      "language": "Java",
+      "source_reported_churn": 689,
+      "raw_additions": 447,
+      "raw_deletions": 384,
+      "size_bin": "301-1000",
+      "changed_ranges": [
+        {
+          "path": "server/src/internalClusterTest/java/org/elasticsearch/discovery/single/SingleNodeDiscoveryIT.java",
+          "start_line": 90,
+          "end_line": 91
+        },
+        {
+          "path": "server/src/internalClusterTest/java/org/elasticsearch/discovery/single/SingleNodeDiscoveryIT.java",
+          "start_line": 140,
+          "end_line": 142
+        },
+        {
+          "path": "server/src/internalClusterTest/java/org/elasticsearch/snapshots/MultiClusterRepoAccessIT.java",
+          "start_line": 80,
+          "end_line": 81
+        },
+        {
+          "path": "server/src/test/java/org/elasticsearch/bootstrap/EntitlementMetaTests.java",
+          "start_line": 13,
+          "end_line": 13
+        },
+        {
+          "path": "server/src/test/java/org/elasticsearch/bootstrap/EntitlementMetaTests.java",
+          "start_line": 15,
+          "end_line": 15
+        },
+        {
+          "path": "server/src/test/java/org/elasticsearch/bootstrap/EntitlementMetaTests.java",
+          "start_line": 45,
+          "end_line": 45
+        },
+        {
+          "path": "server/src/test/java/org/elasticsearch/bootstrap/WithEntitlementsOnTestCodeMetaTests.java",
+          "start_line": 13,
+          "end_line": 13
+        },
+        {
+          "path": "server/src/test/java/org/elasticsearch/bootstrap/WithEntitlementsOnTestCodeMetaTests.java",
+          "start_line": 33,
+          "end_line": 33
+        },
+        {
+          "path": "server/src/test/java/org/elasticsearch/bootstrap/WithEntitlementsOnTestCodeMetaTests.java",
+          "start_line": 39,
+          "end_line": 39
+        },
+        {
+          "path": "server/src/test/java/org/elasticsearch/indices/IndicesServiceCloseTests.java",
+          "start_line": 80,
+          "end_line": 81
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/bootstrap/BootstrapForTesting.java",
+          "start_line": 18,
+          "end_line": 18
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/bootstrap/BootstrapForTesting.java",
+          "start_line": 78,
+          "end_line": 78
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/entitlement/bootstrap/TestEntitlementBootstrap.java",
+          "start_line": 1,
+          "end_line": 305
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/entitlement/bootstrap/TestEntitlementsRule.java",
+          "start_line": 1,
+          "end_line": 358
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/entitlement/runtime/policy/TestPolicyManager.java",
+          "start_line": 32,
+          "end_line": 33
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/entitlement/runtime/policy/TestPolicyManager.java",
+          "start_line": 56,
+          "end_line": 56
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/entitlement/runtime/policy/TestPolicyManager.java",
+          "start_line": 67,
+          "end_line": 72
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/entitlement/runtime/policy/TestPolicyManager.java",
+          "start_line": 76,
+          "end_line": 76
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/entitlement/runtime/policy/TestPolicyManager.java",
+          "start_line": 78,
+          "end_line": 86
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 27,
+          "end_line": 27
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 57,
+          "end_line": 57
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 241,
+          "end_line": 242
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 245,
+          "end_line": 245
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 248,
+          "end_line": 248
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 251,
+          "end_line": 252
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 254,
+          "end_line": 254
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 257,
+          "end_line": 257
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 261,
+          "end_line": 262
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 264,
+          "end_line": 265
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 270,
+          "end_line": 271
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 282,
+          "end_line": 282
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 293,
+          "end_line": 294
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/node/MockNode.java",
+          "start_line": 299,
+          "end_line": 299
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/AbstractMultiClustersTestCase.java",
+          "start_line": 130,
+          "end_line": 131
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/ESIntegTestCase.java",
+          "start_line": 552,
+          "end_line": 552
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/ESIntegTestCase.java",
+          "start_line": 2339,
+          "end_line": 2341
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/ESSingleNodeTestCase.java",
+          "start_line": 291,
+          "end_line": 291
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/ESTestCase.java",
+          "start_line": 114,
+          "end_line": 114
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/ESTestCase.java",
+          "start_line": 162,
+          "end_line": 162
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/ESTestCase.java",
+          "start_line": 527,
+          "end_line": 550
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 181,
+          "end_line": 183
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 284,
+          "end_line": 285
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 293,
+          "end_line": 293
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 298,
+          "end_line": 299
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 310,
+          "end_line": 310
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 316,
+          "end_line": 317
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 329,
+          "end_line": 329
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 336,
+          "end_line": 337
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 346,
+          "end_line": 346
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 786,
+          "end_line": 786
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 795,
+          "end_line": 802
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 1061,
+          "end_line": 1061
+        },
+        {
+          "path": "test/framework/src/main/java/org/elasticsearch/test/InternalTestCluster.java",
+          "start_line": 1077,
+          "end_line": 1077
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/entitlement/runtime/policy/TestPolicyManagerTests.java",
+          "start_line": 44,
+          "end_line": 44
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/entitlement/runtime/policy/TestPolicyManagerTests.java",
+          "start_line": 50,
+          "end_line": 50
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 88,
+          "end_line": 89
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 102,
+          "end_line": 104
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 201,
+          "end_line": 201
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 203,
+          "end_line": 204
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 217,
+          "end_line": 217
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 220,
+          "end_line": 221
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 283,
+          "end_line": 283
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 287,
+          "end_line": 288
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 378,
+          "end_line": 378
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 383,
+          "end_line": 384
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 470,
+          "end_line": 470
+        },
+        {
+          "path": "test/framework/src/test/java/org/elasticsearch/test/test/InternalTestClusterTests.java",
+          "start_line": 476,
+          "end_line": 477
+        },
+        {
+          "path": "x-pack/plugin/ccr/src/test/java/org/elasticsearch/xpack/CcrIntegTestCase.java",
+          "start_line": 186,
+          "end_line": 187
+        },
+        {
+          "path": "x-pack/plugin/ccr/src/test/java/org/elasticsearch/xpack/CcrIntegTestCase.java",
+          "start_line": 208,
+          "end_line": 210
+        }
+      ],
+      "patch_sha256": "db43640cf600a7e5fa275e929678e5d31415ac018075e48fe74cb1d4b14e9b24",
+      "build_state_sha256": "6f9878e86a6486320f7f3ec4a082379b894819290942d8c38221c9926d99982c",
+      "source_row_sha256": "ff8dbd2be97f485f0607f8a327933e25700a473fb62bc59256f23134279cf622",
+      "evidence_refs": [
+        "https://github.com/elastic/elasticsearch/pull/132077",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "63258f49bfc4a9895f40fac8da7ae676a1840aeb",
+        "oid": "63258f49bfc4a9895f40fac8da7ae676a1840aeb"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/elastic/elasticsearch.git",
+        "ref": "5e318eba16c2327289af2e96b9c099ec7469acfa",
+        "oid": "5e318eba16c2327289af2e96b9c099ec7469acfa"
+      },
+      "reasons": [
+        "semantic causal validity and introduced-by-change status require two independent evidenced reviews",
+        "approved ground truth must bind one accepted human source-row digest and preserve its exact causal path/range",
+        "defect category, severity, scenario, and verifier evidence remain unresolved"
+      ]
+    },
+    {
+      "case_id": "aacr-wavetermdev-waveterm-1793",
+      "candidate_source": "aacr",
+      "source_id": "aacr-bench",
+      "source_record_id": "https://github.com/wavetermdev/waveterm/pull/1793",
+      "source_type": "human_caught",
+      "repository": "wavetermdev/waveterm",
+      "source_base_sha": "286783fb8e71cec6d2294bd871e5ccf8c798c646",
+      "source_base_fetch": {
+        "remote_url": "https://github.com/wavetermdev/waveterm.git",
+        "ref": "286783fb8e71cec6d2294bd871e5ccf8c798c646",
+        "oid": "286783fb8e71cec6d2294bd871e5ccf8c798c646"
+      },
+      "eligible_claim_sha256s": [
+        "9c7f85927206c42c67f43ad19f1f904427145ee0f63f6b8657fe373d9234af83"
+      ],
+      "base_sha": "900f4a3ff7574246b188a716f55afe65694d5c40",
+      "head_sha": "90a57d552d15f1b2a4d92cdfc3a4308efcf5c57b",
+      "range_semantics": "github_merge_base_to_head",
+      "selection_key": "911e838c77a833841e796ae2a4efbb9167d9a2a0597c645314fc1d208b5013d4",
+      "language": "Go",
+      "source_reported_churn": 522,
+      "raw_additions": 310,
+      "raw_deletions": 162,
+      "size_bin": "301-1000",
+      "changed_ranges": [
+        {
+          "path": "cmd/wsh/cmd/wshcmd-run.go",
+          "start_line": 14,
+          "end_line": 14
+        },
+        {
+          "path": "cmd/wsh/cmd/wshcmd-run.go",
+          "start_line": 139,
+          "end_line": 140
+        },
+        {
+          "path": "frontend/types/gotypes.d.ts",
+          "start_line": 480,
+          "end_line": 481
+        },
+        {
+          "path": "frontend/types/gotypes.d.ts",
+          "start_line": 483,
+          "end_line": 491
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 46,
+          "end_line": 48
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 149,
+          "end_line": 149
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 156,
+          "end_line": 156
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 168,
+          "end_line": 168
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 201,
+          "end_line": 201
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 212,
+          "end_line": 212
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 218,
+          "end_line": 284
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 286,
+          "end_line": 286
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 323,
+          "end_line": 323
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 354,
+          "end_line": 361
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 365,
+          "end_line": 462
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 467,
+          "end_line": 467
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 481,
+          "end_line": 485
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 501,
+          "end_line": 501
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 510,
+          "end_line": 510
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 513,
+          "end_line": 520
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 542,
+          "end_line": 549
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 571,
+          "end_line": 572
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 583,
+          "end_line": 584
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 589,
+          "end_line": 590
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 625,
+          "end_line": 625
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 634,
+          "end_line": 634
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 768,
+          "end_line": 768
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 876,
+          "end_line": 876
+        },
+        {
+          "path": "pkg/blockcontroller/blockcontroller.go",
+          "start_line": 887,
+          "end_line": 887
+        },
+        {
+          "path": "pkg/remote/conncontroller/conncontroller.go",
+          "start_line": 815,
+          "end_line": 815
+        },
+        {
+          "path": "pkg/remote/conncontroller/conncontroller.go",
+          "start_line": 829,
+          "end_line": 829
+        },
+        {
+          "path": "pkg/shellexec/shellexec.go",
+          "start_line": 41,
+          "end_line": 41
+        },
+        {
+          "path": "pkg/shellexec/shellexec.go",
+          "start_line": 259,
+          "end_line": 265
+        },
+        {
+          "path": "pkg/shellexec/shellexec.go",
+          "start_line": 428,
+          "end_line": 433
+        },
+        {
+          "path": "pkg/shellexec/shellexec.go",
+          "start_line": 560,
+          "end_line": 560
+        },
+        {
+          "path": "pkg/util/shellutil/shellutil.go",
+          "start_line": 229,
+          "end_line": 229
+        },
+        {
+          "path": "pkg/wavebase/wavebase.go",
+          "start_line": 40,
+          "end_line": 46
+        },
+        {
+          "path": "pkg/waveobj/metaconsts.go",
+          "start_line": 50,
+          "end_line": 51
+        },
+        {
+          "path": "pkg/waveobj/metaconsts.go",
+          "start_line": 53,
+          "end_line": 61
+        },
+        {
+          "path": "pkg/waveobj/metamap.go",
+          "start_line": 17,
+          "end_line": 32
+        },
+        {
+          "path": "pkg/waveobj/wtypemeta.go",
+          "start_line": 39,
+          "end_line": 62
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 274,
+          "end_line": 274
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 489,
+          "end_line": 489
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 645,
+          "end_line": 645
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 655,
+          "end_line": 655
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 668,
+          "end_line": 668
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 678,
+          "end_line": 678
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 691,
+          "end_line": 691
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 701,
+          "end_line": 701
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 738,
+          "end_line": 738
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 788,
+          "end_line": 788
+        },
+        {
+          "path": "pkg/wshrpc/wshserver/wshserver.go",
+          "start_line": 800,
+          "end_line": 800
+        },
+        {
+          "path": "pkg/wshutil/wshutil.go",
+          "start_line": 552,
+          "end_line": 552
+        },
+        {
+          "path": "pkg/wslconn/wslconn.go",
+          "start_line": 120,
+          "end_line": 123
+        },
+        {
+          "path": "pkg/wslconn/wslconn.go",
+          "start_line": 754,
+          "end_line": 754
+        },
+        {
+          "path": "pkg/wslconn/wslconn.go",
+          "start_line": 758,
+          "end_line": 758
+        },
+        {
+          "path": "pkg/wslconn/wslconn.go",
+          "start_line": 767,
+          "end_line": 768
+        }
+      ],
+      "patch_sha256": "9c7cd008af834bead50cf2cfa10f81b706287bc56208419be5b945c8aa2a6598",
+      "build_state_sha256": "967c82ec6829e930147166e513f23e6afa05577228838f290f152877a349d3e6",
+      "source_row_sha256": "bcd82696922924e75eebc010623a6f64c95336ee3e58df9b1c0ff9fa3ba5ef89",
+      "evidence_refs": [
+        "https://github.com/wavetermdev/waveterm/pull/1793",
+        "aacr-revision:47be1d6df1e7faf222cf531587772d92f79fe6b2"
+      ],
+      "base_fetch": {
+        "remote_url": "https://github.com/wavetermdev/waveterm.git",
+        "ref": "900f4a3ff7574246b188a716f55afe65694d5c40",
+        "oid": "900f4a3ff7574246b188a716f55afe65694d5c40"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/wavetermdev/waveterm.git",
+        "ref": "90a57d552d15f1b2a4d92cdfc3a4308efcf5c57b",
+        "oid": "90a57d552d15f1b2a4d92cdfc3a4308efcf5c57b"
+      },
+      "reasons": [
+        "semantic causal validity and introduced-by-change status require two independent evidenced reviews",
+        "approved ground truth must bind one accepted human source-row digest and preserve its exact causal path/range",
+        "defect category, severity, scenario, and verifier evidence remain unresolved"
+      ]
+    }
+  ]
+}

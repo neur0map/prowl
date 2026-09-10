@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
 )
 
 type Case struct {
@@ -710,42 +712,32 @@ func Run(ctx context.Context, cfg Config, manifest Manifest) (Report, error) {
 }
 
 func runClient(parent context.Context, cfg Config, work, clientRoot, client, condition, prompt string) ([]byte, []byte, time.Duration, error) {
-	ctx, cancel := context.WithTimeout(parent, cfg.Timeout)
-	defer cancel()
 	environment, err := clientEnvironment(clientRoot, client, condition)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	var command *exec.Cmd
-	switch client {
-	case "claude":
-		home, _ := os.UserHomeDir()
-		args := claudeArgs(cfg, condition, home, prompt)
-		command = exec.CommandContext(ctx, cfg.ClaudeBinary, args...)
-	case "omp":
-		args := []string{"-p", "--mode", "json", "--no-session", "--no-title", "--tools", "read,bash,grep,glob,lsp"}
-		if cfg.Model != "" {
-			args = append(args, "--model", cfg.Model)
-		}
-		if condition == "control" {
-			args = append(args, "--no-skills", "--no-extensions", "--no-rules")
-		} else {
-			home, _ := os.UserHomeDir()
-			args = append(args, "--skills", "code-search", "--no-rules", "-e", filepath.Join(home, ".omp", "agent", "extensions", "prowl-routing.ts"))
-		}
-		args = append(args, prompt)
-		command = exec.CommandContext(ctx, cfg.OMPBinary, args...)
-	default:
-		return nil, nil, 0, fmt.Errorf("unknown client %q", client)
+	clientCfg := agenttrial.ClientConfig{
+		Client:              client,
+		Model:               cfg.Model,
+		ClaudeBinary:        cfg.ClaudeBinary,
+		OMPBinary:           cfg.OMPBinary,
+		Environment:         environment,
+		DisableAmbientRules: condition == "control",
+		Budget:              agenttrial.Budget{Timeout: cfg.Timeout},
 	}
-	command.Dir = work
-	command.Env = environment
-	var stdout, stderr strings.Builder
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	start := time.Now()
-	err = command.Run()
-	return []byte(stdout.String()), []byte(stderr.String()), time.Since(start), err
+	if condition == "treatment" {
+		home, _ := os.UserHomeDir()
+		switch client {
+		case "claude":
+			clientCfg.PluginDirs = []string{filepath.Join(home, ".claude", "skills", "prowl")}
+		case "omp":
+			clientCfg.Skills = []string{"code-search"}
+			clientCfg.Extensions = []string{filepath.Join(home, ".omp", "agent", "extensions", "prowl-routing.ts")}
+			clientCfg.DisableAmbientRules = true
+		}
+	}
+	result, err := agenttrial.Run(parent, work, prompt, clientCfg)
+	return result.Stdout, result.Stderr, result.Elapsed, err
 }
 
 func claudeArgs(cfg Config, condition, home, prompt string) []string {

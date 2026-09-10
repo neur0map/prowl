@@ -45,6 +45,30 @@ func TestAgentFacingCommandsResolveAgainstTheCommandTree(t *testing.T) {
 	}
 }
 
+func TestAgentFacingCommandsIncludeNativeReviewOnly(t *testing.T) {
+	root := &cobra.Command{Use: "prowl-agent"}
+	Register(root, "test", "")
+	commands := commandPaths(root)
+	for path, flags := range map[string][]string{
+		"review plan":  {"base", "head", "commit", "structured"},
+		"review unit":  {"budget-tokens", "budget-bytes"},
+		"review check": {"review", "report"},
+	} {
+		command := commands[path]
+		if command == nil {
+			t.Fatalf("agent-facing command %q is not registered", path)
+		}
+		for _, flag := range flags {
+			if command.Flags().Lookup(flag) == nil {
+				t.Errorf("agent-facing command %q has no --%s flag", path, flag)
+			}
+		}
+	}
+	if _, ok := commands["serve review"]; ok {
+		t.Fatal("review must remain a native CLI workflow, not an MCP command")
+	}
+}
+
 // TestAgentFacingCommandTreeIncludesSkills proves the installer surface is part of
 // the one command tree agents resolve against: `skills` is public (it appears in
 // help), while `_search-advisory` -- a Claude hook helper, never invoked by a

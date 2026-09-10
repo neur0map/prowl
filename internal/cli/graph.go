@@ -62,7 +62,7 @@ func newGraphCmd() *cobra.Command {
 			}
 			path := out
 			if path == "" {
-				path = filepath.Join(ws.Path, "graph.html")
+				path = filepath.Join(ws.Derived, "graph.html")
 			}
 			html, err := renderGraphHTML(filepath.Base(ws.Root), data)
 			if err != nil {
@@ -80,7 +80,7 @@ func newGraphCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&out, "html", "", "output path (default: .prowl/graph.html)")
+	c.Flags().StringVar(&out, "html", "", "output path (default: per-worktree derived graph.html)")
 	return c
 }
 

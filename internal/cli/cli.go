@@ -16,7 +16,7 @@ func Register(root *cobra.Command, version string, managedBy string) {
 	// these through resolveFormat.
 	root.PersistentFlags().String("format", "", "output format: human, toon, json, or markdown (default: human on a terminal, toon when piped)")
 	root.PersistentFlags().Bool("json", false, "output JSON (shorthand for --format json)")
-	root.AddCommand(newInitCmd(), newStatusCmd(version), newDoctorCmd(version), newKnowledgeCmd(), newContextCmd(), newCapabilitiesCmd(), newServeCmd(version), newLSPCmd(version), newUpdateCmd(version, managedBy), newRestartCmd(version), newVersionCmd(version), newSkillsCmd(version), newSearchAdvisoryCmd())
+	root.AddCommand(newInitCmd(), newStatusCmd(version), newDoctorCmd(version), newKnowledgeCmd(), newContextCmd(), newCapabilitiesCmd(), newReviewCmd(), newServeCmd(version), newLSPCmd(version), newUpdateCmd(version, managedBy), newRestartCmd(version), newVersionCmd(version), newSkillsCmd(version), newSearchAdvisoryCmd())
 	// Read-only query commands: the CLI-first path. Any agent can shell out to
 	// these (token-lean TOON output) with no MCP server and no `serve`.
 	root.AddCommand(

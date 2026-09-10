@@ -1,0 +1,4191 @@
+{
+  "schema": "review.eval-small-corpus.v1",
+  "set": "small_non_regression",
+  "sources_manifest_sha256": "36bcecf0aef80492d6a0c359d6cd3d342f5b7c7e3a8f93fe5ac52d091bfc8078",
+  "cases": [
+    {
+      "id": "swr-astropy-astropy-2213",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-2213",
+      "repository": "astropy/astropy",
+      "base_sha": "0026bee989ecb2789a9ca54fd8cb97140c9c04e8",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "0026bee989ecb2789a9ca54fd8cb97140c9c04e8",
+        "oid": "0026bee989ecb2789a9ca54fd8cb97140c9c04e8"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "6283cf5e7ee6d354f5b5e2e1bfd525b0b15c58fb",
+        "oid": "6283cf5e7ee6d354f5b5e2e1bfd525b0b15c58fb"
+      },
+      "head_sha": "6283cf5e7ee6d354f5b5e2e1bfd525b0b15c58fb",
+      "raw_additions": 15,
+      "raw_deletions": 7,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-2213-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `mdboom` pointed out that using `str()` directly on `col.name` could cause issues with unicode column names in Python 2. Reviewer `taldcroft` acknowledged this comment (`Apart from @mdboom's comment on six.text_type...`). The author subsequently implemented the suggested change using `six.text_type`.",
+          "scenario": "The code was changed from `col_name = str(col.name)` to `col_name = six.text_type(col.name)`. This uses the `six` library's `text_type` alias, which correctly handles conversion to the appropriate text string type (unicode in Python 2, str in Python 3), addressing the reviewer's concern about potential issues with unicode column names in Python 2.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-2213",
+            "source_digest": "76c73e62229a387d67bbe153ee2750457c5e756b10ba490b5f4c071c1f6cfc2d",
+            "evidence_refs": [
+              "6283cf5e7ee6d354f5b5e2e1bfd525b0b15c58fb",
+              "f50dbf72769479b5eb95c34eedb4b95927a4d916"
+            ]
+          },
+          "canonical_digest": "bbdde637cc5e63c7bfff71fb5ecceba23260bc72b1440a404e948572a798c2a4",
+          "locations": [
+            {
+              "path": "astropy/table/pprint.py",
+              "start_line": 213,
+              "end_line": 213
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "CHANGES.rst",
+          "start_line": 214,
+          "end_line": 215
+        },
+        {
+          "path": "astropy/table/pprint.py",
+          "start_line": 208,
+          "end_line": 208
+        },
+        {
+          "path": "astropy/table/pprint.py",
+          "start_line": 213,
+          "end_line": 213
+        },
+        {
+          "path": "astropy/table/pprint.py",
+          "start_line": 215,
+          "end_line": 215
+        },
+        {
+          "path": "astropy/table/pprint.py",
+          "start_line": 217,
+          "end_line": 218
+        },
+        {
+          "path": "astropy/table/tests/test_pprint.py",
+          "start_line": 55,
+          "end_line": 55
+        },
+        {
+          "path": "astropy/table/tests/test_pprint.py",
+          "start_line": 232,
+          "end_line": 233
+        },
+        {
+          "path": "astropy/table/tests/test_pprint.py",
+          "start_line": 327,
+          "end_line": 334
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "0756b369824e08b64c7927996419ea52b3b0ea06eb508c9afcfc7c8cac2f74fb",
+      "patch_sha256": "96bf5a79cc95efe0787fad9b836dca631c623c8bfcb50dc3224d9912b7227318",
+      "build_state_sha256": "5b426184058905ddf6319c1baf0bd3455cf05a8a3dcd874c8b917059e9274eb2",
+      "canonical_diff_sha256": "96bf5a79cc95efe0787fad9b836dca631c623c8bfcb50dc3224d9912b7227318",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-6157",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-6157",
+      "repository": "astropy/astropy",
+      "base_sha": "dd2b168981ca84cff81defd9da8838a7ddb3a6a7",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "dd2b168981ca84cff81defd9da8838a7ddb3a6a7",
+        "oid": "dd2b168981ca84cff81defd9da8838a7ddb3a6a7"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "b8510217ddfb6b2cf9090205cbba1a08a9bea905",
+        "oid": "b8510217ddfb6b2cf9090205cbba1a08a9bea905"
+      },
+      "head_sha": "b8510217ddfb6b2cf9090205cbba1a08a9bea905",
+      "raw_additions": 2,
+      "raw_deletions": 31,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "CHANGES.rst",
+          "start_line": 213,
+          "end_line": 214
+        },
+        {
+          "path": "astropy/utils/__init__.py",
+          "start_line": 19,
+          "end_line": 20
+        },
+        {
+          "path": "astropy/utils/compat/odict.py",
+          "start_line": 1,
+          "end_line": 13
+        },
+        {
+          "path": "astropy/utils/tests/test_odict.py",
+          "start_line": 1,
+          "end_line": 16
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-6157"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "0f7038aad7cd91ec160ef83944d3085ad1109c93a4539add99fbcd061d0fcb2e",
+      "patch_sha256": "27908268e8622f851af0e6448c936228bc91efcec64c0d5e25adcddf195d9225",
+      "build_state_sha256": "aad536ed83ae1132dc642aa0ef690d5c8178fcfccf18defeb46418f0c2e262d1",
+      "canonical_diff_sha256": "27908268e8622f851af0e6448c936228bc91efcec64c0d5e25adcddf195d9225",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-14607",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-14607",
+      "repository": "astropy/astropy",
+      "base_sha": "aaf8975dd12d512a046ce11e6a404ed47372d7a8",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "aaf8975dd12d512a046ce11e6a404ed47372d7a8",
+        "oid": "aaf8975dd12d512a046ce11e6a404ed47372d7a8"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "9ea5ddae91430b79f1314424f50c967d93c2c947",
+        "oid": "9ea5ddae91430b79f1314424f50c967d93c2c947"
+      },
+      "head_sha": "9ea5ddae91430b79f1314424f50c967d93c2c947",
+      "raw_additions": 2,
+      "raw_deletions": 2,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": ".pre-commit-config.yaml",
+          "start_line": 66,
+          "end_line": 66
+        },
+        {
+          "path": ".pre-commit-config.yaml",
+          "start_line": 72,
+          "end_line": 72
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-14607"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "0f9a1fd2cb65be9053aad1544d72a616189942016b338180e3ac160ca768b778",
+      "patch_sha256": "65406e1bbae6abf1ae196a944c1f837947e5cb3c98f4a8649c20ba6313d7c56b",
+      "build_state_sha256": "0147c6aee49040a163b07b10f7c6b228bb034491ebfdc9027877d3664541dcdc",
+      "canonical_diff_sha256": "65406e1bbae6abf1ae196a944c1f837947e5cb3c98f4a8649c20ba6313d7c56b",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-11764",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-11764",
+      "repository": "astropy/astropy",
+      "base_sha": "03f6ac5f79569fb9572f75c10d6fd82611f33c0d",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "03f6ac5f79569fb9572f75c10d6fd82611f33c0d",
+        "oid": "03f6ac5f79569fb9572f75c10d6fd82611f33c0d"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "ce8cceeb13924332b30dec45d19516d0c3aff0b9",
+        "oid": "ce8cceeb13924332b30dec45d19516d0c3aff0b9"
+      },
+      "head_sha": "ce8cceeb13924332b30dec45d19516d0c3aff0b9",
+      "raw_additions": 4,
+      "raw_deletions": 2,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": ".github/workflows/ci_cron_daily.yml",
+          "start_line": 50,
+          "end_line": 50
+        },
+        {
+          "path": ".github/workflows/ci_cron_daily.yml",
+          "start_line": 60,
+          "end_line": 61
+        },
+        {
+          "path": ".github/workflows/ci_cron_daily.yml",
+          "start_line": 67,
+          "end_line": 67
+        },
+        {
+          "path": ".github/workflows/ci_cron_daily.yml",
+          "start_line": 72,
+          "end_line": 72
+        },
+        {
+          "path": ".github/workflows/ci_cron_daily.yml",
+          "start_line": 74,
+          "end_line": 74
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-11764"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "0f9f6791fecabca6f7ebc991ed9f6fef23e673e32a5c7ca9ff8740423ce23b7d",
+      "patch_sha256": "78cb95a526dc9089bd56e11ffdc16cd30eb2673b5d8c79289532931657134b61",
+      "build_state_sha256": "b148f5046c97a92fac1806a2b23e6f36a1b20744e1b50003edb90810777f3925",
+      "canonical_diff_sha256": "78cb95a526dc9089bd56e11ffdc16cd30eb2673b5d8c79289532931657134b61",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-14682",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-14682",
+      "repository": "astropy/astropy",
+      "base_sha": "e4c203ceb5cfe89c4b4d816591576ca00cdd8538",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "e4c203ceb5cfe89c4b4d816591576ca00cdd8538",
+        "oid": "e4c203ceb5cfe89c4b4d816591576ca00cdd8538"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "379dce6faf77c5eb35eaa682e2e95b60539e22d1",
+        "oid": "379dce6faf77c5eb35eaa682e2e95b60539e22d1"
+      },
+      "head_sha": "379dce6faf77c5eb35eaa682e2e95b60539e22d1",
+      "raw_additions": 1,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "configuration_migration",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-14682-truth-1",
+          "defect_class": "configuration_migration",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `pllim` noticed that the PR, intended to update pre-commit hooks, was itself failing the pre-commit CI checks. Subsequent comments by `eerovaher`, `saimn`, and `nstarman` confirmed that the failure was due to new linting rules introduced in the updated `ruff` version (`v0.0.262`) included in the first commit. `nstarman` acknowledged the need to update the configuration to ignore these new rules to allow the CI to pass and stated they would implement the fix.",
+          "scenario": "The commit modifies the `pyproject.toml` file to add several new `ruff` rule codes (S324, S603, S605, S607) to the `extend-ignore` list under the `[tool.ruff]` section. This action suppresses the errors/warnings emitted by these specific rules, which were introduced or enabled by the `ruff` version update in commit `379dce6`. By ignoring these rules, the pre-commit CI checks could pass, resolving the issue pointed out by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-14682",
+            "source_digest": "6c0c0044e5a45ec219777cc2f58ad307395fba0c628134958a0e07827ca7f833",
+            "evidence_refs": [
+              "379dce6faf77c5eb35eaa682e2e95b60539e22d1",
+              "9f9f2daefd57969b6e076ec628638308b4f0ea45"
+            ]
+          },
+          "canonical_digest": "1c88543a3a52f6b92dfb1616d531f2e99c5ffa038451918b5cbadee55bf4dde0",
+          "locations": [
+            {
+              "path": ".pre-commit-config.yaml",
+              "start_line": 65,
+              "end_line": 65
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": ".pre-commit-config.yaml",
+          "start_line": 65,
+          "end_line": 65
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "126f439b61cbd84ad4e2a1f3c89ad722300d1e6cc2e0368f0482045dff982866",
+      "patch_sha256": "3231b51ee7ff76cb5879c1a727ab54df0b80a1e9317d71cf5c0e2dcb20419756",
+      "build_state_sha256": "681d2a68e23fed93aa6995d72670a4dc10f87a99fe52ddc5e12a505b3f79e760",
+      "canonical_diff_sha256": "3231b51ee7ff76cb5879c1a727ab54df0b80a1e9317d71cf5c0e2dcb20419756",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-13841",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-13841",
+      "repository": "astropy/astropy",
+      "base_sha": "96dde46c854cd34cf3fd4b485d1250e32a78648e",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "96dde46c854cd34cf3fd4b485d1250e32a78648e",
+        "oid": "96dde46c854cd34cf3fd4b485d1250e32a78648e"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "75fe3e75c17ce86ab7ea4558dbbdcd761f34def8",
+        "oid": "75fe3e75c17ce86ab7ea4558dbbdcd761f34def8"
+      },
+      "head_sha": "75fe3e75c17ce86ab7ea4558dbbdcd761f34def8",
+      "raw_additions": 1,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": ".pre-commit-config.yaml",
+          "start_line": 69,
+          "end_line": 69
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-13841"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "1438f8bef624a5b45960df938cd000bc8898a312ec0137f9b10de0f148aa1328",
+      "patch_sha256": "579b3ae3929ff49a5ec62c3e53284bec2b77d7ea4322718c814364b0e75957ee",
+      "build_state_sha256": "2965af26f10afb4bcc64998e6b1663dffdc46e75f69e998d5cf58bf554d512fa",
+      "canonical_diff_sha256": "579b3ae3929ff49a5ec62c3e53284bec2b77d7ea4322718c814364b0e75957ee",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-1700",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-1700",
+      "repository": "astropy/astropy",
+      "base_sha": "57f06838d73537c260404f15887a1894acdfd21e",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "57f06838d73537c260404f15887a1894acdfd21e",
+        "oid": "57f06838d73537c260404f15887a1894acdfd21e"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "9d19eb4b5b985852e1022345dcf11d4160105ef1",
+        "oid": "9d19eb4b5b985852e1022345dcf11d4160105ef1"
+      },
+      "head_sha": "9d19eb4b5b985852e1022345dcf11d4160105ef1",
+      "raw_additions": 35,
+      "raw_deletions": 8,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/coordinates/builtin_systems.py",
+          "start_line": 752,
+          "end_line": 755
+        },
+        {
+          "path": "astropy/coordinates/old_builtin_systems_names.py",
+          "start_line": 9,
+          "end_line": 9
+        },
+        {
+          "path": "astropy/coordinates/old_builtin_systems_names.py",
+          "start_line": 41,
+          "end_line": 42
+        },
+        {
+          "path": "astropy/coordinates/old_builtin_systems_names.py",
+          "start_line": 55,
+          "end_line": 56
+        },
+        {
+          "path": "astropy/coordinates/old_builtin_systems_names.py",
+          "start_line": 69,
+          "end_line": 70
+        },
+        {
+          "path": "astropy/coordinates/old_builtin_systems_names.py",
+          "start_line": 83,
+          "end_line": 84
+        },
+        {
+          "path": "astropy/coordinates/old_builtin_systems_names.py",
+          "start_line": 99,
+          "end_line": 124
+        },
+        {
+          "path": "astropy/coordinates/transformations.py",
+          "start_line": 210,
+          "end_line": 212
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-1700"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "18b3e5b77bd3d75d804a648ef97319d101a67c48691982e8f643d5addeef77aa",
+      "patch_sha256": "b27c16941a3e7247415c28694a67dda9363f553fd3b2866a99440d48239c9c1b",
+      "build_state_sha256": "8ee9422b8ecccc7523ddf70536a738a312bd6021391e3ed30ef83a491d7fec5d",
+      "canonical_diff_sha256": "b27c16941a3e7247415c28694a67dda9363f553fd3b2866a99440d48239c9c1b",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-112",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-112",
+      "repository": "astropy/astropy",
+      "base_sha": "ec2d96773598260f26b303b8d34eccfd90919aa7",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "ec2d96773598260f26b303b8d34eccfd90919aa7",
+        "oid": "ec2d96773598260f26b303b8d34eccfd90919aa7"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "a22ae11964002b96e4a601f852174e2ce339ebc7",
+        "oid": "a22ae11964002b96e4a601f852174e2ce339ebc7"
+      },
+      "head_sha": "a22ae11964002b96e4a601f852174e2ce339ebc7",
+      "raw_additions": 2,
+      "raw_deletions": 5,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/tests/helper.py",
+          "start_line": 195,
+          "end_line": 199
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-112"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "193454c7cd40f0cc8baa33c69db01c536069b77a579288e11074b8e69dbcab0b",
+      "patch_sha256": "65252d9e9d83d35a188fc6a1fce0d2d4fc7874c6cff5c38d2f306d98854294ef",
+      "build_state_sha256": "d034522ff85b0582b001cfd1f76b6b0bd050615269177eeb5a552f02287a1d9f",
+      "canonical_diff_sha256": "65252d9e9d83d35a188fc6a1fce0d2d4fc7874c6cff5c38d2f306d98854294ef",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-1312",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-1312",
+      "repository": "astropy/astropy",
+      "base_sha": "0674f8bcfabca1631e6c23431655806f0007bca8",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "0674f8bcfabca1631e6c23431655806f0007bca8",
+        "oid": "0674f8bcfabca1631e6c23431655806f0007bca8"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "aebb7db96f5e8044243c7bb77301b4983e3006da",
+        "oid": "aebb7db96f5e8044243c7bb77301b4983e3006da"
+      },
+      "head_sha": "aebb7db96f5e8044243c7bb77301b4983e3006da",
+      "raw_additions": 8,
+      "raw_deletions": 4,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "test_gap",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-1312-truth-1",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `astrofrog` noted that a test was still failing despite the PR's attempt to make tests deterministic using a fixed random seed. He later explicitly suggested that the chosen seed itself might be the issue (\"maybe this is just a case of changing the random seed?\"). The author (`nden`) acknowledged this possibility (\"This was my thought too\") and proceeded to change the seed value. The subsequent test runs passed, confirming the original seed led to a problematic state for the test.",
+          "scenario": "The commit changes the seed value used for the `RandomState` object from `1234` to `123456789`. This directly addresses the reviewer's suggestion that the specific seed value (`1234`) introduced in the initial commit was causing the test failure. Changing the seed alters the sequence of pseudo-random numbers generated, leading to a state where the test now passes.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-1312",
+            "source_digest": "9d331f4a6e3f1a35ac898d6ed61bd9ff55b53f2b8d85d7d177482f6cabdf3503",
+            "evidence_refs": [
+              "aebb7db96f5e8044243c7bb77301b4983e3006da",
+              "d73eeadacee96842699b8073979483219ac992bf"
+            ]
+          },
+          "canonical_digest": "46e55652e1727b6728f9c99d27e509e45665c546e3800fee909f7004910165e8",
+          "locations": [
+            {
+              "path": "astropy/wcs/tests/test_wcs.py",
+              "start_line": 25,
+              "end_line": 25
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 7,
+          "end_line": 7
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 25,
+          "end_line": 26
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 256,
+          "end_line": 256
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 259,
+          "end_line": 260
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 298,
+          "end_line": 298
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 302,
+          "end_line": 302
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 307,
+          "end_line": 307
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 311,
+          "end_line": 311
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 434,
+          "end_line": 434
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 438,
+          "end_line": 438
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "1ccec0e6c6b0bd535e372f0d809415796ad08b4982955d91a4aaa57781878f72",
+      "patch_sha256": "8b39a4a43592aa05d8fcd7963cef17852fd274f41d9568e972a0676bd814e791",
+      "build_state_sha256": "459810d720e7bdc1bc915af8992e1555ec9e0c2d507a97b8c74e75b8adf9c283",
+      "canonical_diff_sha256": "8b39a4a43592aa05d8fcd7963cef17852fd274f41d9568e972a0676bd814e791",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-444",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-444",
+      "repository": "astropy/astropy",
+      "base_sha": "cbf2964ef2ec26411439f3f3b85a93e234c7792f",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "cbf2964ef2ec26411439f3f3b85a93e234c7792f",
+        "oid": "cbf2964ef2ec26411439f3f3b85a93e234c7792f"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "3b467c33d8e3b3c081d0c0ba5759ea35bdbf7039",
+        "oid": "3b467c33d8e3b3c081d0c0ba5759ea35bdbf7039"
+      },
+      "head_sha": "3b467c33d8e3b3c081d0c0ba5759ea35bdbf7039",
+      "raw_additions": 73,
+      "raw_deletions": 40,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/utils/misc.py",
+          "start_line": 227,
+          "end_line": 227
+        },
+        {
+          "path": "astropy/wcs/_docutil.py",
+          "start_line": 17,
+          "end_line": 17
+        },
+        {
+          "path": "astropy/wcs/_docutil.py",
+          "start_line": 20,
+          "end_line": 20
+        },
+        {
+          "path": "astropy/wcs/_docutil.py",
+          "start_line": 22,
+          "end_line": 23
+        },
+        {
+          "path": "astropy/wcs/_docutil.py",
+          "start_line": 25,
+          "end_line": 26
+        },
+        {
+          "path": "astropy/wcs/_docutil.py",
+          "start_line": 57,
+          "end_line": 58
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 9,
+          "end_line": 9
+        },
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 247,
+          "end_line": 269
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 828,
+          "end_line": 832
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 836,
+          "end_line": 836
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 840,
+          "end_line": 841
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 843,
+          "end_line": 844
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 848,
+          "end_line": 850
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 852,
+          "end_line": 864
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 866,
+          "end_line": 866
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 873,
+          "end_line": 874
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 932,
+          "end_line": 932
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 940,
+          "end_line": 940
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1005,
+          "end_line": 1005
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1013,
+          "end_line": 1013
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1072,
+          "end_line": 1072
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1080,
+          "end_line": 1081
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1088,
+          "end_line": 1089
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1104,
+          "end_line": 1104
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1112,
+          "end_line": 1112
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1115,
+          "end_line": 1116
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1130,
+          "end_line": 1130
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1138,
+          "end_line": 1138
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1141,
+          "end_line": 1142
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1156,
+          "end_line": 1156
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1164,
+          "end_line": 1164
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1167,
+          "end_line": 1167
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1175,
+          "end_line": 1175
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1195,
+          "end_line": 1195
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1203,
+          "end_line": 1203
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1206,
+          "end_line": 1206
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1214,
+          "end_line": 1214
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1232,
+          "end_line": 1232
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 1240,
+          "end_line": 1240
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-444"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "1d2c28eccba464fbc6eb63a1e51f5d28c740f1be084a3d6e5f77c1555abf9cd1",
+      "patch_sha256": "29bb6a16ac2c57d2b0b16d61efbc2156c565491d373f35760b7e5b67b4160369",
+      "build_state_sha256": "e55ec7285a29e05040a0ccae6b7d2ac9ad8fed7633dae1daa88e7b42a90a5dd1",
+      "canonical_diff_sha256": "29bb6a16ac2c57d2b0b16d61efbc2156c565491d373f35760b7e5b67b4160369",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-5097",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-5097",
+      "repository": "astropy/astropy",
+      "base_sha": "f2d16a928e195918245c6856c39b9944e8d16b8a",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "f2d16a928e195918245c6856c39b9944e8d16b8a",
+        "oid": "f2d16a928e195918245c6856c39b9944e8d16b8a"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "0c84b87b935083fda7396b797c21bf8262e0a24a",
+        "oid": "0c84b87b935083fda7396b797c21bf8262e0a24a"
+      },
+      "head_sha": "0c84b87b935083fda7396b797c21bf8262e0a24a",
+      "raw_additions": 43,
+      "raw_deletions": 101,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": ".travis.yml",
+          "start_line": 57,
+          "end_line": 61
+        },
+        {
+          "path": ".travis.yml",
+          "start_line": 63,
+          "end_line": 63
+        },
+        {
+          "path": ".travis.yml",
+          "start_line": 65,
+          "end_line": 65
+        },
+        {
+          "path": ".travis.yml",
+          "start_line": 67,
+          "end_line": 67
+        },
+        {
+          "path": ".travis.yml",
+          "start_line": 69,
+          "end_line": 69
+        },
+        {
+          "path": ".travis.yml",
+          "start_line": 81,
+          "end_line": 81
+        },
+        {
+          "path": ".travis.yml",
+          "start_line": 83,
+          "end_line": 92
+        },
+        {
+          "path": "astropy/coordinates/builtin_frames/ecliptic_transforms.py",
+          "start_line": 12,
+          "end_line": 12
+        },
+        {
+          "path": "astropy/coordinates/builtin_frames/ecliptic_transforms.py",
+          "start_line": 30,
+          "end_line": 45
+        },
+        {
+          "path": "astropy/coordinates/builtin_frames/ecliptic_transforms.py",
+          "start_line": 64,
+          "end_line": 64
+        },
+        {
+          "path": "astropy/coordinates/builtin_frames/ecliptic_transforms.py",
+          "start_line": 83,
+          "end_line": 83
+        },
+        {
+          "path": "astropy/coordinates/builtin_frames/ecliptic_transforms.py",
+          "start_line": 92,
+          "end_line": 92
+        },
+        {
+          "path": "astropy/coordinates/solar_system.py",
+          "start_line": 217,
+          "end_line": 218
+        },
+        {
+          "path": "astropy/coordinates/tests/test_regression.py",
+          "start_line": 15,
+          "end_line": 16
+        },
+        {
+          "path": "astropy/coordinates/tests/test_regression.py",
+          "start_line": 24,
+          "end_line": 48
+        },
+        {
+          "path": "astropy/coordinates/tests/test_regression.py",
+          "start_line": 150,
+          "end_line": 150
+        },
+        {
+          "path": "astropy/coordinates/tests/test_regression.py",
+          "start_line": 154,
+          "end_line": 155
+        },
+        {
+          "path": "astropy/coordinates/tests/test_solar_system.py",
+          "start_line": 294,
+          "end_line": 303
+        },
+        {
+          "path": "astropy/io/fits/hdu/image.py",
+          "start_line": 249,
+          "end_line": 249
+        },
+        {
+          "path": "astropy/io/fits/tests/test_image.py",
+          "start_line": 1556,
+          "end_line": 1564
+        },
+        {
+          "path": "astropy/utils/compat/misc.py",
+          "start_line": 150,
+          "end_line": 155
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2055,
+          "end_line": 2055
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2057,
+          "end_line": 2057
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2060,
+          "end_line": 2060
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2065,
+          "end_line": 2065
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2067,
+          "end_line": 2067
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2070,
+          "end_line": 2070
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2086,
+          "end_line": 2086
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2092,
+          "end_line": 2092
+        },
+        {
+          "path": "astropy/wcs/wcs.py",
+          "start_line": 2122,
+          "end_line": 2122
+        },
+        {
+          "path": "docs/coordinates/remote_methods.rst",
+          "start_line": 47,
+          "end_line": 47
+        },
+        {
+          "path": "tox.ini",
+          "start_line": 2,
+          "end_line": 2
+        },
+        {
+          "path": "tox.ini",
+          "start_line": 6,
+          "end_line": 6
+        },
+        {
+          "path": "tox.ini",
+          "start_line": 9,
+          "end_line": 10
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-5097"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "1dae56c68252e9637a0b058ecbc0bce2926bef08ad898f6bbe8b9b4f912bf7ec",
+      "patch_sha256": "65b81f7bf3970dde0ce52d58ba165427d05f8c4af12faec54c37394fd1c1f16c",
+      "build_state_sha256": "38e979dab27422e975faa4bf971b53477bb746a876e4985019cb48e8899b7d32",
+      "canonical_diff_sha256": "65b81f7bf3970dde0ce52d58ba165427d05f8c4af12faec54c37394fd1c1f16c",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-6541",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-6541",
+      "repository": "astropy/astropy",
+      "base_sha": "f87a3e54f7e2257bfe582a7a9c32017aeaeb4493",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "f87a3e54f7e2257bfe582a7a9c32017aeaeb4493",
+        "oid": "f87a3e54f7e2257bfe582a7a9c32017aeaeb4493"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "d188ce719254cee2f34c5879e7dfdefd00d9f928",
+        "oid": "d188ce719254cee2f34c5879e7dfdefd00d9f928"
+      },
+      "head_sha": "d188ce719254cee2f34c5879e7dfdefd00d9f928",
+      "raw_additions": 2,
+      "raw_deletions": 261,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "CHANGES.rst",
+          "start_line": 269,
+          "end_line": 270
+        },
+        {
+          "path": "astropy/analytic_functions/__init__.py",
+          "start_line": 1,
+          "end_line": 10
+        },
+        {
+          "path": "astropy/analytic_functions/blackbody.py",
+          "start_line": 1,
+          "end_line": 79
+        },
+        {
+          "path": "astropy/analytic_functions/tests/test_blackbody.py",
+          "start_line": 1,
+          "end_line": 22
+        },
+        {
+          "path": "docs/analytic_functions/index.rst",
+          "start_line": 1,
+          "end_line": 138
+        },
+        {
+          "path": "docs/index.rst",
+          "start_line": 73,
+          "end_line": 73
+        },
+        {
+          "path": "docs/stability.rst",
+          "start_line": 87,
+          "end_line": 97
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-6541"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "25c094b7375182248579aaa4222551e7d3e5e3ad5728f6b44ee25967749750b0",
+      "patch_sha256": "81f944d2eac7c8fbac5a8db2917602d415a8dc5b532a3d43043f4e3ca1c6a562",
+      "build_state_sha256": "b5aaadd5ddfe124b1684bca5fe108a422a4669a3112896543229087df68ef508",
+      "canonical_diff_sha256": "81f944d2eac7c8fbac5a8db2917602d415a8dc5b532a3d43043f4e3ca1c6a562",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-6422",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-6422",
+      "repository": "astropy/astropy",
+      "base_sha": "71d94196ad5a50c5b67e972106d1ccf9caaaf8c0",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "71d94196ad5a50c5b67e972106d1ccf9caaaf8c0",
+        "oid": "71d94196ad5a50c5b67e972106d1ccf9caaaf8c0"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "fdaa7881766a834a4559322991ed79673e6f4396",
+        "oid": "fdaa7881766a834a4559322991ed79673e6f4396"
+      },
+      "head_sha": "fdaa7881766a834a4559322991ed79673e6f4396",
+      "raw_additions": 28,
+      "raw_deletions": 219,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "dependency",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-6422-truth-1",
+          "defect_class": "dependency",
+          "severity": "unspecified_by_source",
+          "summary": "The reviewer suggested using `os.path.join` for the hardcoded path string `utils/tests/test_decorators.py`. This implicitly pointed out the platform-dependency issue (using '/'). The author later acknowledged the problem (\"Oh yes indeed, I forgot about Windows path separator :(\") and implemented a fix.",
+          "scenario": "The fixing commit changed the assertion from checking for the full path `utils/tests/test_decorators.py` to only checking for the filename `test_decorators.py`. This avoids the hardcoded path separator ('/') and makes the test assertion platform-independent, addressing the issue identified by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-6422",
+            "source_digest": "df31a0444cdae71f220a3bbe47877daa1a3fe8c3a708eaa6d73f6d0c2f0b5aa1",
+            "evidence_refs": [
+              "fdaa7881766a834a4559322991ed79673e6f4396",
+              "f9335905ff0b973ba8491daa0c42fede8b3ef9e4"
+            ]
+          },
+          "canonical_digest": "164c7a3614c784a1c9f053668f6f2ea237241238c6c7672cb031393dd2556721",
+          "locations": [
+            {
+              "path": "astropy/utils/tests/test_decorators.py",
+              "start_line": 292,
+              "end_line": 292
+            }
+          ]
+        },
+        {
+          "id": "swr-astropy-astropy-6422-truth-2",
+          "defect_class": "dependency",
+          "severity": "unspecified_by_source",
+          "summary": "The reviewer pointed out this second instance of the same hardcoded path issue identified in Change-0, referencing their previous comment about using `os.path.join`. The author acknowledged the general path separator issue later and fixed both instances.",
+          "scenario": "Similar to Change-0, the fixing commit changed the assertion to check only for the filename `test_decorators.py`, removing the hardcoded path with the problematic separator ('/'). This resolved the platform-dependency issue identified by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-6422",
+            "source_digest": "09e8be2e7ce07575b5557ef64e18f4cd166ca132ac8eb5b8077dd01dbeb2007b",
+            "evidence_refs": [
+              "fdaa7881766a834a4559322991ed79673e6f4396",
+              "f9335905ff0b973ba8491daa0c42fede8b3ef9e4"
+            ]
+          },
+          "canonical_digest": "9b088e44a1f2a635cb0b1c8c722d49751f7e07b36010bef986f5c4f0873e8b3f",
+          "locations": [
+            {
+              "path": "astropy/utils/tests/test_decorators.py",
+              "start_line": 322,
+              "end_line": 322
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "CHANGES.rst",
+          "start_line": 31,
+          "end_line": 33
+        },
+        {
+          "path": "CHANGES.rst",
+          "start_line": 305,
+          "end_line": 308
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 9,
+          "end_line": 9
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 89,
+          "end_line": 90
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 92,
+          "end_line": 94
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 471,
+          "end_line": 473
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 523,
+          "end_line": 544
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 795,
+          "end_line": 842
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 854,
+          "end_line": 854
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 902,
+          "end_line": 904
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 942,
+          "end_line": 943
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 953,
+          "end_line": 955
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 979,
+          "end_line": 979
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 1004,
+          "end_line": 1008
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 1010,
+          "end_line": 1014
+        },
+        {
+          "path": "astropy/io/fits/column.py",
+          "start_line": 1063,
+          "end_line": 1123
+        },
+        {
+          "path": "astropy/io/fits/tests/test_table.py",
+          "start_line": 232,
+          "end_line": 238
+        },
+        {
+          "path": "astropy/io/fits/tests/test_table.py",
+          "start_line": 2979,
+          "end_line": 3019
+        },
+        {
+          "path": "astropy/utils/decorators.py",
+          "start_line": 482,
+          "end_line": 482
+        },
+        {
+          "path": "astropy/utils/tests/test_decorators.py",
+          "start_line": 292,
+          "end_line": 292
+        },
+        {
+          "path": "astropy/utils/tests/test_decorators.py",
+          "start_line": 322,
+          "end_line": 322
+        },
+        {
+          "path": "docs/io/fits/usage/table.rst",
+          "start_line": 268,
+          "end_line": 274
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "269aef69e8493685004a56f2e2da18b04426a1bbe55b820eebb487b3a833fe9b",
+      "patch_sha256": "9b4788ff4c2986d23c82784e5338bab81857f55392ccada779e49f7460ce315b",
+      "build_state_sha256": "bbb7f80cf0bd84cf9015959655e7eba0de1fd44fd492dadbf47b2ab096b02b30",
+      "canonical_diff_sha256": "9b4788ff4c2986d23c82784e5338bab81857f55392ccada779e49f7460ce315b",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-16539",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-16539",
+      "repository": "astropy/astropy",
+      "base_sha": "68f5119d1603581aedc5a0abab80567cd099a365",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "68f5119d1603581aedc5a0abab80567cd099a365",
+        "oid": "68f5119d1603581aedc5a0abab80567cd099a365"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "fd80b0adbaa3ec7521446d381ebec7e815deb326",
+        "oid": "fd80b0adbaa3ec7521446d381ebec7e815deb326"
+      },
+      "head_sha": "fd80b0adbaa3ec7521446d381ebec7e815deb326",
+      "raw_additions": 1,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": ".github/workflows/check_changelog.yml",
+          "start_line": 17,
+          "end_line": 17
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-16539"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "34c2fa952edab9a562669430872f71d7e02c7be52fc419983bc8bbce9d193c18",
+      "patch_sha256": "1cb8d8c85321946511a6b1d72b0eec817cf1b389949aef67f88f93021aaa30fe",
+      "build_state_sha256": "dedc2e8e7c6366b7e96fa11cab087a2cf14cd273a1c36a719d7e85279b455355",
+      "canonical_diff_sha256": "1cb8d8c85321946511a6b1d72b0eec817cf1b389949aef67f88f93021aaa30fe",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-4203",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-4203",
+      "repository": "astropy/astropy",
+      "base_sha": "2a2c19b55388dfc2d37285c01d73ce30ee4a5227",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "2a2c19b55388dfc2d37285c01d73ce30ee4a5227",
+        "oid": "2a2c19b55388dfc2d37285c01d73ce30ee4a5227"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "883de2ee81cd66265b642fc62a82fb868b499016",
+        "oid": "883de2ee81cd66265b642fc62a82fb868b499016"
+      },
+      "head_sha": "883de2ee81cd66265b642fc62a82fb868b499016",
+      "raw_additions": 9,
+      "raw_deletions": 66,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "docs/coordinates/galactocentric.rst",
+          "start_line": 3,
+          "end_line": 5
+        },
+        {
+          "path": "docs/coordinates/galactocentric.rst",
+          "start_line": 9,
+          "end_line": 13
+        },
+        {
+          "path": "docs/coordinates/galactocentric.rst",
+          "start_line": 115,
+          "end_line": 115
+        },
+        {
+          "path": "docs/coordinates/index.rst",
+          "start_line": 16,
+          "end_line": 22
+        },
+        {
+          "path": "docs/coordinates/index.rst",
+          "start_line": 274,
+          "end_line": 274
+        },
+        {
+          "path": "docs/coordinates/index.rst",
+          "start_line": 289,
+          "end_line": 339
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-4203"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "35101e82686656662aaa410dd6d969ad2fd982ae2ea1f50e4693f74ed4c8e1e9",
+      "patch_sha256": "a701cdc1f8e9179406b0c03bef9135e8bfa956b0598e7d676cbbf784e04a2319",
+      "build_state_sha256": "10da2720b5f8a023a32498327f1a1fcb6bce4e73cd18238fb12af4858073d7b3",
+      "canonical_diff_sha256": "a701cdc1f8e9179406b0c03bef9135e8bfa956b0598e7d676cbbf784e04a2319",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-8838",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-8838",
+      "repository": "astropy/astropy",
+      "base_sha": "99fb305304a6564787e001f46ef407b802fdf91f",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "99fb305304a6564787e001f46ef407b802fdf91f",
+        "oid": "99fb305304a6564787e001f46ef407b802fdf91f"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "f1659c18b76414be6ee4c555d1207a1314ebf3bc",
+        "oid": "f1659c18b76414be6ee4c555d1207a1314ebf3bc"
+      },
+      "head_sha": "f1659c18b76414be6ee4c555d1207a1314ebf3bc",
+      "raw_additions": 1,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "test_gap",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-8838-truth-1",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `pllim` pointed out that since the PR fixes a bug, it should include a changelog entry. The author `saimn` did not explicitly respond to this part of the comment but addressed it by adding the changelog entry in a subsequent commit.",
+          "scenario": "The commit adds a new entry to the `CHANGES.rst` file, specifically documenting the bug fix introduced in this PR, directly addressing the reviewer's suggestion.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-8838",
+            "source_digest": "0d7af3b3d83a331ed71d2fb496192c652e12b6281622d5a8770eb3908d7c61f2",
+            "evidence_refs": [
+              "f1659c18b76414be6ee4c555d1207a1314ebf3bc",
+              "8920d5a2051411395de1b6358d5a7cbfb4983cfa"
+            ]
+          },
+          "canonical_digest": "277b003078943177165a8e57fa01c4459607d1039f0be5d5f78a89a2d36ac1fe",
+          "locations": [
+            {
+              "path": "astropy/io/fits/hdu/table.py",
+              "start_line": 327,
+              "end_line": 327
+            }
+          ]
+        },
+        {
+          "id": "swr-astropy-astropy-8838-truth-2",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `pllim` observed that the automated tests were failing after the initial code change. The author `saimn` confirmed this in a follow-up comment: \"@pllim, indeed, some tests were catching this warning!\". This confirmed that the change introduced in the first commit caused test failures that needed addressing.",
+          "scenario": "This commit modifies the test file `test_fitstime.py` by removing the `pytest.warns` blocks that were specifically checking for the deprecation warnings suppressed by the initial code change in commit `f1659c18b...`. This aligns the tests with the new, intended behavior of the code, resolving the test failures pointed out by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-8838",
+            "source_digest": "24e3cd91c251d80bcd907638c6180dce145d4575dc32cb2cc3e1b3177746b821",
+            "evidence_refs": [
+              "f1659c18b76414be6ee4c555d1207a1314ebf3bc",
+              "596bfd4316fc75792335b99853122a15b7ef097a"
+            ]
+          },
+          "canonical_digest": "18f6b8ac30bdbf70b32da248ad6bfbe75c61b1ed60b5a42df2331bde2ad614e3",
+          "locations": [
+            {
+              "path": "astropy/io/fits/hdu/table.py",
+              "start_line": 327,
+              "end_line": 327
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/io/fits/hdu/table.py",
+          "start_line": 327,
+          "end_line": 327
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "353fb0c131d656bcc94c8378b873920c33e4ebc97194eb94ca00e0f14c16f621",
+      "patch_sha256": "8fe25d0118f09ae7e57fdfa5a3d08e5982f3f37d0e8a13a8a680cf61044b96d2",
+      "build_state_sha256": "d63d3b03872d6aec96532f550790636189b7c5eb1f25803d5d9b4338a0446af3",
+      "canonical_diff_sha256": "8fe25d0118f09ae7e57fdfa5a3d08e5982f3f37d0e8a13a8a680cf61044b96d2",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-8201",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-8201",
+      "repository": "astropy/astropy",
+      "base_sha": "708dc60a150b89f85c192e61894d420aa1332b91",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "708dc60a150b89f85c192e61894d420aa1332b91",
+        "oid": "708dc60a150b89f85c192e61894d420aa1332b91"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "5ced0750effe79e226db8354af8cc39e5ca2232b",
+        "oid": "5ced0750effe79e226db8354af8cc39e5ca2232b"
+      },
+      "head_sha": "5ced0750effe79e226db8354af8cc39e5ca2232b",
+      "raw_additions": 3,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-8201-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "The reviewer (`pllim`) questioned the structure and indentation of the exception handling, specifically how the `ImportError` was intended to be caught *after* a `KeyError` occurred. The author (`bsipocz`) initially misunderstood the comment but then acknowledged the structural issue (\"of course you're right\"). This confirmed that the initial implementation's logic for nested exception handling was incorrect or at least confusingly structured.",
+          "scenario": "The code was restructured to correctly handle the nested exception logic. The `try...except ImportError` block is now placed *inside* the `except KeyError` block. This ensures that the import from `...version` is only attempted if the initial lookup in `TESTED_VERSIONS` fails (raises `KeyError`), and any potential `ImportError` during that fallback attempt is handled within the scope of the `KeyError` handler. This directly addresses the structural/logical flaw pointed out by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-8201",
+            "source_digest": "fe4c41d6dcd002d1af3cf7f6aa7864352b283461ed517640fb78e3474613d3d7",
+            "evidence_refs": [
+              "5ced0750effe79e226db8354af8cc39e5ca2232b",
+              "3ae0fb7149bad489e51e5c135c7cee92ec9b1a75"
+            ]
+          },
+          "canonical_digest": "04f887aa1935105c7e41af84748dfe9aca1cefa36192ece6d4e40398db2b7e50",
+          "locations": [
+            {
+              "path": "astropy/tests/plugins/display.py",
+              "start_line": 99,
+              "end_line": 99
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/tests/plugins/display.py",
+          "start_line": 43,
+          "end_line": 43
+        },
+        {
+          "path": "astropy/tests/plugins/display.py",
+          "start_line": 99,
+          "end_line": 100
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "363d6d35b5823d57396098502302ead49a839439173b6deb27ae748e33dd1afc",
+      "patch_sha256": "abc65e0b9573d333acc15619661753ad915a2d7f9cebb4b82d90516709f4e9db",
+      "build_state_sha256": "d3bb9b3748781218ee951b7fc2ab1a51262229e0cb2909d38c9ab383c4798f3a",
+      "canonical_diff_sha256": "abc65e0b9573d333acc15619661753ad915a2d7f9cebb4b82d90516709f4e9db",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-692",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-692",
+      "repository": "astropy/astropy",
+      "base_sha": "c2b8ea7ebaafd7ad382532aee71faf92243b9b7f",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "c2b8ea7ebaafd7ad382532aee71faf92243b9b7f",
+        "oid": "c2b8ea7ebaafd7ad382532aee71faf92243b9b7f"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "38da5fe1751736361ed3893cd449bf4fe0cb73bd",
+        "oid": "38da5fe1751736361ed3893cd449bf4fe0cb73bd"
+      },
+      "head_sha": "38da5fe1751736361ed3893cd449bf4fe0cb73bd",
+      "raw_additions": 37,
+      "raw_deletions": 5,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-692-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `eteq` pointed out that while `spectral_density` could handle energy units (`keV`) in its *argument*, it failed when trying to convert *to* a unit with an energy denominator (`erg/s/cm^2/keV`). This highlighted a missing piece of functionality required for X-ray astronomy units. Reviewer `pllim` later confirmed (2014-04-07T18:24:25) that this unit combination was indeed undefined within the existing `spectral_density` implementation and suggested expanding it.",
+          "scenario": "@astrofrog Aha, ok, yeah, that gets into some dangerous territory now that I see more closely and I'm okay with not doing that\n\nre: the second one: (I tried to make a notebook about this and put it on http://nbviewer.ipython.org/9997406 , but at least as of this post it's not working, so I summarized below.  But by the time you read it, perhaps it will be up).  I see the following:\n\n```\n(1*u.Jy).to(u.erg/u.s/u.cm**2/u.AA,\n            equivalencies=u.spectral_density(4000 * u.AA))\n(1*u.Jy).to(u.erg/u.s/u.cm**2/u.AA,\n            equivalencies=u.spectral_density(3.1e-3 * u.keV))\n```\n\nBoth work as you'd expect, giving roughly the same answer: it treats 3.1e-3 keV (equivalent to 4000 angstroms) as the energy of the photon, and does the flux conversion to per-wavelength correctly.\n\nBut this does _not_ work:\n\n```\n(1*u.Jy).to(u.erg/u.s/u.cm**2/u.keV,\n            equivalencies=u.spectral_density(3.1e-3 * u.keV))\n```\n\nit gives me an error that the units aren't right... So is that supposed to be working now, then (and hence it's a bug)?",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-692",
+            "source_digest": "08cbd18c28b1cbf07b3981880f4cf45f599dfeba6eb8f2b53a39d1f30b6de69e",
+            "evidence_refs": [
+              "38da5fe1751736361ed3893cd449bf4fe0cb73bd"
+            ]
+          },
+          "canonical_digest": "907463c3f15ac0ff5d1bbb6ef511f7e7bfa7f45b317f167c97aef8cce1f19f46",
+          "locations": [
+            {
+              "path": "astropy/units/equivalencies.py",
+              "start_line": 37,
+              "end_line": 37
+            }
+          ]
+        },
+        {
+          "id": "swr-astropy-astropy-692-truth-2",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `eteq` questioned whether the `spectral_density` equivalency should work for units beyond the explicitly defined flux/luminosity densities (e.g., for integrated energy per spectral bin). This pointed out a limitation in the implementation's generality, suggesting it could be broadened to handle any compatible numerator unit while converting the spectral denominator (e.g., `/Hz` to `/AA`). The discussion confirmed this generalization was desirable but not implemented.",
+          "scenario": "Also, one other thing occurs to me about this,  @astrofrog.  Should this work:\n\n```\n(1*u.Jy * 600 * u.s * pi*10**2 * u.m**2).to(u.erg/u.AA,\n            equivalencies=u.spectral_density(4000 * u.AA))\n```\n\nThat is, spectral density is useful for a variety of other numerator units.  Are we just going to say we only support flux numerators, or is there a way to generalize this to make it possible for things like energy?",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-692",
+            "source_digest": "4a358f2737c1296aef241dbba620c6eb542268b7b8aaebee4e5d77bfe08bfe51",
+            "evidence_refs": [
+              "38da5fe1751736361ed3893cd449bf4fe0cb73bd"
+            ]
+          },
+          "canonical_digest": "19860e3bf36fdc58888e040bc4a43b0912c15defe303dd44e882b8c64882d721",
+          "locations": [
+            {
+              "path": "astropy/units/equivalencies.py",
+              "start_line": 37,
+              "end_line": 37
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/units/equivalencies.py",
+          "start_line": 37,
+          "end_line": 37
+        },
+        {
+          "path": "astropy/units/equivalencies.py",
+          "start_line": 43,
+          "end_line": 48
+        },
+        {
+          "path": "astropy/units/equivalencies.py",
+          "start_line": 71,
+          "end_line": 73
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 117,
+          "end_line": 118
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 121,
+          "end_line": 121
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 123,
+          "end_line": 124
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 126,
+          "end_line": 127
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 129,
+          "end_line": 129
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 133,
+          "end_line": 133
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 135,
+          "end_line": 136
+        },
+        {
+          "path": "astropy/units/tests/test_units.py",
+          "start_line": 138,
+          "end_line": 158
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "3c607fd9864740b63e901f22e7f13cf576bdfe518fd15a606f06a04482711059",
+      "patch_sha256": "462c69f25af83bb10348775e509c44c1a1e2355db2bd0e6b2f4ffa3fef57dc0f",
+      "build_state_sha256": "8d8634326580d7909460c26e5239d179394619225b3b8c98fe6823ef6174036c",
+      "canonical_diff_sha256": "462c69f25af83bb10348775e509c44c1a1e2355db2bd0e6b2f4ffa3fef57dc0f",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-17319",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-17319",
+      "repository": "astropy/astropy",
+      "base_sha": "5b79a7c2c49a52868703b6e0cb0016aa5d6cd312",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "5b79a7c2c49a52868703b6e0cb0016aa5d6cd312",
+        "oid": "5b79a7c2c49a52868703b6e0cb0016aa5d6cd312"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "cbcf260ab59000904bebf8d6ac1a87d858f8f035",
+        "oid": "cbcf260ab59000904bebf8d6ac1a87d858f8f035"
+      },
+      "head_sha": "cbcf260ab59000904bebf8d6ac1a87d858f8f035",
+      "raw_additions": 2,
+      "raw_deletions": 2,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-17319-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "The initial comment by `pllim` questioned the automated update of `docformatter`. Reviewers `nstarman` and `eerovaher` then discussed the possibility and benefit of removing `docformatter` entirely, suggesting `ruff` might replace its functionality and noting `docformatter` was sparsely used. `pllim` agreed with the suggestion to remove it.",
+          "scenario": "Following the reviewers' suggestion during the discussion, this commit removes the entire `docformatter` configuration block from the `.pre-commit-config.yaml` file, thereby implementing the suggested change to stop using this tool instead of just managing its update.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-17319",
+            "source_digest": "4b3b003e4d39faa1b79d59a139d05390530584d367f87d30451059ff51d65c2a",
+            "evidence_refs": [
+              "cbcf260ab59000904bebf8d6ac1a87d858f8f035",
+              "031019f0df675f9fb76571156c42bcd947fa9f95"
+            ]
+          },
+          "canonical_digest": "80d6a81d94fafba97948ff21234ab81b0b997b2e86f86e698554bbd6b33670fb",
+          "locations": [
+            {
+              "path": ".pre-commit-config.yaml",
+              "start_line": 78,
+              "end_line": 78
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": ".pre-commit-config.yaml",
+          "start_line": 63,
+          "end_line": 63
+        },
+        {
+          "path": ".pre-commit-config.yaml",
+          "start_line": 78,
+          "end_line": 78
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "3c6c60f00b4af60f60ad8f37d13179c693f8549424ef36d3df0ba19102b8b8be",
+      "patch_sha256": "ffd060b74f3c3e6a85be515ba996ed1cde8aaee1c9433cae3f9222de6371f130",
+      "build_state_sha256": "ba1e7a5254919b7f3eab48e51d8b948a4b574e62b1b6579895a70707ce2d84d1",
+      "canonical_diff_sha256": "ffd060b74f3c3e6a85be515ba996ed1cde8aaee1c9433cae3f9222de6371f130",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-840",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-840",
+      "repository": "astropy/astropy",
+      "base_sha": "123b8ee8f93402f1958f31f37ccc4986f8a89c20",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "123b8ee8f93402f1958f31f37ccc4986f8a89c20",
+        "oid": "123b8ee8f93402f1958f31f37ccc4986f8a89c20"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "bb9ed4f782b118e52574847ad0dde81f28ecae7d",
+        "oid": "bb9ed4f782b118e52574847ad0dde81f28ecae7d"
+      },
+      "head_sha": "bb9ed4f782b118e52574847ad0dde81f28ecae7d",
+      "raw_additions": 95,
+      "raw_deletions": 104,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/coordinates/tests/accuracy/generate_ref_ast.py",
+          "start_line": 54,
+          "end_line": 60
+        },
+        {
+          "path": "astropy/coordinates/tests/accuracy/generate_ref_ast.py",
+          "start_line": 115,
+          "end_line": 123
+        },
+        {
+          "path": "astropy/coordinates/tests/accuracy/generate_ref_ast.py",
+          "start_line": 177,
+          "end_line": 184
+        },
+        {
+          "path": "astropy/coordinates/tests/accuracy/generate_ref_ast.py",
+          "start_line": 238,
+          "end_line": 245
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 37,
+          "end_line": 37
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 47,
+          "end_line": 47
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 58,
+          "end_line": 58
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 68,
+          "end_line": 68
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 107,
+          "end_line": 107
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 117,
+          "end_line": 117
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 128,
+          "end_line": 128
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 139,
+          "end_line": 139
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 150,
+          "end_line": 150
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 161,
+          "end_line": 161
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 176,
+          "end_line": 176
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 191,
+          "end_line": 191
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 206,
+          "end_line": 206
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 221,
+          "end_line": 221
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 238,
+          "end_line": 238
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 253,
+          "end_line": 253
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 269,
+          "end_line": 269
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 305,
+          "end_line": 305
+        },
+        {
+          "path": "astropy/io/misc/tests/test_hdf5.py",
+          "start_line": 327,
+          "end_line": 327
+        },
+        {
+          "path": "astropy/table/__init__.py",
+          "start_line": 2,
+          "end_line": 2
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 32,
+          "end_line": 44
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 49,
+          "end_line": 52
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 56,
+          "end_line": 56
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 58,
+          "end_line": 58
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 389,
+          "end_line": 390
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 463,
+          "end_line": 463
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 519,
+          "end_line": 520
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 600,
+          "end_line": 600
+        },
+        {
+          "path": "astropy/table/tests/test_column.py",
+          "start_line": 33,
+          "end_line": 33
+        },
+        {
+          "path": "astropy/table/tests/test_column.py",
+          "start_line": 60,
+          "end_line": 60
+        },
+        {
+          "path": "astropy/table/tests/test_column.py",
+          "start_line": 67,
+          "end_line": 67
+        },
+        {
+          "path": "astropy/table/tests/test_column.py",
+          "start_line": 77,
+          "end_line": 77
+        },
+        {
+          "path": "astropy/table/tests/test_column.py",
+          "start_line": 119,
+          "end_line": 119
+        },
+        {
+          "path": "astropy/table/tests/test_init_table.py",
+          "start_line": 153,
+          "end_line": 153
+        },
+        {
+          "path": "astropy/table/tests/test_init_table.py",
+          "start_line": 215,
+          "end_line": 215
+        },
+        {
+          "path": "docs/table/access_table.rst",
+          "start_line": 380,
+          "end_line": 380
+        },
+        {
+          "path": "docs/table/construct_table.rst",
+          "start_line": 43,
+          "end_line": 45
+        },
+        {
+          "path": "docs/table/construct_table.rst",
+          "start_line": 101,
+          "end_line": 101
+        },
+        {
+          "path": "docs/table/construct_table.rst",
+          "start_line": 137,
+          "end_line": 137
+        },
+        {
+          "path": "docs/table/construct_table.rst",
+          "start_line": 511,
+          "end_line": 515
+        },
+        {
+          "path": "docs/table/index.rst",
+          "start_line": 135,
+          "end_line": 135
+        },
+        {
+          "path": "docs/table/masking.rst",
+          "start_line": 60,
+          "end_line": 61
+        },
+        {
+          "path": "docs/table/masking.rst",
+          "start_line": 80,
+          "end_line": 81
+        },
+        {
+          "path": "docs/table/masking.rst",
+          "start_line": 90,
+          "end_line": 91
+        },
+        {
+          "path": "docs/table/masking.rst",
+          "start_line": 108,
+          "end_line": 108
+        },
+        {
+          "path": "docs/table/modify_table.rst",
+          "start_line": 44,
+          "end_line": 44
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-840"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "429beefe8cd228fad45f6ffe9cd29320970141c74d4f6896ebb9c2c2a4c4c481",
+      "patch_sha256": "05d9686709fcc0bf5f45d9f7f8c825c18fccbbd3c6a2fc2fe5091a852cea277a",
+      "build_state_sha256": "42e2ec25a875ddb1beab2b0bcfa6f87e055461e2706760568a99a4bd765a7a1c",
+      "canonical_diff_sha256": "05d9686709fcc0bf5f45d9f7f8c825c18fccbbd3c6a2fc2fe5091a852cea277a",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-4657",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-4657",
+      "repository": "astropy/astropy",
+      "base_sha": "2c7db48a01f17658eaf1a497463ea88ef0b38954",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "2c7db48a01f17658eaf1a497463ea88ef0b38954",
+        "oid": "2c7db48a01f17658eaf1a497463ea88ef0b38954"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "9d133704c75d1f7b797853d40915efb186d5c8ad",
+        "oid": "9d133704c75d1f7b797853d40915efb186d5c8ad"
+      },
+      "head_sha": "9d133704c75d1f7b797853d40915efb186d5c8ad",
+      "raw_additions": 16,
+      "raw_deletions": 16,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "docs/coordinates/observing-example.rst",
+          "start_line": 46,
+          "end_line": 50
+        },
+        {
+          "path": "docs/coordinates/observing-example.rst",
+          "start_line": 95,
+          "end_line": 105
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-4657"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "486a1fd1735d98bab45ef7c0d769b22b7a0940dc6366addb56c7bf9db74d4098",
+      "patch_sha256": "948888ce407824d4f7e3d2c1f55523ebe7ee69e125a1e0c07171091f317a407d",
+      "build_state_sha256": "7a0208e4db9e7cc6be7f0d8c7741c81613f19f7c2ba539cc680b8fb65a005419",
+      "canonical_diff_sha256": "948888ce407824d4f7e3d2c1f55523ebe7ee69e125a1e0c07171091f317a407d",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-1357",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-1357",
+      "repository": "astropy/astropy",
+      "base_sha": "8e7ec172e7896e2562c62ca23734734a8e59ea44",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "8e7ec172e7896e2562c62ca23734734a8e59ea44",
+        "oid": "8e7ec172e7896e2562c62ca23734734a8e59ea44"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "3ff912244dca1f013a8452670707661920983a15",
+        "oid": "3ff912244dca1f013a8452670707661920983a15"
+      },
+      "head_sha": "3ff912244dca1f013a8452670707661920983a15",
+      "raw_additions": 0,
+      "raw_deletions": 63,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "cross_file_contract",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-1357-truth-1",
+          "defect_class": "cross_file_contract",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `astrofrog` pointed out that imports of the `any` function (which was removed from `core.py` in the first commit) still existed elsewhere and were causing test failures. The author later pushed a commit specifically to remove these imports, implicitly confirming the issue.",
+          "scenario": "This commit removes the `any` identifier from the import statements in `basic.py`, `fixedwidth.py`, and `ui.py`, resolving the `ImportError` caused by the removal of the `any` definition in `core.py` in the earlier commit.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-1357",
+            "source_digest": "3213c117621ee0c78910b1720bc2b60c54065d4ee6f3b04799b803121497596f",
+            "evidence_refs": [
+              "3ff912244dca1f013a8452670707661920983a15",
+              "67921112dc3ea59c5b950a66a29560242e514d44"
+            ]
+          },
+          "canonical_digest": "c6aa91c3e5e0b7b17269ea151525c1e34d811aeebac02c0a5ab5605c0d2abcb5",
+          "locations": [
+            {
+              "path": "astropy/io/ascii/core.py",
+              "start_line": 80,
+              "end_line": 80
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/io/ascii/core.py",
+          "start_line": 80,
+          "end_line": 89
+        },
+        {
+          "path": "astropy/io/ascii/core.py",
+          "start_line": 629,
+          "end_line": 681
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "48b79d5d5e5bd1788df8f4f351c6d070c0a105515a974d296eaa1f3831b56a3b",
+      "patch_sha256": "8ded8833f42edf3e415d2127266d93a31c6e62b83cd19b3f98ca03fd56bfb897",
+      "build_state_sha256": "0c6dba0d876215b49ecff291d12489dca8e45e9e1a431b275bd9b4a90e4ecf67",
+      "canonical_diff_sha256": "8ded8833f42edf3e415d2127266d93a31c6e62b83cd19b3f98ca03fd56bfb897",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-5569",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-5569",
+      "repository": "astropy/astropy",
+      "base_sha": "e07f6b33523657f308addfd017e5ac6c639eb30a",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "e07f6b33523657f308addfd017e5ac6c639eb30a",
+        "oid": "e07f6b33523657f308addfd017e5ac6c639eb30a"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "03f296003a49a2a4bc59d04293ed4c30792e5d6d",
+        "oid": "03f296003a49a2a4bc59d04293ed4c30792e5d6d"
+      },
+      "head_sha": "03f296003a49a2a4bc59d04293ed4c30792e5d6d",
+      "raw_additions": 30,
+      "raw_deletions": 8,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/visualization/mpl_style.py",
+          "start_line": 34,
+          "end_line": 36
+        },
+        {
+          "path": "astropy/visualization/mpl_style.py",
+          "start_line": 39,
+          "end_line": 41
+        },
+        {
+          "path": "astropy/visualization/mpl_style.py",
+          "start_line": 64,
+          "end_line": 70
+        },
+        {
+          "path": "astropy/visualization/mpl_style.py",
+          "start_line": 98,
+          "end_line": 114
+        },
+        {
+          "path": "astropy/visualization/mpl_style.py",
+          "start_line": 117,
+          "end_line": 117
+        },
+        {
+          "path": "astropy/visualization/mpl_style.py",
+          "start_line": 133,
+          "end_line": 133
+        },
+        {
+          "path": "astropy/visualization/mpl_style.py",
+          "start_line": 143,
+          "end_line": 148
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-5569"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "4b6d5d4140fb1771957a560e73879f3f3abfea95665a1521b6e86e4ece97f0d5",
+      "patch_sha256": "7ecbe8f8cd4ca16441ce3dd8c8e652330699aa8ef0adaced52c76d79e82dab6e",
+      "build_state_sha256": "219eed56184f3c2ab4500f6f809e05e6306fb0dbd00b5f4557b8ab85258749e7",
+      "canonical_diff_sha256": "7ecbe8f8cd4ca16441ce3dd8c8e652330699aa8ef0adaced52c76d79e82dab6e",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-14149",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-14149",
+      "repository": "astropy/astropy",
+      "base_sha": "4d19c88898e9a55b7cb7da957ca2b3aa8f6aaa5c",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "4d19c88898e9a55b7cb7da957ca2b3aa8f6aaa5c",
+        "oid": "4d19c88898e9a55b7cb7da957ca2b3aa8f6aaa5c"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "17f61fa61ec559f38e8423590264ba361f18df0c",
+        "oid": "17f61fa61ec559f38e8423590264ba361f18df0c"
+      },
+      "head_sha": "17f61fa61ec559f38e8423590264ba361f18df0c",
+      "raw_additions": 4,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": ".gitignore",
+          "start_line": 89,
+          "end_line": 91
+        },
+        {
+          "path": "docs/development/testguide.rst",
+          "start_line": 778,
+          "end_line": 778
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-14149"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "4bb9ee170aa60bb202da895974533028f43ad24c53329f010b3ad69f78e10bad",
+      "patch_sha256": "991458e60b4f911d2afe9c19afc136b83c282c7c84430741aeab32ab746c00a3",
+      "build_state_sha256": "f6bb86e5854b46fe5a7790abffca8028f06128df9809e36fb7a225b1eea88be6",
+      "canonical_diff_sha256": "991458e60b4f911d2afe9c19afc136b83c282c7c84430741aeab32ab746c00a3",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-8489",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-8489",
+      "repository": "astropy/astropy",
+      "base_sha": "4fe967fc5cda5c0eb8546810bbbf18235e4a7e1b",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "4fe967fc5cda5c0eb8546810bbbf18235e4a7e1b",
+        "oid": "4fe967fc5cda5c0eb8546810bbbf18235e4a7e1b"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "f4bd05177eaee971cee60a2a2c9b739fe789d025",
+        "oid": "f4bd05177eaee971cee60a2a2c9b739fe789d025"
+      },
+      "head_sha": "f4bd05177eaee971cee60a2a2c9b739fe789d025",
+      "raw_additions": 0,
+      "raw_deletions": 10,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "test_gap",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-8489-truth-1",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `drdavella` pointed out that the removal of the `astropy.tests.plugins.config` plugin in the initial commit was incomplete, as references remained in `astropy/tests/runner.py`, likely causing test failures. Later discussion (including another comment from `drdavella` and acknowledgment from the author `astrofrog`) confirmed this oversight and the need to remove the references in the test runner.",
+          "scenario": "This commit removes the conditional logic (`if 'astropy.tests.plugins.config' not in plugins:`) that checked for the presence of the now-deleted plugin and also removes the plugin name from the default list in the `@keyword` decorator for the `plugins` method within the `TestRunner` class, addressing the reviewer's point about removing the references.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-8489",
+            "source_digest": "2961d6400cadb4dc65c0c7b8bc01f9b6e67eaf07a283fac01250449db5321e22",
+            "evidence_refs": [
+              "f4bd05177eaee971cee60a2a2c9b739fe789d025",
+              "48dab17340ac5cb4dd58bc9cc06500850d00d426"
+            ]
+          },
+          "canonical_digest": "ac894f0bc990745effeacd4d08bcd5c183b3c01e8f7398baf332a9cdc6d3d2ae",
+          "locations": [
+            {
+              "path": "conftest.py",
+              "start_line": 4,
+              "end_line": 4
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/tests/plugins/config.py",
+          "start_line": 1,
+          "end_line": 9
+        },
+        {
+          "path": "conftest.py",
+          "start_line": 4,
+          "end_line": 4
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "4f4ac32a20b8acf7b56253ec71faebe7103181a3d0e9c34256a9b4d182cd51e5",
+      "patch_sha256": "ac1c17da97faeb94b31c3ce2d8c6ee4bb3c2f568008f388830cbd97b6a318c47",
+      "build_state_sha256": "02ee848c5a4bfa14f2fd53f531507a0ef5228c9230c259778bbb8bb1ca420c19",
+      "canonical_diff_sha256": "ac1c17da97faeb94b31c3ce2d8c6ee4bb3c2f568008f388830cbd97b6a318c47",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-228",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-228",
+      "repository": "astropy/astropy",
+      "base_sha": "035d15372fc64a28916f87ee647ab732f965b9ca",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "035d15372fc64a28916f87ee647ab732f965b9ca",
+        "oid": "035d15372fc64a28916f87ee647ab732f965b9ca"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "bf6fd83b22b385599adbb7fb27c46e02c2718e91",
+        "oid": "bf6fd83b22b385599adbb7fb27c46e02c2718e91"
+      },
+      "head_sha": "bf6fd83b22b385599adbb7fb27c46e02c2718e91",
+      "raw_additions": 4,
+      "raw_deletions": 4,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-228-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer 'astrofrog' pointed out that the `format` string in the `IOError` message only had two placeholders (`{0}`, `{1}`) but was being passed three arguments (`cfn`, `pyxfn`, `ext.name`). In a subsequent comment, 'astrofrog' suggested how to correct the message to include the third argument. The author 'mdboom' acknowledged this as a \"Good catch\" and confirmed they fixed the message.",
+          "scenario": "The commit modified the `IOError` message string to include the third placeholder `{2}` and adjusted the wording (\"when building extension {2}\") so that all three provided arguments (`cfn`, `pyxfn`, `ext.name`) are correctly used in the formatted error message, directly addressing the reviewer's comment.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-228",
+            "source_digest": "550ef3a43de88235119e84eda98ca270c80dc8cc25a62fd108334f7f50038864",
+            "evidence_refs": [
+              "bf6fd83b22b385599adbb7fb27c46e02c2718e91",
+              "0b6d11b2be8799fbe3fc7046e6e8a12c38ab241e"
+            ]
+          },
+          "canonical_digest": "dd1a6eec286910374b41081815717c21f6d5b73a2785e2f26a96d914864179e5",
+          "locations": [
+            {
+              "path": "astropy/setup_helpers.py",
+              "start_line": 319,
+              "end_line": 319
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/setup_helpers.py",
+          "start_line": 319,
+          "end_line": 322
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "539811262df495d4678f341ec47826cdcf713b4432e7bedbe93e60f321d967ab",
+      "patch_sha256": "fa1dfcd584b3c44c2af15dbeb713f19737c7911e73c9a557945c3ccbed7fdaaf",
+      "build_state_sha256": "3f2dc3dda77c1e9beef4f07e0d4db988e0e3c3e93e705068bdf3db4dec18434c",
+      "canonical_diff_sha256": "fa1dfcd584b3c44c2af15dbeb713f19737c7911e73c9a557945c3ccbed7fdaaf",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-16207",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-16207",
+      "repository": "astropy/astropy",
+      "base_sha": "f52a09b6a98c19742c59f3420c65d240c03756f5",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "f52a09b6a98c19742c59f3420c65d240c03756f5",
+        "oid": "f52a09b6a98c19742c59f3420c65d240c03756f5"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "035218f74a1838c77c5b9585e0846534d3dfbb1f",
+        "oid": "035218f74a1838c77c5b9585e0846534d3dfbb1f"
+      },
+      "head_sha": "035218f74a1838c77c5b9585e0846534d3dfbb1f",
+      "raw_additions": 5,
+      "raw_deletions": 0,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-16207-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `mhvk` suggested using the `-q` (quiet) flag for `grep` to simplify the command and avoid redirecting standard output to `/dev/null`. The developer (`MridulS`) acknowledged this suggestion (\"Yeah that should work fine too!\").",
+          "scenario": "The developer implemented the reviewer's suggestion by replacing `grep ... \u003e /dev/null` with `grep -q ...` in the conditional statement, achieving the same logical outcome more directly.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-16207",
+            "source_digest": "91abd331ddf31486456d75f8d4b3657b7042b00da914d0dc334f3a4f6c85b6ac",
+            "evidence_refs": [
+              "035218f74a1838c77c5b9585e0846534d3dfbb1f",
+              "e96a32278d6f6f9338a55caa1dfb64f634edda75"
+            ]
+          },
+          "canonical_digest": "696b2870eafa84528d9b3493503d12fc3ed322efc4397c7511118b78674ba0ef",
+          "locations": [
+            {
+              "path": ".github/workflows/ci_benchmark.yml",
+              "start_line": 90,
+              "end_line": 90
+            }
+          ]
+        },
+        {
+          "id": "swr-astropy-astropy-16207-truth-2",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `pllim` questioned whether the `exit 1` command (intended to fail the step upon detecting errors) would prevent subsequent necessary steps, specifically the artifact upload step, from running. This highlighted a potential flaw in the workflow logic where failure information (the log file) might not be uploaded if a failure occurred. The developer (`MridulS`) acknowledged this as a valid concern (\"Nice catch! Thanks!\").",
+          "scenario": "The developer added `if: always()` conditions to the \"Check ccache performance\" and \"upload-artifact\" steps. This ensures these steps will execute even if the preceding step (containing the `grep` and potential `exit 1`) fails, thus addressing the reviewer's concern about the logs not being uploaded on failure.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-16207",
+            "source_digest": "5169fff5e9d6980c95cbbbd3403e39f4b687d85c9be700fe1d40bc0f08e2516a",
+            "evidence_refs": [
+              "035218f74a1838c77c5b9585e0846534d3dfbb1f",
+              "242e196ce3535d1767a4b82a79714aba5a46a5b2"
+            ]
+          },
+          "canonical_digest": "c3d9c8d5139610da4d7786a44c2018dfc4466d5d36e80be1743221eeeee9dcbe",
+          "locations": [
+            {
+              "path": ".github/workflows/ci_benchmark.yml",
+              "start_line": 90,
+              "end_line": 90
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": ".github/workflows/ci_benchmark.yml",
+          "start_line": 90,
+          "end_line": 94
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "574493f99ffd563a201e21b3921f0aa96ebced5dbe0175b0b78b357ed4d92b57",
+      "patch_sha256": "e5338c77ce781177e11308e625ee09fd61ccddd310720b695ac388e57372f8cd",
+      "build_state_sha256": "88c0d0970903a840a1eab98aafe3a47ca6b142f02b264003d838d668c03f97c5",
+      "canonical_diff_sha256": "e5338c77ce781177e11308e625ee09fd61ccddd310720b695ac388e57372f8cd",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-13074",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-13074",
+      "repository": "astropy/astropy",
+      "base_sha": "43ee5806e9c6f7d58c12c1cb9287b3c61abe489d",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "43ee5806e9c6f7d58c12c1cb9287b3c61abe489d",
+        "oid": "43ee5806e9c6f7d58c12c1cb9287b3c61abe489d"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "bf8d6c9ca3e3f449871b162de961a023efad4aa9",
+        "oid": "bf8d6c9ca3e3f449871b162de961a023efad4aa9"
+      },
+      "head_sha": "bf8d6c9ca3e3f449871b162de961a023efad4aa9",
+      "raw_additions": 1,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "test_gap",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-13074-truth-1",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `pllim` questioned why the missing import (fixed in the first commit) didn't cause CI failures and suggested adding a test. The author (`nstarman`) subsequently added a test in the next commit and explained that existing tests inadvertently masked the missing import, confirming the need for the specific test suggested by the reviewer.",
+          "scenario": "This commit adds a new test file (`test_.py`) with two test functions (`test_expected_readwrite_io` and `test_expected_convert_io`). These tests explicitly check the registered I/O methods in `readwrite_registry` and `convert_registry`, directly addressing the reviewer's suggestion to add a test to ensure the necessary I/O components (including the `astropy.cosmology` one added in the first commit) are correctly registered.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-13074",
+            "source_digest": "2dca2a775fdb5b42c0a612b41362fe4751f429a5a27315393e56c4f431f4ab4d",
+            "evidence_refs": [
+              "bf8d6c9ca3e3f449871b162de961a023efad4aa9",
+              "67f57fcec8a123b43843bfc6eeb17eebaa5fd3e0"
+            ]
+          },
+          "canonical_digest": "89d5a2bc7b4496f23f459347b522ead6b447055d74ff4576267a5f902e21162e",
+          "locations": [
+            {
+              "path": "astropy/cosmology/io/__init__.py",
+              "start_line": 9,
+              "end_line": 9
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/cosmology/io/__init__.py",
+          "start_line": 9,
+          "end_line": 9
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "57524e7d7b5ac391a4798450b38129d61c75930cff9c579f4778e5b8431788f7",
+      "patch_sha256": "dc7e76b994add57d5e66adbbcd3afc96b12e93a5de552f9fe2481792ab231cf8",
+      "build_state_sha256": "52932318bb4b555d7653fb4a930f190c9c989f5f06583ae9ae2b97e8688dce0e",
+      "canonical_diff_sha256": "dc7e76b994add57d5e66adbbcd3afc96b12e93a5de552f9fe2481792ab231cf8",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-17278",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-17278",
+      "repository": "astropy/astropy",
+      "base_sha": "27694782493b9bbc60a0a24ef5e85574a6f8df53",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "27694782493b9bbc60a0a24ef5e85574a6f8df53",
+        "oid": "27694782493b9bbc60a0a24ef5e85574a6f8df53"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "1412b92d66b92625ba8ebdfd7366b1c3589f1262",
+        "oid": "1412b92d66b92625ba8ebdfd7366b1c3589f1262"
+      },
+      "head_sha": "1412b92d66b92625ba8ebdfd7366b1c3589f1262",
+      "raw_additions": 0,
+      "raw_deletions": 2,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/visualization/interval.py",
+          "start_line": 213,
+          "end_line": 214
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-17278"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "5882006a6043e8034aaac17bee51880b7787a4c32aeaffb3ec4468ffaf32f215",
+      "patch_sha256": "08cf558af0a1f26a9114a7d469c324a864f5b26946f24b72beb6f555743f2341",
+      "build_state_sha256": "bad2eae98f756301baf52df716396d82aa0f1e45b3c3da8a69f33e26368300d0",
+      "canonical_diff_sha256": "08cf558af0a1f26a9114a7d469c324a864f5b26946f24b72beb6f555743f2341",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-3977",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-3977",
+      "repository": "astropy/astropy",
+      "base_sha": "d1c7bd4822ec7de05a88a1887acb027f2426d6bf",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "d1c7bd4822ec7de05a88a1887acb027f2426d6bf",
+        "oid": "d1c7bd4822ec7de05a88a1887acb027f2426d6bf"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "8aebf2caec07d7493e50e663a5eb7889590a7004",
+        "oid": "8aebf2caec07d7493e50e663a5eb7889590a7004"
+      },
+      "head_sha": "8aebf2caec07d7493e50e663a5eb7889590a7004",
+      "raw_additions": 34,
+      "raw_deletions": 10,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-3977-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `astrofrog` pointed out that creating a temporary `np.empty` array (`tmp`) to extract names and dtypes from the input `dtype` was unnecessary. They suggested a more direct approach using `np.dtype(dtype)` directly. The author (`taldcroft`) acknowledged this (\"right you are, done.\") and implemented the suggested change in a subsequent commit.",
+          "scenario": "The code was modified to follow the reviewer's suggestion. Instead of creating `tmp = np.empty(0, dtype=dtype)` and then accessing `tmp.dtype.names` and iterating through `tmp.dtype`, the code now directly converts the input `dtype` using `dtype = np.dtype(dtype)` and then accesses `dtype.names` and iterates using `[dtype[name] for name in names]`. This removes the need for the temporary array.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-3977",
+            "source_digest": "d46de4f17990d2d480218c6ef726d0e4822326c523e78042288930b370fc7a92",
+            "evidence_refs": [
+              "8aebf2caec07d7493e50e663a5eb7889590a7004",
+              "5087284e0526a7287c02ce7a4e6ed2758f354af3"
+            ]
+          },
+          "canonical_digest": "f1f876d5225a89ecdf62292384a574b924531db02f86869541ef831bb077f065",
+          "locations": [
+            {
+              "path": "astropy/table/table.py",
+              "start_line": 281,
+              "end_line": 281
+            }
+          ]
+        },
+        {
+          "id": "swr-astropy-astropy-3977-truth-2",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `astrofrog` questioned the `if names is not None:` check, suggesting it could be replaced with `else`. The author (`taldcroft`) realized the check was entirely redundant because the preceding logic guaranteed that `names` would be defined at that point (either passed in initially or derived from `dtype`). The author then removed the conditional check completely in the next commit.",
+          "scenario": "The code was modified by removing the `if names is not None:` conditional statement entirely. The code block that was previously inside the `if` statement is now executed unconditionally, as the logic guarantees `names` is always set at this point if the execution reaches this part of the code. A comment was added explaining why the check was removed.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-3977",
+            "source_digest": "70f108df991301c9fb6e800cffc5ccca3a278cb6f863914789c0cc280c0be64d",
+            "evidence_refs": [
+              "8aebf2caec07d7493e50e663a5eb7889590a7004",
+              "a4094df507d78024cc2f819c74b38b15998e81ef"
+            ]
+          },
+          "canonical_digest": "ed89de64123d8e3d2e1cc4b7c68b942434eb5d7e336f7ec4053d386f5199f9af",
+          "locations": [
+            {
+              "path": "astropy/table/table.py",
+              "start_line": 281,
+              "end_line": 281
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "CHANGES.rst",
+          "start_line": 1256,
+          "end_line": 1258
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 281,
+          "end_line": 292
+        },
+        {
+          "path": "astropy/table/tests/test_init_table.py",
+          "start_line": 397,
+          "end_line": 413
+        },
+        {
+          "path": "docs/table/construct_table.rst",
+          "start_line": 52,
+          "end_line": 53
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "5c0ac8bacad90473ffd49e377f37d575366315871ad4b8cf6757acd7dcabdcb9",
+      "patch_sha256": "478de85d85ede3ae2848515ad943b14b12bbc97bcacd15098a8f622119e88ca8",
+      "build_state_sha256": "74055bc59b428ba3a465ece572621845add80426e2acfffaf25c846a2a9d277c",
+      "canonical_diff_sha256": "478de85d85ede3ae2848515ad943b14b12bbc97bcacd15098a8f622119e88ca8",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-4614",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-4614",
+      "repository": "astropy/astropy",
+      "base_sha": "97a6d30f2171eb406818449a4dcc2022a2b00823",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "97a6d30f2171eb406818449a4dcc2022a2b00823",
+        "oid": "97a6d30f2171eb406818449a4dcc2022a2b00823"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "e50c47bc44d59208a77e15ffc0c99a59ec47ea92",
+        "oid": "e50c47bc44d59208a77e15ffc0c99a59ec47ea92"
+      },
+      "head_sha": "e50c47bc44d59208a77e15ffc0c99a59ec47ea92",
+      "raw_additions": 12,
+      "raw_deletions": 0,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/wcs/tests/test_wcs.py",
+          "start_line": 871,
+          "end_line": 882
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-4614"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "66e38c050591c0652b0c00490817b161dee347c14ed3e797fe6daa02381d1092",
+      "patch_sha256": "ca726d2264f067e1c1bc862fc5d633803394fb9d723700bdc585b651390f31aa",
+      "build_state_sha256": "fe60a5db3052a4b2eee4946034bdde76ba0f10b3781c3486bef728e098991b31",
+      "canonical_diff_sha256": "ca726d2264f067e1c1bc862fc5d633803394fb9d723700bdc585b651390f31aa",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-1010",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-1010",
+      "repository": "astropy/astropy",
+      "base_sha": "5044a9408fc052515160eb3145f13713f76e8948",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "5044a9408fc052515160eb3145f13713f76e8948",
+        "oid": "5044a9408fc052515160eb3145f13713f76e8948"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "3d31e28685c3b53adfc4fcfe706c11dece71e9a9",
+        "oid": "3d31e28685c3b53adfc4fcfe706c11dece71e9a9"
+      },
+      "head_sha": "3d31e28685c3b53adfc4fcfe706c11dece71e9a9",
+      "raw_additions": 6,
+      "raw_deletions": 4,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/io/votable/converters.py",
+          "start_line": 484,
+          "end_line": 486
+        },
+        {
+          "path": "astropy/io/votable/exceptions.py",
+          "start_line": 159,
+          "end_line": 161
+        },
+        {
+          "path": "astropy/io/votable/table.py",
+          "start_line": 254,
+          "end_line": 254
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-1010"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "692abc4f7a93eb39b8d4b7b343df82de2443efb3de85025746ec67e04c714faa",
+      "patch_sha256": "8a41d4a3090ad83d688cddf18686add329d0715c593d91b4043175a6f975e686",
+      "build_state_sha256": "d361f66829ada9474b423baa22be9fbaf4d39cd4646c5a6fd98f69783b20e6cf",
+      "canonical_diff_sha256": "8a41d4a3090ad83d688cddf18686add329d0715c593d91b4043175a6f975e686",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-5450",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-5450",
+      "repository": "astropy/astropy",
+      "base_sha": "d4578c0f5a76eac01c30740afc5692e401123662",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "d4578c0f5a76eac01c30740afc5692e401123662",
+        "oid": "d4578c0f5a76eac01c30740afc5692e401123662"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "2fb83f8fbbaca1dfbfc2fdb85459a4e413ae25c8",
+        "oid": "2fb83f8fbbaca1dfbfc2fdb85459a4e413ae25c8"
+      },
+      "head_sha": "2fb83f8fbbaca1dfbfc2fdb85459a4e413ae25c8",
+      "raw_additions": 20,
+      "raw_deletions": 9,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "astropy/io/ascii/ecsv.py",
+          "start_line": 169,
+          "end_line": 189
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-5450"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "69b13bcca740223dba4f775c8ed6953c78684bfc75409a4e452a55f5ac3d6bc7",
+      "patch_sha256": "46abb47906a7c2f868abff6b1be14f6b92c8a3b5f8d3c6a7a0139fdcde64749b",
+      "build_state_sha256": "1f6a17090ee5bccd297b5f904d9d2d7334ccacab271c08492a0e7ef31c2dd840",
+      "canonical_diff_sha256": "46abb47906a7c2f868abff6b1be14f6b92c8a3b5f8d3c6a7a0139fdcde64749b",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-3537",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-3537",
+      "repository": "astropy/astropy",
+      "base_sha": "b3c2c761b9ec960b29cabf797c7d05faf08af7ed",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "b3c2c761b9ec960b29cabf797c7d05faf08af7ed",
+        "oid": "b3c2c761b9ec960b29cabf797c7d05faf08af7ed"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "841c29a719ba1b4d1c0b8a10a89c8e39a804fda2",
+        "oid": "841c29a719ba1b4d1c0b8a10a89c8e39a804fda2"
+      },
+      "head_sha": "841c29a719ba1b4d1c0b8a10a89c8e39a804fda2",
+      "raw_additions": 65,
+      "raw_deletions": 19,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "clean",
+      "source_type": "clean",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Clean-PR",
+      "ground_truth": null,
+      "changed_ranges": [
+        {
+          "path": "CHANGES.rst",
+          "start_line": 175,
+          "end_line": 176
+        },
+        {
+          "path": "astropy/constants/__init__.py",
+          "start_line": 44,
+          "end_line": 44
+        },
+        {
+          "path": "astropy/constants/__init__.py",
+          "start_line": 48,
+          "end_line": 48
+        },
+        {
+          "path": "astropy/constants/constant.py",
+          "start_line": 9,
+          "end_line": 9
+        },
+        {
+          "path": "astropy/constants/constant.py",
+          "start_line": 94,
+          "end_line": 99
+        },
+        {
+          "path": "astropy/constants/constant.py",
+          "start_line": 109,
+          "end_line": 119
+        },
+        {
+          "path": "astropy/constants/constant.py",
+          "start_line": 162,
+          "end_line": 162
+        },
+        {
+          "path": "astropy/constants/constant.py",
+          "start_line": 165,
+          "end_line": 165
+        },
+        {
+          "path": "astropy/constants/constant.py",
+          "start_line": 206,
+          "end_line": 212
+        },
+        {
+          "path": "astropy/constants/tests/test_constant.py",
+          "start_line": 128,
+          "end_line": 164
+        }
+      ],
+      "clean_provenance": {
+        "method": "official_swr_clean_pr_label",
+        "evidence_refs": [
+          "swr:astropy__astropy-3537"
+        ]
+      },
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "6a783bb7379691dd05f660f23ecafe1220d75cdea1df2a1bbf27236d5cb617c4",
+      "patch_sha256": "d7f8dd964e5ad18f0037beb20226b73a36cfb61c191727848767939898c60768",
+      "build_state_sha256": "58011116e341db7693edd7b130e59822f7a8e0e2b95b6571297cb288447c3f3e",
+      "canonical_diff_sha256": "d7f8dd964e5ad18f0037beb20226b73a36cfb61c191727848767939898c60768",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-1134",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-1134",
+      "repository": "astropy/astropy",
+      "base_sha": "30f4c8fc1a412dd7b2981a0f3e6977ab04ee1805",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "30f4c8fc1a412dd7b2981a0f3e6977ab04ee1805",
+        "oid": "30f4c8fc1a412dd7b2981a0f3e6977ab04ee1805"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "5fc721b81783b10f55d26846dc079cbca68f6e39",
+        "oid": "5fc721b81783b10f55d26846dc079cbca68f6e39"
+      },
+      "head_sha": "5fc721b81783b10f55d26846dc079cbca68f6e39",
+      "raw_additions": 67,
+      "raw_deletions": 70,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "test_gap",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-1134-truth-1",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "The reviewer (`embray`) pointed out that using `is False` and `is True` for NumPy boolean arrays (introduced as a PEP8 fix in the PR) is incorrect because NumPy uses its own boolean types (`np.False_`, `np.True_`) which are not identical to Python's built-in `False` and `True`. This would lead to incorrect test logic and failures. The author (`astrofrog`) acknowledged this and proposed using `np.all(~self.a.mask)` and `np.all(self.b.mask)` as a correct and PEP8-compliant alternative, which was subsequently implemented.",
+          "scenario": "The code was changed to use `np.all(~self.a.mask)` to check if all elements in the mask are False and `np.all(self.b.mask)` to check if all are True. This correctly handles NumPy boolean arrays and adheres to PEP8 style, resolving the logical error pointed out by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-1134",
+            "source_digest": "8a9d991c002594712c22f026b80d93e5f26a58f50b1b31582c449b8bc951a418",
+            "evidence_refs": [
+              "5fc721b81783b10f55d26846dc079cbca68f6e39",
+              "e5a21d4cc2ed16378acd765bb1caa7541f1b3359"
+            ]
+          },
+          "canonical_digest": "964a149e3676220523b94a8a0e10684fa7322e4f754a43ef6ced5d3e86e4f230",
+          "locations": [
+            {
+              "path": "astropy/table/tests/test_masked.py",
+              "start_line": 149,
+              "end_line": 149
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 18,
+          "end_line": 18
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 460,
+          "end_line": 461
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 599,
+          "end_line": 600
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 1288,
+          "end_line": 1288
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 1477,
+          "end_line": 1477
+        },
+        {
+          "path": "astropy/table/table.py",
+          "start_line": 1945,
+          "end_line": 1945
+        },
+        {
+          "path": "astropy/table/tests/test_column.py",
+          "start_line": 10,
+          "end_line": 11
+        },
+        {
+          "path": "astropy/table/tests/test_column.py",
+          "start_line": 13,
+          "end_line": 14
+        },
+        {
+          "path": "astropy/table/tests/test_init_table.py",
+          "start_line": 151,
+          "end_line": 151
+        },
+        {
+          "path": "astropy/table/tests/test_init_table.py",
+          "start_line": 155,
+          "end_line": 155
+        },
+        {
+          "path": "astropy/table/tests/test_init_table.py",
+          "start_line": 159,
+          "end_line": 159
+        },
+        {
+          "path": "astropy/table/tests/test_init_table.py",
+          "start_line": 163,
+          "end_line": 163
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 149,
+          "end_line": 151
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 207,
+          "end_line": 207
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 209,
+          "end_line": 209
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 211,
+          "end_line": 214
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 219,
+          "end_line": 219
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 221,
+          "end_line": 221
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 223,
+          "end_line": 226
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 231,
+          "end_line": 231
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 233,
+          "end_line": 233
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 235,
+          "end_line": 238
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 248,
+          "end_line": 249
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 251,
+          "end_line": 254
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 260,
+          "end_line": 261
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 263,
+          "end_line": 266
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 274,
+          "end_line": 275
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 278,
+          "end_line": 278
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 280,
+          "end_line": 280
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 289,
+          "end_line": 290
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 293,
+          "end_line": 293
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 295,
+          "end_line": 295
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 304,
+          "end_line": 304
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 312,
+          "end_line": 312
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 315,
+          "end_line": 315
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 323,
+          "end_line": 323
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 325,
+          "end_line": 325
+        },
+        {
+          "path": "astropy/table/tests/test_masked.py",
+          "start_line": 327,
+          "end_line": 330
+        },
+        {
+          "path": "astropy/table/tests/test_pprint.py",
+          "start_line": 230,
+          "end_line": 230
+        },
+        {
+          "path": "astropy/table/tests/test_pprint.py",
+          "start_line": 251,
+          "end_line": 251
+        },
+        {
+          "path": "astropy/table/tests/test_pprint.py",
+          "start_line": 260,
+          "end_line": 260
+        },
+        {
+          "path": "astropy/table/tests/test_table.py",
+          "start_line": 82,
+          "end_line": 82
+        },
+        {
+          "path": "astropy/table/tests/test_table.py",
+          "start_line": 763,
+          "end_line": 764
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "6ba074734de2400a1b3bd646ba5c4402b027842bfc712a6d9cb37d304400cfeb",
+      "patch_sha256": "c455384f1763360e94144cb1213f75f1b66ee0dcb19eaeec30bc756ce53a8936",
+      "build_state_sha256": "2f8639098bac936625986f84c3efe36d7d62a354de37c99d061e53f6e7ff0628",
+      "canonical_diff_sha256": "c455384f1763360e94144cb1213f75f1b66ee0dcb19eaeec30bc756ce53a8936",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-573",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-573",
+      "repository": "astropy/astropy",
+      "base_sha": "3d2e2bccd9b22e4991df349b476cbaee88c8e377",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "3d2e2bccd9b22e4991df349b476cbaee88c8e377",
+        "oid": "3d2e2bccd9b22e4991df349b476cbaee88c8e377"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "63b57a0976a32f3e8b13e0bf39c8fd7fdd387570",
+        "oid": "63b57a0976a32f3e8b13e0bf39c8fd7fdd387570"
+      },
+      "head_sha": "63b57a0976a32f3e8b13e0bf39c8fd7fdd387570",
+      "raw_additions": 26,
+      "raw_deletions": 13,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-573-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `astrofrog` suggested moving the newly added sections (introduced at the bottom of the page in commit 63b57a0) higher up, specifically suggesting placing them before the developer documentation or in the 'Getting started' section. Reviewer `embray` agreed. The author (`taldcroft`) discussed the options and acknowledged the suggestion by implementing the move in a subsequent commit.",
+          "scenario": "This commit moves the \"Getting help\" and \"Reporting issues\" sections from below the \"Developer Documentation\" section to a position above it, directly addressing the reviewer's suggestion to place this information higher up on the page for better visibility to users.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-573",
+            "source_digest": "9cc50366d89ded93d4e6486b95219fb84304da21e193178d37593293f637ea06",
+            "evidence_refs": [
+              "63b57a0976a32f3e8b13e0bf39c8fd7fdd387570",
+              "5ade5c963fa52a39fe1ea6e161a2c89783095b7a"
+            ]
+          },
+          "canonical_digest": "d6384fbbbd3ef55c73f80d7b7eed34d4ffe45e45b998b6ce0ad7c85dee312e3e",
+          "locations": [
+            {
+              "path": "docs/index.rst",
+              "start_line": 68,
+              "end_line": 68
+            }
+          ]
+        },
+        {
+          "id": "swr-astropy-astropy-573-truth-2",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `eteq` identified a Sphinx build warning caused by the specific reStructuredText link format `` `astropy \u003c...\u003e`_ `` introduced in the first commit. The reviewer explained the likely cause (conflict with the package name) and suggested a specific textual change to the link format to resolve the warning. The author implemented this exact suggestion in a subsequent commit.",
+          "scenario": "This commit modifies the reStructuredText link text from `` `astropy \u003cURL\u003e`_ mailing list. `` to `` `astropy mailing list \u003cURL\u003e`_. `` exactly as suggested by the reviewer, resolving the Sphinx build warning about a duplicate explicit target name.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-573",
+            "source_digest": "2d7003d1ae6eeaa22537bf5f4f3468f9b473247d0ff07f7768e942df2ea90990",
+            "evidence_refs": [
+              "63b57a0976a32f3e8b13e0bf39c8fd7fdd387570",
+              "205a5980b67782e5e40839f2ede9713e86005d35"
+            ]
+          },
+          "canonical_digest": "b025dab75c50e026f55e0d768ee9af3173ff8faa5721768b735f6088c3dc3236",
+          "locations": [
+            {
+              "path": "docs/index.rst",
+              "start_line": 68,
+              "end_line": 68
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "docs/index.rst",
+          "start_line": 68,
+          "end_line": 93
+        },
+        {
+          "path": "setup.py",
+          "start_line": 134,
+          "end_line": 146
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "843e26b6fb2eb9dba0d6ab0fde1bd408d3798764e99d59d757122aef0732a62c",
+      "patch_sha256": "a64d6dfbf6d6daae7cd2f93d785e2f68c032c873b20d2244f74c5d52808884f9",
+      "build_state_sha256": "08203b9a084e7f16ed19ecd87ef51a121237e822be7843fd44eccc5ab41b51ba",
+      "canonical_diff_sha256": "a64d6dfbf6d6daae7cd2f93d785e2f68c032c873b20d2244f74c5d52808884f9",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-3096",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-3096",
+      "repository": "astropy/astropy",
+      "base_sha": "a7dd2ef9301f6e7d0d2827ac670645c0920759c5",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "a7dd2ef9301f6e7d0d2827ac670645c0920759c5",
+        "oid": "a7dd2ef9301f6e7d0d2827ac670645c0920759c5"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "21f3417cdcb0a8dae5c92a095949a795212da499",
+        "oid": "21f3417cdcb0a8dae5c92a095949a795212da499"
+      },
+      "head_sha": "21f3417cdcb0a8dae5c92a095949a795212da499",
+      "raw_additions": 6,
+      "raw_deletions": 3,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-3096-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `embray` pointed out that checking `importlib.__dict__` for `'machinery'` is unreliable, as the submodule might not be present in the dict even if available, unless explicitly imported. They suggested a more robust `try...except ImportError` pattern for importing `importlib.machinery`. Reviewer `astrofrog` agreed (+1), and the author `sargas` later implemented this suggested pattern, acknowledging the correction.",
+          "scenario": "The code was changed to follow the reviewer's suggestion. It now attempts to import `importlib.machinery` directly within a `try...except ImportError` block near the top of the file, assigning the result (or `None`) to `importlib_machinery`. The conditional check within `_get_open_file_list` was updated from `if 'machinery' in importlib.__dict__:` to `if importlib_machinery is not None:`, which reliably determines if the module was successfully imported.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-3096",
+            "source_digest": "1e192e1533161389f12ae3a1644cbf681be499891267fe782836d21e5aed443b",
+            "evidence_refs": [
+              "21f3417cdcb0a8dae5c92a095949a795212da499",
+              "3a56ae4362aca3a61e8d450c1897cd1e8efab508"
+            ]
+          },
+          "canonical_digest": "c18272c2acfc7b9bd25f52847bd328496666472f459fa2a0993a637ae4589850",
+          "locations": [
+            {
+              "path": "astropy/tests/pytest_plugins.py",
+              "start_line": 419,
+              "end_line": 419
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/tests/pytest_plugins.py",
+          "start_line": 18,
+          "end_line": 18
+        },
+        {
+          "path": "astropy/tests/pytest_plugins.py",
+          "start_line": 418,
+          "end_line": 420
+        },
+        {
+          "path": "astropy/tests/pytest_plugins.py",
+          "start_line": 422,
+          "end_line": 424
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "850d1faa8f41e6693061bf541a2d7eb4c50c9deb319395effbc88d7e3b859d5b",
+      "patch_sha256": "277573afc1f21d7e1d513ed67d61d99820f894e237244bf6ccd46e0ca8d043eb",
+      "build_state_sha256": "e4198c789c269da204bffecfaca27f8205138a8bd17b078e79dc58bdead9e68d",
+      "canonical_diff_sha256": "277573afc1f21d7e1d513ed67d61d99820f894e237244bf6ccd46e0ca8d043eb",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-417",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-417",
+      "repository": "astropy/astropy",
+      "base_sha": "5b3f2de6fb8a549d43123354f4ea6e098351eec6",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "5b3f2de6fb8a549d43123354f4ea6e098351eec6",
+        "oid": "5b3f2de6fb8a549d43123354f4ea6e098351eec6"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "c5cbc7cbbc4ed2b2c592d286e7aeef6f665385f3",
+        "oid": "c5cbc7cbbc4ed2b2c592d286e7aeef6f665385f3"
+      },
+      "head_sha": "c5cbc7cbbc4ed2b2c592d286e7aeef6f665385f3",
+      "raw_additions": 2,
+      "raw_deletions": 3,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "cross_file_contract",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-417-truth-1",
+          "defect_class": "cross_file_contract",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `mdboom` pointed out that the test function `test_color_text` was still calling the old public function name `color_text` after it had been renamed to the private `_color_text` in commit `c5cbc7cbbc4ed2b2c592d286e7aeef6f665385f3`. Reviewer `astrofrog` also commented on this discrepancy, wondering why the build wasn't failing. The author (`adrn`) later acknowledged and fixed this specific issue as requested.",
+          "scenario": "The fixing commit updated the assertion in `test_color_text` to call the renamed private function `console._color_text` instead of the old public name `console.color_text`, directly addressing the issue raised by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-417",
+            "source_digest": "756ae5606a8c55891a4c746ffbad5c9a0709f6854174a37f2744f277bcef79d4",
+            "evidence_refs": [
+              "c5cbc7cbbc4ed2b2c592d286e7aeef6f665385f3",
+              "ec58e96aa21237575cfd569566e79ca99a5977ea"
+            ]
+          },
+          "canonical_digest": "03097f1c6b6ad41ea2db85a23c5020e5274238ef28737258cc592a552b91e127",
+          "locations": [
+            {
+              "path": "astropy/utils/console.py",
+              "start_line": 55,
+              "end_line": 55
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/utils/console.py",
+          "start_line": 55,
+          "end_line": 55
+        },
+        {
+          "path": "astropy/utils/console.py",
+          "start_line": 144,
+          "end_line": 144
+        },
+        {
+          "path": "astropy/utils/console.py",
+          "start_line": 155,
+          "end_line": 155
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "8b8e7c7fb0503330f6762bff6120564c9fd7f9b30996cc831ddb0fbfab41d3a0",
+      "patch_sha256": "ab7e4d6abaf951d6f4202b4ae41d88f008bd2de7646185538ab9f0e58a1997b6",
+      "build_state_sha256": "7d211c7b84bea8e31e2d130ec586a34092b73f8a8d3a88868b3e79362bc30db9",
+      "canonical_diff_sha256": "ab7e4d6abaf951d6f4202b4ae41d88f008bd2de7646185538ab9f0e58a1997b6",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-12747",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-12747",
+      "repository": "astropy/astropy",
+      "base_sha": "139b4e942ba55eacc8a9da723291b8e15619aedf",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "139b4e942ba55eacc8a9da723291b8e15619aedf",
+        "oid": "139b4e942ba55eacc8a9da723291b8e15619aedf"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "a43d7bfbff043dae5f8f3a8f45223b1bee8c5cd2",
+        "oid": "a43d7bfbff043dae5f8f3a8f45223b1bee8c5cd2"
+      },
+      "head_sha": "a43d7bfbff043dae5f8f3a8f45223b1bee8c5cd2",
+      "raw_additions": 36,
+      "raw_deletions": 0,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "local_logic",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-12747-truth-1",
+          "defect_class": "local_logic",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer 'pllim' pointed out a documentation build error (\"Undefined substitution referenced\") caused by the newly added documentation lines using `|Cosmology.to_format|` and `|Cosmology.from_format|`. The developer ('nstarman', acting for the bot author) acknowledged the issue. Further discussion revealed that the definitions for these substitutions were missing in this backport branch because a related commit from another PR (#12611) hadn't been included.",
+          "scenario": "This commit merges changes from PR #12611, which includes adding the necessary substitution definitions (e.g., `.. |Cosmology.to_format| replace:: :meth:`~astropy.cosmology.Cosmology.to_format``) to `docs/common_links.txt`. This allows the Sphinx documentation build system to correctly resolve the `|Cosmology.to_format|` and `|Cosmology.from_format|` references introduced in the first commit, fixing the \"Undefined substitution referenced\" error identified by the reviewer.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-12747",
+            "source_digest": "3655472e4cc52d69d4c4a72a3289cc8abb8082e2857e98bd2ebfcdf783a7dfdc",
+            "evidence_refs": [
+              "a43d7bfbff043dae5f8f3a8f45223b1bee8c5cd2",
+              "7067eb55b4ab2d0c665494219fc290ba96df7c1d"
+            ]
+          },
+          "canonical_digest": "43d54d23f03b503b90948a1f33a358a231614932b8d7354144a355e57f670dc6",
+          "locations": [
+            {
+              "path": "docs/modeling/physical_models.rst",
+              "start_line": 291,
+              "end_line": 291
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "docs/modeling/physical_models.rst",
+          "start_line": 291,
+          "end_line": 326
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "98b01b8bab960bcf1cd72c86bef0981aba6230c5e54081f101bfc651d2f4241c",
+      "patch_sha256": "b647f756f968ce6779f7b71ddd083d13d6a61159e35ee2df8a99d78adaf7e4a0",
+      "build_state_sha256": "b67f766becc976cba4f99a8dfd71745791453a9c3200c683b820fc1ce5ec3c13",
+      "canonical_diff_sha256": "b647f756f968ce6779f7b71ddd083d13d6a61159e35ee2df8a99d78adaf7e4a0",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    },
+    {
+      "id": "swr-astropy-astropy-1020",
+      "source_id": "swr",
+      "source_record_id": "astropy__astropy-1020",
+      "repository": "astropy/astropy",
+      "base_sha": "7ba60c62f9619f79ff04825008c00ba08b276afc",
+      "base_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "7ba60c62f9619f79ff04825008c00ba08b276afc",
+        "oid": "7ba60c62f9619f79ff04825008c00ba08b276afc"
+      },
+      "head_fetch": {
+        "remote_url": "https://github.com/astropy/astropy.git",
+        "ref": "6c0738d5a516b566b58b6d08a110f5b23a755bf2",
+        "oid": "6c0738d5a516b566b58b6d08a110f5b23a755bf2"
+      },
+      "head_sha": "6c0738d5a516b566b58b6d08a110f5b23a755bf2",
+      "raw_additions": 1,
+      "raw_deletions": 1,
+      "language": "Python",
+      "size_bin": "0-300",
+      "defect_category": "test_gap",
+      "source_type": "human_caught",
+      "direct": true,
+      "structured_required": false,
+      "small_label": "Change-PR",
+      "ground_truth": [
+        {
+          "id": "swr-astropy-astropy-1020-truth-1",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `taldcroft` reviewed the initial fix and requested the addition of a test case to verify the fix for the reported issue (#957). The author `jdnc` then provided an interactive example, which `taldcroft` confirmed looked correct and asked for it to be added as a formal test in `test_write.py`.",
+          "scenario": "This commit adds a new test case to `test_write.py`. This test specifically uses `delimiter=None` in the `kwargs`, directly addressing the scenario described in the issue and requested by the reviewer `taldcroft` to ensure the fix introduced in the first commit works correctly.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-1020",
+            "source_digest": "3470ce6b607db0bb1c867abe210f390adfad3b78e2ed5cbf102e7c128fce4a1f",
+            "evidence_refs": [
+              "6c0738d5a516b566b58b6d08a110f5b23a755bf2",
+              "f8b6420ea6002d67fcdbb483f1dfbf0633ba1d36"
+            ]
+          },
+          "canonical_digest": "7ee2cc9159e7ff925af219564003de6bca37b8c9483821d6fdbc96cf2cced1e3",
+          "locations": [
+            {
+              "path": "astropy/io/ascii/core.py",
+              "start_line": 300,
+              "end_line": 300
+            }
+          ]
+        },
+        {
+          "id": "swr-astropy-astropy-1020-truth-2",
+          "defect_class": "test_gap",
+          "severity": "unspecified_by_source",
+          "summary": "Reviewer `embray` pointed out that the keyword arguments in the `csv.writer` call had extra spaces around the equals signs, violating PEP 8 style guidelines. Although acknowledging this wasn't newly introduced for all lines, `embray` suggested fixing it since the code block was being modified. The author implicitly agreed by making the change in a subsequent commit.",
+          "scenario": "This commit modifies the `csv.writer` call in `astropy/io/ascii/core.py` by removing the spaces around the equals signs for all keyword arguments (`delimiter=`, `doublequote=`, `escapechar=`, `quotechar=`, `quoting=`, `lineterminator=`), directly implementing the style suggestion made by the reviewer `embray`.",
+          "verifier": "official_swr_reviewer_confirmed",
+          "provenance": {
+            "source_id": "swr",
+            "source_record_id": "astropy__astropy-1020",
+            "source_digest": "015a09d0010f5a48ad3c2792f63e296f6f33f34a0fd44154c8307323f6d401b8",
+            "evidence_refs": [
+              "6c0738d5a516b566b58b6d08a110f5b23a755bf2",
+              "67552228c825b05146db1644cf6e9e67f522b497"
+            ]
+          },
+          "canonical_digest": "05595b86ebd84de81e25f6cf7f06e20a3e2bbbbb8781621da2223e6f0117dd98",
+          "locations": [
+            {
+              "path": "astropy/io/ascii/core.py",
+              "start_line": 300,
+              "end_line": 300
+            }
+          ]
+        }
+      ],
+      "changed_ranges": [
+        {
+          "path": "astropy/io/ascii/core.py",
+          "start_line": 300,
+          "end_line": 300
+        }
+      ],
+      "audit": {
+        "decisions": null
+      },
+      "selection_key": "9e07b9ef33fdf951b14b0a0cd175d99d9c656144111837d22f2a0b6bc68bf502",
+      "patch_sha256": "02f48795726954768db638294b2928bab4b2249961b6ee13649b6702b877a8f0",
+      "build_state_sha256": "b6add13042bebbd25f09cb19133d2b0122671047b048c1ad1f5f24ae6696c6b3",
+      "canonical_diff_sha256": "02f48795726954768db638294b2928bab4b2249961b6ee13649b6702b877a8f0",
+      "diff_position": {
+        "byte_start": 0,
+        "byte_end": 0,
+        "total_bytes": 0,
+        "line_start": 0,
+        "line_end": 0,
+        "total_lines": 0,
+        "bin": ""
+      }
+    }
+  ],
+  "audit_queue": []
+}

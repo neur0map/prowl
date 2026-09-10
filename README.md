@@ -168,6 +168,52 @@ project; Prowl finds the index by walking up to `.prowl/`. Each answer stays
 small: on a 2023-file Go repo, `overview` is about 1 KB and a typical `impact`
 answer is a dozen lines, not the few hundred dependent rows the raw graph prints.
 
+## Experimental native change review
+
+The `review` command group is **EXPERIMENTAL**. It deterministically captures
+and partitions a change for a host coding agent; Prowl itself does not perform
+semantic review.
+
+```sh
+prowl-agent review plan                         # current workspace
+prowl-agent review plan --base main --head HEAD # branch or pull-request range
+prowl-agent review plan --commit abc123         # one non-merge commit
+```
+
+`review plan` selects `direct` or `structured` mode. The mandatory boundary is
+exactly `raw_additions + raw_deletions > 300`: 300 lines remains direct, while
+301 requires structured review. `--structured` opts into structured mode below
+that boundary. Direct mode provides focused change context without a receipt
+matrix; structured mode provides ordered cohorts, bounded units, required
+cross-cutting audits, and an exact receipt contract.
+
+The plan prints the next command for every unit. Fetch one territory at a time;
+the owned patch is mandatory, while surrounding cited context is bounded:
+
+```sh
+prowl-agent review unit <review-id>/<unit-id>
+prowl-agent review unit <review-id>/<unit-id> --budget-tokens 1200 --budget-bytes 8192
+```
+
+Plan, unit, and check output use the normal human, TOON, JSON, or Markdown
+formats. The report input boundary is canonical `review.report.v1` JSON in a
+regular file or on standard input:
+
+```sh
+prowl-agent review check --review <review-id> --report review-results.json
+prowl-agent review check --review <review-id> --report -
+```
+
+The checker validates plan identity, evidence locations, workspace freshness,
+recommendation consistency, plus complete unit and audit receipts in structured
+mode. It rejects incomplete or stale reports with a non-zero exit; neither
+state can approve a change. It validates this deterministic boundary, not the
+semantic truth of a finding.
+
+The commands are available for explicit use, but mandatory generated routing
+and the GitHub Action integration are **not enabled** pending the frozen
+held-out gates. See [the native review design and protocol](docs/REVIEW.md).
+
 ## Resume where you left off
 
 `prowl-agent wip` answers "what was I in the middle of?" so a fresh session does

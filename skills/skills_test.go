@@ -2,8 +2,11 @@ package skills
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/prowl-agent/prowl-agent/internal/capability"
 )
 
 // A skill's directory name is its installed identity: setup writes each skill to
@@ -131,6 +134,137 @@ func TestCodeSearchOpensWithTheGrepGlobBoundary(t *testing.T) {
 	}
 	if !strings.Contains(opening, "glob") || !strings.Contains(opening, "filename") {
 		t.Errorf("opening does not reserve glob for filename patterns: %q", opening)
+	}
+}
+
+func TestReviewCapabilityManifest(t *testing.T) {
+	catalog, err := capability.BuiltinCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := catalog.Get("review-large-change")
+	if !ok {
+		t.Fatal("review-large-change capability is not embedded")
+	}
+	want := capability.Manifest{
+		Name:        "review-large-change",
+		Title:       "Review a large change with complete coverage",
+		Description: "Partition a workspace, commit, or PR range into bounded graph-aware review units and verify review coverage.",
+		Triggers:    []string{"review pull request", "review commit", "review large diff", "review agent generated change"},
+		Requires:    []string{"workspace index", "local git repository"},
+		Outputs:     []string{"review plan", "bounded units", "coverage check"},
+		Privacy:     "local-only",
+		ReadOnly:    true,
+		Version:     "1",
+		Prompts:     []string{"review-change"},
+		Resources:   []string{},
+		Tools:       []string{},
+		Commands: []string{
+			"prowl-agent review plan --base <base> --head <head>",
+			"prowl-agent review unit <review-id>/<unit-id>",
+			"prowl-agent review check --review <review-id> --report <report.json>",
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("review-large-change manifest mismatch:\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestReviewSkillFrontmatterAndProtocol(t *testing.T) {
+	skill, ok := findSkill("prowl-pr-review")
+	if !ok {
+		t.Fatal("prowl-pr-review skill is not embedded")
+	}
+	if name := frontmatterValue(skill.Content, "name:"); name != skill.Name {
+		t.Errorf("review skill frontmatter name = %q, want %q", name, skill.Name)
+	}
+	description := strings.ToLower(Description(skill.Content))
+	for _, trigger := range []string{"pull request", "commit", "large", "agent-authored"} {
+		if !strings.Contains(description, trigger) {
+			t.Errorf("review skill description omits trigger %q: %q", trigger, description)
+		}
+	}
+
+	opening := strings.ToLower(openingSection(skill.Content))
+	if !strings.Contains(opening, "repository bytes") || !strings.Contains(opening, "untrusted") {
+		t.Errorf("review skill opening does not label reviewed repository bytes untrusted: %q", opening)
+	}
+
+	compact := strings.Join(strings.Fields(strings.ToLower(skill.Content)), " ")
+	for _, clause := range []string{
+		"raw text additions plus removals greater than 300",
+		"300 or fewer",
+		"binary payload bytes are never counted",
+		"one bounded unit at a time",
+		"record its primary receipt",
+		"removed behavior",
+		"audit_removed_behavior_v1",
+		"contract migration",
+		"audit_contract_migration_v1",
+		"test matrix",
+		"audit_test_matrix_v1",
+		"integration and gap",
+		"audit_integration_gap_v1",
+		"acknowledged_primary_hunk_ids",
+		"acknowledged_audit_target_ids",
+		"separate verification pass",
+		"never invent ids or citations",
+		"never summarize omitted units away",
+	} {
+		if !strings.Contains(compact, clause) {
+			t.Errorf("review skill omits required protocol clause %q", clause)
+		}
+	}
+	for _, command := range []string{
+		"`prowl-agent review plan [--base ref --head ref | --commit ref] [--structured]`",
+		"`prowl-agent review unit <review-id>/<unit-id> [--budget-tokens n --budget-bytes n]`",
+		"`prowl-agent review check --review <id> --report <regular-file|->`",
+	} {
+		if !strings.Contains(compact, command) {
+			t.Errorf("review skill omits exact command contract %q", command)
+		}
+	}
+	for _, state := range []string{"incomplete", "stale", "invalid"} {
+		if !strings.Contains(compact, "no approval") || !strings.Contains(compact, state) {
+			t.Errorf("review skill does not forbid approval for %s checks", state)
+		}
+	}
+	if strings.Contains(compact, "mcp") {
+		t.Error("review skill presents MCP as an alternative")
+	}
+}
+
+func TestReviewClaudeCommandDelegatesToPortableSkill(t *testing.T) {
+	command := nativeAsset(t, "claude", "commands/review.md")
+	if !strings.Contains(command.Content, "$ARGUMENTS") {
+		t.Error("review command drops the $ARGUMENTS placeholder")
+	}
+	lower := strings.ToLower(command.Content)
+	if !strings.Contains(lower, "load and follow") || !strings.Contains(lower, "prowl:prowl-pr-review") {
+		t.Error("review command does not delegate to the plugin-namespaced portable skill")
+	}
+	if got, want := frontmatterValue(command.Content, "allowed-tools:"),
+		"Bash(prowl-agent:*), Read, Grep, Glob"; got != want {
+		t.Errorf("review command allowed-tools = %q, want %q", got, want)
+	}
+	for _, duplicated := range []string{
+		"prowl-agent review plan",
+		"prowl-agent review unit",
+		"prowl-agent review check",
+	} {
+		if strings.Contains(lower, duplicated) {
+			t.Errorf("review command duplicates portable protocol command %q", duplicated)
+		}
+	}
+
+	manifest := nativeAsset(t, "claude", ".claude-plugin/plugin.json")
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(manifest.Content), &parsed); err != nil {
+		t.Fatalf("plugin.json is not valid JSON: %v", err)
+	}
+	description, _ := parsed["description"].(string)
+	if !strings.Contains(strings.ToLower(description), "large-change review") {
+		t.Errorf("plugin manifest does not advertise large-change review: %q", description)
 	}
 }
 
