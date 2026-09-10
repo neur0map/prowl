@@ -7,6 +7,13 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Added an experimental native code-review subsystem (`prowl-agent review`:
+  `plan`, `unit`, `check`). It captures exact review churn against a merge base,
+  resolves immutable review scopes, persists bounded review units and
+  dependency-ordered plans from a sandboxed local Git reader, and verifies
+  review coverage and freshness. Ships the review protocol for agents plus a
+  blind control/treatment evaluation harness (`internal/review`,
+  `internal/revieweval`, `cmd/review-eval*`).
 - Added an `issue-resolution` agent skill. It routes a "work through the open
   GitHub issues" task through Prowl for investigation (search, find, def,
   references, impact) and `gh` for the issue API, then closes each issue with a
