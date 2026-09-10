@@ -9,7 +9,7 @@ import (
 	"github.com/prowl-agent/prowl-agent/internal/cli"
 )
 
-var version = "v0.15.6"
+var version = "v0.15.7"
 
 // managedBy is stamped at build time for packaged binaries
 // (-ldflags "-X main.managedBy=pacman"). When set, `prowl-agent update` defers
