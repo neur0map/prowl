@@ -7,6 +7,11 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Added an `issue-resolution` agent skill. It routes a "work through the open
+  GitHub issues" task through Prowl for investigation (search, find, def,
+  references, impact) and `gh` for the issue API, then closes each issue with a
+  short, human-toned note. Installed alongside the other skills via
+  `prowl-agent skills`.
 - `prowl-agent skills` gained a non-interactive apply path and client
   selection. `--yes` applies the reviewed plan without a prompt, the only way a
   piped or provisioning run writes (a plain non-interactive run stays a
