@@ -64,6 +64,10 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- Unmeasured keys now rotate fairly across a model's key pool. The round-robin
+  base was rotating over a key order the exploration draw had already
+  scrambled, so load was not actually spread and the behaviour was
+  nondeterministic; the rotation now runs over a canonical key order.
 - `prowl update` downloads the build for the platform it is running on
   (`prowl-<os>-<arch>`, `.exe` on Windows) instead of always fetching the
   linux-amd64 binary, which previously overwrote a macOS, Windows or arm64

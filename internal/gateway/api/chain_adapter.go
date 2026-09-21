@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"math/rand/v2"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -216,6 +217,14 @@ func (c *requestChain) selectKey(group []gateway.ChainEntry, skip *gateway.SkipS
 	if len(cands) == 0 {
 		return gateway.Route{}, false
 	}
+	// Rotate over a canonical key order. Model-level ordering may randomise a
+	// model's key-entries (the Thompson draw explores across requests), but the
+	// round-robin base is only fair over a stable list: without this, the same
+	// base indexes a different key each request and rotation neither spreads
+	// load nor is reproducible. Sorting by id gives every request the same key
+	// order for the base to rotate; the bandit path re-ranks and only inherits
+	// this as its tie-break.
+	sort.Slice(cands, func(i, j int) bool { return cands[i].ID < cands[j].ID })
 
 	ordered := gateway.OrderKeysForWalk(cands, c.keyStrategy, platform, modelID,
 		c.rotationBase(modelDBID), c.server.engine.Ledger(), c.rng)
