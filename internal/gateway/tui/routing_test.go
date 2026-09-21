@@ -75,9 +75,11 @@ func TestRoutingSetEditEditsExactSetWithoutActivating(t *testing.T) {
 		t.Fatal("Enter on a set must open that set's editor, not the defaults")
 	}
 
-	// An empty set intentionally shows no rows until search opens the catalogue.
-	app.routing.list.startSearch()
-	app.routing.buildModelRows()
+	// An empty set opens the catalogue immediately so the first model can be
+	// added without discovering a hidden search command.
+	if !app.routing.addingModels || len(app.routing.list.rows) != 2 {
+		t.Fatalf("empty set editor = adding %v with %d rows; want the two-model catalogue", app.routing.addingModels, len(app.routing.list.rows))
+	}
 	// Space toggles model 41 into the set and rewrites ordered membership.
 	app.routing.list.cursor = 0
 	if mo, ok := app.routing.list.selected().key.(ModelRow); !ok || mo.ID != 41 {
@@ -89,20 +91,38 @@ func TestRoutingSetEditEditsExactSetWithoutActivating(t *testing.T) {
 		t.Fatalf("membership toggle produced %T; want setEditLoadedMsg", reloaded)
 	}
 	app.routing.Update(editMsg)
+	if !app.routing.addingModels || len(app.routing.list.rows) != 2 {
+		t.Fatalf("adding the first model left adding mode=%v with %d rows; want the remaining catalogue visible", app.routing.addingModels, len(app.routing.list.rows))
+	}
+
+	app.routing.list.cursor = 1
+	if mo, ok := app.routing.list.selected().key.(ModelRow); !ok || mo.ID != 42 {
+		t.Fatalf("second model row = %#v; want model 42", app.routing.list.selected())
+	}
+	_, toggleCmd = app.routing.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	reloaded = runCmd(t, toggleCmd)
+	if editMsg, ok = reloaded.(setEditLoadedMsg); !ok {
+		t.Fatalf("second membership toggle produced %T; want setEditLoadedMsg", reloaded)
+	}
+	app.routing.Update(editMsg)
 
 	mu.Lock()
 	defer mu.Unlock()
 	if activeCalled {
 		t.Fatal("editing a set must never activate it")
 	}
-	if len(reorderBody) != 1 || int64(reorderBody[0]["modelDbId"].(float64)) != 41 {
-		t.Fatalf("reorder body = %#v; want exactly model 41", reorderBody)
+	if len(reorderBody) != 2 ||
+		int64(reorderBody[0]["modelDbId"].(float64)) != 41 ||
+		int64(reorderBody[1]["modelDbId"].(float64)) != 42 {
+		t.Fatalf("reorder body = %#v; want models 41 then 42", reorderBody)
 	}
-	if reorderBody[0]["enabled"] != true {
-		t.Fatalf("member must be written enabled; got %#v", reorderBody[0])
+	for _, entry := range reorderBody {
+		if entry["enabled"] != true {
+			t.Fatalf("member must be written enabled; got %#v", entry)
+		}
 	}
-	if !app.routing.setMembers[41] {
-		t.Fatal("model 41 not reflected as a member after the toggle")
+	if !app.routing.setMembers[41] || !app.routing.setMembers[42] {
+		t.Fatalf("set members = %#v; want models 41 and 42", app.routing.setMembers)
 	}
 }
 

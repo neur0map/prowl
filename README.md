@@ -109,10 +109,11 @@ smart routing never silently enables a disabled model or escapes the selected
 set.
 
 On **Models**, `Enter` edits a set and `Space` activates a set or toggles a
-model's membership, depending on context. The set editor initially shows only
-that set's selected models; `/` deliberately searches the complete catalogue
-when adding another model. `n` opens grouped templates, `s` opens routing
-strategies, and `p` opens a checkbox provider picker.
+model's membership, depending on context. A populated set initially shows only
+its selected models; an empty set opens directly in add mode. Press `a` to
+switch between selected models and candidates to add, or `/` to search the
+complete catalogue. `n` opens grouped templates, `s` opens routing strategies,
+and `p` opens a checkbox provider picker.
 
 ## Subscription accounts and multiple models
 

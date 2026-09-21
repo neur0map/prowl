@@ -83,6 +83,10 @@ type routingModel struct {
 	setName       string
 	setMembers    map[int64]bool
 	setOrder      []int64
+	// addingModels keeps the catalogue visible while a set is being built.
+	// Empty sets start in this mode; it survives membership refreshes so adding
+	// the first model does not hide every remaining candidate.
+	addingModels bool
 	// wantSetID is the set the operator currently intends to edit: set when a
 	// set editor is opened, cleared on leaveEditing. A late setEditLoadedMsg for
 	// any other id is stale and must not reopen an editor the user has left.
@@ -216,6 +220,9 @@ func (m *routingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.filter = ""
 		m.list.searching = false
 		fresh := m.setID != msg.id
+		if fresh {
+			m.addingModels = len(msg.order) == 0
+		}
 		m.setID = msg.id
 		m.setName = msg.name
 		m.defaultModels = false
@@ -280,6 +287,9 @@ func (m *routingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.list.page(1)
 			return m, nil
 		case "/":
+			if m.setID != 0 {
+				m.addingModels = true
+			}
 			m.list.startSearch()
 			m.buildRows()
 			return m, nil
@@ -296,6 +306,15 @@ func (m *routingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "i":
 				m.cycleIntel()
+				return m, nil
+			case "a":
+				if m.setID != 0 {
+					m.addingModels = !m.addingModels
+					m.list.filter = ""
+					m.list.searching = false
+					m.list.cursor, m.list.offset = 0, 0
+					m.buildRows()
+				}
 				return m, nil
 			}
 		} else {
@@ -345,6 +364,7 @@ func (m *routingModel) leaveEditing() {
 	m.setName = ""
 	m.setOrder = nil
 	m.setMembers = nil
+	m.addingModels = false
 	// Drop the edit intent and any in-flight set spinner so a pending set load
 	// or membership write cannot revive the editor after the operator leaves.
 	m.wantSetID = 0
@@ -847,7 +867,7 @@ func (m *routingModel) buildModelRows() {
 	searching := m.list.isSearching() || strings.TrimSpace(m.list.filter) != ""
 	rows := make([]row, 0, len(m.data.models))
 	for _, model := range m.data.models {
-		if m.setID != 0 && !searching && !m.setMembers[model.ID] {
+		if m.setID != 0 && !m.addingModels && !searching && !m.setMembers[model.ID] {
 			continue
 		}
 		if !searching {
@@ -944,8 +964,8 @@ func (m *routingModel) buildModelRows() {
 	m.list.empty = ""
 	if len(rows) == 0 && !searching {
 		switch {
-		case m.setID != 0:
-			m.list.empty = "This set has no selected models in the current view. Press / to find and add one."
+		case m.setID != 0 && !m.addingModels:
+			m.list.empty = "This set has no selected models in the current view. Press a to show models to add."
 		case m.providerMode == providerScopeActive:
 			m.list.empty = "No active providers yet. Press p to browse all, or connect an account."
 		case m.providerMode == providerScopeCustom:
@@ -1129,12 +1149,15 @@ func (m *routingModel) setActivityLabel() string {
 func (m *routingModel) setEditBanner() string {
 	name := m.setName
 	state := stFaint.Render("Saved but inactive; edits do not change current routing.")
-	scope := "Only selected models are shown; / searches every model to add one."
+	scope := "Only selected models are shown; a shows models to add and / searches every model."
 	if m.setID == 0 {
 		name = "Default models"
 		state = stGood.Render("Active whenever no named model set is selected.")
 		scope = "/ searches every model outside the current provider view."
-	} else if m.setID == m.data.activeID {
+	} else if m.addingModels {
+		scope = "Showing models to add; Space toggles selection and a returns to selected models."
+	}
+	if m.setID == m.data.activeID {
 		state = stGood.Render("Active now; model changes take effect immediately.")
 	}
 	return fmt.Sprintf(
@@ -1245,6 +1268,13 @@ func (m *routingModel) actions() []action {
 			action{Key: "space", Label: membershipLabel, Primary: true},
 			action{Key: "e", Label: stateLabel},
 		)
+	}
+	if m.setID != 0 {
+		label := "Add models"
+		if m.addingModels {
+			label = "Selected only"
+		}
+		actions = append(actions, action{Key: "a", Label: label})
 	}
 	actions = append(actions,
 		action{Key: "p", Label: "Providers"},
