@@ -187,8 +187,10 @@ func anthropicRequest(request *ChatRequest, stream bool) (map[string]any, error)
 			body["stop_sequences"] = value
 		}
 	}
-	if effort, ok := request.Params["reasoning_effort"].(string); ok && effort != "" {
-		body["output_config"] = map[string]any{"effort": effort}
+	if effort, ok := request.Params["reasoning_effort"].(string); ok {
+		if level, sendable := anthropicEffort(effort); sendable {
+			body["output_config"] = map[string]any{"effort": level}
+		}
 	}
 	if tools, ok := request.Params["tools"]; ok {
 		converted, err := anthropicTools(toAnySlice(tools))
@@ -327,6 +329,25 @@ func anthropicToolUseContent(value any) ([]any, error) {
 		})
 	}
 	return out, nil
+}
+
+// anthropicEffort maps an OpenAI-style reasoning_effort onto the values
+// Anthropic's output_config.effort accepts (high/medium/low), and reports
+// whether it is sendable at all. A client (or Codex) may send "xhigh" or
+// "minimal", which Anthropic rejects verbatim; an unrecognised or disabling
+// value drops output_config entirely rather than risking a 400. Callers gate
+// this on the model actually supporting reasoning.
+func anthropicEffort(effort string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(effort)) {
+	case "xhigh", "high":
+		return "high", true
+	case "medium":
+		return "medium", true
+	case "minimal", "low":
+		return "low", true
+	default:
+		return "", false
+	}
 }
 
 func anthropicTools(tools []any) ([]any, error) {

@@ -64,6 +64,13 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- A model that does not support reasoning no longer 400s when the client sends a
+  reasoning-only parameter. A coding harness commonly sends a fixed
+  `reasoning_effort` on every request; the gateway now drops it for a
+  non-reasoning route (Anthropic Haiku returned "this model does not support the
+  effort parameter", wasting the whole attempt and its failover), and the
+  Anthropic transform maps effort levels to the values Anthropic accepts
+  (`xhigh` -> `high`), dropping any it cannot map instead of forwarding it.
 - Unmeasured keys now rotate fairly across a model's key pool. The round-robin
   base was rotating over a key order the exploration draw had already
   scrambled, so load was not actually spread and the behaviour was

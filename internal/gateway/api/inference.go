@@ -381,7 +381,7 @@ func (c *chatRelay) Dispatch(ctx context.Context, route gateway.Route, attempt i
 		Model:    route.ModelID,
 		Messages: c.request.Messages,
 		Stream:   c.request.Stream,
-		Params:   c.request.Params,
+		Params:   paramsForRoute(route, c.request.Params),
 	}
 
 	var res attemptResult
@@ -1375,6 +1375,43 @@ func derefLimit(v *int64) int64 {
 		return 0
 	}
 	return *v
+}
+
+// reasoningOnlyParams are request fields that only mean something to a model
+// that reasons. A client (e.g. a coding harness) commonly sends a fixed
+// reasoning_effort on every request; forwarding it to a non-reasoning model
+// makes the upstream reject the whole call ("this model does not support the
+// effort parameter"), so they are dropped for such a route.
+var reasoningOnlyParams = []string{"reasoning_effort", "reasoning"}
+
+// paramsForRoute returns the params to send upstream for a route. For a model
+// that advertises reasoning it is the caller's params unchanged; for one that
+// does not, it is a shallow copy with the reasoning-only fields removed. The
+// copy matters: the same params map is reused across failover attempts, and a
+// later attempt may land on a model that DOES reason, so the reasoning fields
+// must survive on the original.
+func paramsForRoute(route gateway.Route, params map[string]any) map[string]any {
+	if route.SupportsReasoning || params == nil {
+		return params
+	}
+	present := false
+	for _, k := range reasoningOnlyParams {
+		if _, ok := params[k]; ok {
+			present = true
+			break
+		}
+	}
+	if !present {
+		return params
+	}
+	out := make(map[string]any, len(params))
+	for k, v := range params {
+		out[k] = v
+	}
+	for _, k := range reasoningOnlyParams {
+		delete(out, k)
+	}
+	return out
 }
 
 // routeScope is the endpoint identity a request is accounted under. A route

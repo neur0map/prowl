@@ -237,17 +237,18 @@ func (c *requestChain) selectKey(group []gateway.ChainEntry, skip *gateway.SkipS
 		}
 		e := entryByKey[keyID]
 		return gateway.Route{
-			Platform:        platform,
-			ModelID:         modelID,
-			ModelDBID:       modelDBID,
-			KeyID:           keyID,
-			BaseURL:         c.server.keyBaseURL(keyID),
-			EndpointScope:   e.EndpointScope,
-			RPMLimit:        e.RPMLimit,
-			RPDLimit:        e.RPDLimit,
-			TPMLimit:        e.TPMLimit,
-			TPDLimit:        e.TPDLimit,
-			TokenMultiplier: navyTokenMultiplier(platform, e),
+			Platform:          platform,
+			ModelID:           modelID,
+			ModelDBID:         modelDBID,
+			KeyID:             keyID,
+			BaseURL:           c.server.keyBaseURL(keyID),
+			EndpointScope:     e.EndpointScope,
+			RPMLimit:          e.RPMLimit,
+			RPDLimit:          e.RPDLimit,
+			TPMLimit:          e.TPMLimit,
+			TPDLimit:          e.TPDLimit,
+			TokenMultiplier:   navyTokenMultiplier(platform, e),
+			SupportsReasoning: e.SupportsReasoning,
 		}, true
 	}
 	return gateway.Route{}, false

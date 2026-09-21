@@ -69,6 +69,53 @@ func TestAnthropicProviderUsesMessagesWireAndConvertsResponse(t *testing.T) {
 	require.Equal(t, 17, response.Usage.TotalTokens)
 }
 
+// TestAnthropicEffortMapping proves reasoning_effort is normalised to the values
+// Anthropic accepts and is dropped when it maps to nothing, so an OpenAI-style
+// level like "xhigh" cannot make output_config.effort a 400. The dispatcher is
+// responsible for not sending it at all to a non-reasoning model; this covers
+// the value translation for a model that does reason.
+func TestAnthropicEffortMapping(t *testing.T) {
+	cases := []struct {
+		in       string
+		want     string
+		sendable bool
+	}{
+		{"xhigh", "high", true},
+		{"high", "high", true},
+		{"medium", "medium", true},
+		{"low", "low", true},
+		{"minimal", "low", true},
+		{"", "", false},
+		{"bogus", "", false},
+	}
+	for _, c := range cases {
+		got, sendable := anthropicEffort(c.in)
+		if sendable != c.sendable || got != c.want {
+			t.Errorf("anthropicEffort(%q) = (%q,%v); want (%q,%v)", c.in, got, sendable, c.want, c.sendable)
+		}
+	}
+
+	// End to end through the request build: "xhigh" reaches Anthropic as "high".
+	var captured map[string]any
+	client := &http.Client{Transport: captureTransport(func(req *http.Request) (*http.Response, error) {
+		require.NoError(t, json.NewDecoder(req.Body).Decode(&captured))
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(`{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+				"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)),
+		}, nil
+	})}
+	p := &anthropicProvider{client: client}
+	_, err := p.ChatCompletion(context.Background(), "sk-ant-api-test", &ChatRequest{
+		Model:    "anthropic/claude-opus-5",
+		Messages: []map[string]any{{"role": "user", "content": "hi"}},
+		Params:   map[string]any{"reasoning_effort": "xhigh"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{"effort": "high"}, captured["output_config"])
+}
+
 func TestAnthropicStreamMapsTextToolArgumentsAndFinish(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"type":"message_start","message":{"id":"msg_2","model":"claude-opus-5"}}`,
