@@ -7,6 +7,12 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Every push to `main` now cuts a stable release, not just `unstable`: the
+  release workflow bumps the patch on each push (`0.15.x`), rolls the minor on
+  the ninth bump (`0.15.8` -> `0.16.0`), builds all five targets, and publishes
+  `vX.Y.Z` plus the rolling `stable` channel that `prowl update` follows. A
+  green gate (gofmt, vet, `go test`) runs on the exact commit and blocks any red
+  push from publishing.
 - The console is reworked around the two things an operator actually does:
   build routing sets and connect providers. A grouped sidebar replaces the
   nine-tab strip (Home; Gateway: Routing, Providers, Activity; Workspace:
@@ -58,6 +64,11 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- `prowl update` downloads the build for the platform it is running on
+  (`prowl-<os>-<arch>`, `.exe` on Windows) instead of always fetching the
+  linux-amd64 binary, which previously overwrote a macOS, Windows or arm64
+  executable with the wrong architecture. A platform with no published build is
+  refused with a clear message rather than a broken download.
 - Selecting or clearing every model in a large set no longer times out: the
   set-write enables its member models inside the reorder transaction instead of
   one HTTP request per model, so a bulk select over a catalogue of hundreds

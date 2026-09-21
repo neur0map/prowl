@@ -2,14 +2,15 @@ name: build-binary
 
 # Versioning standard (see docs/VERSIONING.md):
 #
-#   every push to unstable  -> patch bump (0.0.x), build, publish the PREVIEW channel
-#   every push to main      -> build, publish vX.Y.Z and the STABLE channel
-#   ten patches roll over   -> 0.9.9 becomes 0.10.0, patch resets to 0
+#   every push to main      -> patch bump (0.15.x), build, publish vX.Y.Z + STABLE
+#   every push to unstable  -> patch bump, build, publish the PREVIEW channel
+#   the 9th patch bump rolls -> 0.15.8 becomes 0.16.0, and the patch resets to 0
+#   major stays manual, never automated
 #
 # Bump, build and publish are one workflow on purpose. Splitting them cannot work
 # here: a bump pushed with GITHUB_TOKEN does not trigger another workflow, and a
-# "[skip ci]" bump sitting at the head of a merge suppresses the release run
-# entirely (which is exactly how a stable release was silently skipped once).
+# CI-skip bump sitting at the head of a merge suppresses the release run entirely
+# (which is exactly how a stable release was silently skipped once).
 on:
   push:
     branches: [main, unstable]
@@ -31,17 +32,18 @@ concurrency:
 
 jobs:
   # version owns the single source of truth: var version in cmd/prowl/main.go.
-  # unstable advances it and pushes the bump; main publishes whatever unstable
-  # already produced, so a merge never renumbers itself.
+  # Each push to a publishing branch advances the patch and pushes the bump back
+  # to that branch, so main (stable) and unstable (preview) both cut a fresh
+  # version on every push.
   version:
     runs-on: ubuntu-latest
-    # Skip only the bot's own bump on unstable, so the bump does not bump itself.
-    # Keyed on the author, not on a marker in the message: matching message text
-    # also matches any commit that merely mentions the marker, and on main it
-    # would skip a merge whose tip happens to be a bump.
+    # Skip only the bot's own bump commit, so a bump never bumps itself. Keyed on
+    # the author, not on a marker in the message: matching message text also
+    # matches any commit that merely mentions the marker. A GITHUB_TOKEN push
+    # does not retrigger a workflow anyway; this guard is the belt-and-suspenders
+    # for a PAT-pushed bump.
     if: >-
       github.event_name != 'push' ||
-      github.ref_name != 'unstable' ||
       github.event.head_commit.author.name != 'github-actions[bot]'
     outputs:
       version: ${{ steps.resolve.outputs.version }}
@@ -78,14 +80,25 @@ jobs:
 
           if [ -n "$INPUT_VERSION" ]; then
             version="${INPUT_VERSION#v}"
-          elif [ "$channel" = "preview" ] && [ "${{ github.event_name }}" = "push" ]; then
-            # Patch is single digit: the tenth bump rolls into the minor and
-            # resets patch. Major stays manual.
-            major=${current%%.*}; rest=${current#*.}
-            minor=${rest%%.*};    patch=${rest##*.}
-            patch=$((patch + 1))
-            if [ "$patch" -ge 10 ]; then minor=$((minor + 1)); patch=0; fi
-            version="${major}.${minor}.${patch}"
+          elif [ "$publish" = "true" ] && [ "${{ github.event_name }}" = "push" ]; then
+            # Every push to a publishing branch (main -> stable, unstable ->
+            # preview) advances the patch. The 9th bump rolls into the minor and
+            # resets the patch, so 0.15.8 is followed by 0.16.0. Major is manual.
+            bump() {
+              local m=${1%%.*} r=${1#*.}; local mn=${r%%.*} p=${r##*.}
+              p=$((p + 1)); if [ "$p" -ge 9 ]; then mn=$((mn + 1)); p=0; fi
+              echo "${m}.${mn}.${p}"
+            }
+            version=$(bump "$current")
+            # Never collide with a version already published: if a prior bump
+            # commit did not land (e.g. a protected branch refused the bot push),
+            # the const is stale, so skip past every existing tag. This keeps the
+            # published version strictly monotonic without depending on the
+            # commit-back succeeding.
+            git fetch --tags --force --quiet || true
+            while git rev-parse "v${version}" >/dev/null 2>&1; do
+              version=$(bump "$version")
+            done
           else
             version="$current"
           fi
@@ -97,7 +110,7 @@ jobs:
 
       - name: Commit the bump
         id: commit
-        if: steps.resolve.outputs.channel == 'preview' && github.event_name == 'push'
+        if: steps.resolve.outputs.publish == 'true' && github.event_name == 'push'
         run: |
           set -euo pipefail
           want="${{ steps.resolve.outputs.version }}"
@@ -109,8 +122,37 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add cmd/prowl/main.go
             git commit -m "chore: bump version to ${want} (automated)"
-            git push origin HEAD:unstable
+            # Best-effort: a protected branch may refuse the bot push. The
+            # release still ships the resolved version, and the tag self-heal in
+            # resolve keeps the next run monotonic even if this never lands.
+            git push origin HEAD:${{ github.ref_name }} || echo "warning: could not push the version bump (branch protection?); publishing v${want} anyway"
           fi
+
+  # Green-gate-before-ship: the same checks CI runs, on this exact commit. The
+  # publish jobs depend on it, so a red push can never become a release even
+  # though the per-platform build jobs run in parallel to keep the wall clock
+  # short.
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.ref || github.ref_name }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+      - name: vet
+        run: CGO_ENABLED=1 go vet -tags sqlite_fts5 ./...
+      - name: test
+        run: CGO_ENABLED=1 go test -tags sqlite_fts5 ./...
 
   build-unix:
     name: ${{ matrix.target }}
@@ -257,7 +299,7 @@ jobs:
   # Preview: every unstable commit, as it lands. Opt in with
   # PROWL_UPDATE_CHANNEL=preview; nothing here reaches a default install.
   publish-preview:
-    needs: [version, build-unix, build-windows]
+    needs: [version, gate, build-unix, build-windows]
     if: needs.version.outputs.publish == 'true' && needs.version.outputs.channel == 'preview'
     runs-on: ubuntu-latest
     steps:
@@ -284,7 +326,7 @@ jobs:
   # updating. Every tag also carries byte-identical prowl-agent-* copies so
   # installs released under the old name still resolve on the rename redirect.
   publish-stable:
-    needs: [version, build-unix, build-windows]
+    needs: [version, gate, build-unix, build-windows]
     if: needs.version.outputs.publish == 'true' && needs.version.outputs.channel == 'stable'
     runs-on: ubuntu-latest
     steps:

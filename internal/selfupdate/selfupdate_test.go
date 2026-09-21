@@ -28,6 +28,33 @@ func TestSameCommit(t *testing.T) {
 	}
 }
 
+// TestAssetForMatchesReleaseNames pins the updater's asset names to what
+// release.yml publishes. A drift here means prowl update fetches a URL that
+// 404s (or, worse, the wrong platform's binary) for real users.
+func TestAssetForMatchesReleaseNames(t *testing.T) {
+	cases := []struct {
+		goos, goarch, want string
+	}{
+		{"linux", "amd64", "prowl-linux-amd64"},
+		{"linux", "arm64", "prowl-linux-arm64"},
+		{"darwin", "amd64", "prowl-darwin-amd64"},
+		{"darwin", "arm64", "prowl-darwin-arm64"},
+		{"windows", "amd64", "prowl-windows-amd64.exe"},
+	}
+	for _, c := range cases {
+		if got := assetFor(c.goos, c.goarch); got != c.want {
+			t.Errorf("assetFor(%q,%q) = %q, want %q", c.goos, c.goarch, got, c.want)
+		}
+		if !supportedPlatform(c.goos, c.goarch) {
+			t.Errorf("supportedPlatform(%q,%q) = false, want true", c.goos, c.goarch)
+		}
+	}
+	// A platform release.yml does not build must be refused, not guessed.
+	if supportedPlatform("linux", "386") {
+		t.Error("supportedPlatform(linux,386) = true; that target is not published")
+	}
+}
+
 func TestParseChecksum(t *testing.T) {
 	h, err := parseChecksum([]byte("abcdef0123456789abcdef0123456789  prowl-linux-amd64\n"))
 	if err != nil || h != "abcdef0123456789abcdef0123456789" {

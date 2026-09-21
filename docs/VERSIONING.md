@@ -9,14 +9,15 @@ else stores a version, and no human edits it.
 
 ```
 0 . 15 . 3
-│    │    └── patch: one per commit landed on unstable
-│    └─────── minor: rolls over when patch would reach 10
+│    │    └── patch: one per push to a publishing branch (main or unstable)
+│    └─────── minor: rolls over when the patch would reach 9
 └──────────── major: manual, never automated
 ```
 
-**Every push to `unstable` advances the patch.** The tenth bump rolls into the
-minor and resets the patch, so `0.9.9` is followed by `0.10.0`. The major stays
-manual: automation never decides that a release is breaking.
+**Every push to `main` (stable) and to `unstable` (preview) advances the patch.**
+The ninth bump rolls into the minor and resets the patch, so `0.15.8` is followed
+by `0.16.0`. The major stays manual: automation never decides that a release is
+breaking.
 
 The bump is committed by CI as `chore: bump version to vX.Y.Z (automated)`, and
 the workflow skips it by matching the bot **author**, not text in the message.
@@ -62,12 +63,15 @@ those installs have rolled forward. Do not point anything new at it.
 `prowl update` does not compare version strings. It compares the running
 binary's embedded VCS revision against the head commit of its channel's branch
 (`main` for stable, `unstable` for preview), then downloads the channel's asset
-and verifies its SHA-256 before replacing the executable in place. The version
-string is for humans and for the changelog; the commit is what decides freshness.
+and verifies its SHA-256 before replacing the executable in place. The asset is
+the build for the running platform (`prowl-<os>-<arch>`, `.exe` on Windows); a
+platform with no published build is refused, never handed another platform's
+binary. The version string is for humans and for the changelog; the commit is
+what decides freshness.
 
 This is why the release build checks out the branch tip rather than the commit
-that triggered it: on `unstable` the tip is the bump commit, and a binary built
-from the pre-bump commit would report an available update forever.
+that triggered it: on a publishing branch the tip is the bump commit, and a
+binary built from the pre-bump commit would report an available update forever.
 
 ## The pipeline
 
@@ -77,10 +81,13 @@ another workflow run, so a tag- or push-triggered release chained after it would
 never fire.
 
 ```
-push to unstable ──► resolve + bump ──► build ×5 ──► publish `preview`
-push to main     ──► resolve         ──► build ×5 ──► publish `vX.Y.Z` + `stable` (+ `nightly`)
-pull request     ──► resolve         ──► build ×5 ──► publish nothing
+push to main     ──► resolve + bump ──► gate + build ×5 ──► publish `vX.Y.Z` + `stable` (+ `nightly`)
+push to unstable ──► resolve + bump ──► gate + build ×5 ──► publish `preview`
+pull request     ──► resolve        ──► gate + build ×5 ──► publish nothing
 ```
+
+The `gate` job runs the same gofmt/vet/test checks as CI on the exact commit;
+the publish jobs depend on it, so a red push can never become a release.
 
 Every build injects the resolved version with
 `-ldflags "-X main.version=vX.Y.Z"`, and then asserts that `prowl --version`
@@ -90,7 +97,9 @@ reached a single user.
 
 ## Releasing
 
-Nothing manual. Land work on `unstable`; merge `unstable` into `main` when it is
-ready to ship. `workflow_dispatch` with an explicit `version` input exists for
-recovery (republishing a version, or cutting one by hand), and is not part of the
-normal flow.
+Nothing manual. Every push to `main` cuts the next stable version and publishes
+it; every push to `unstable` does the same on the preview channel. (Landing on
+`unstable` first and merging to `main` remains the safer path for unreviewed
+work.) `workflow_dispatch` with an explicit `version` input exists for recovery
+(republishing a version or cutting one by hand), and is not part of the normal
+flow.

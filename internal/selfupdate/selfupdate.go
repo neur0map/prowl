@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -25,13 +26,43 @@ import (
 const (
 	// DevVersion is the default version string of a locally built binary.
 	DevVersion = "v0.8.1"
-	asset      = "prowl-linux-amd64"
-	releaseAt  = "https://github.com/neur0map/prowl/releases/download/"
-	commitsAt  = "https://api.github.com/repos/neur0map/prowl/commits/"
-	cacheTTL   = 2 * time.Minute
+	// asset is set from the running platform below, so the updater fetches the
+	// build for THIS os/arch instead of a fixed one.
+	releaseAt = "https://github.com/neur0map/prowl/releases/download/"
+	commitsAt = "https://api.github.com/repos/neur0map/prowl/commits/"
+	cacheTTL  = 2 * time.Minute
 	// ChannelEnv opts a binary into a non-default channel.
 	ChannelEnv = "PROWL_UPDATE_CHANNEL"
 )
+
+// asset is the release artifact for the platform this binary runs on. The
+// updater MUST fetch the build for THIS os/arch: a fixed name would hand a
+// macOS, Windows or arm64 user the linux-amd64 binary and overwrite their
+// executable with it. The names match what .github/workflows/release.yml
+// publishes.
+var asset = assetFor(runtime.GOOS, runtime.GOARCH)
+
+// assetFor maps an os/arch to its published release asset name, mirroring the
+// build matrix in release.yml (prowl-<os>-<arch>, with a .exe suffix on
+// Windows).
+func assetFor(goos, goarch string) string {
+	name := "prowl-" + goos + "-" + goarch
+	if goos == "windows" {
+		name += ".exe"
+	}
+	return name
+}
+
+// supportedPlatform reports whether release.yml publishes a build for this
+// os/arch, so Apply can refuse with a clear message instead of 404-ing on a
+// guessed asset name.
+func supportedPlatform(goos, goarch string) bool {
+	switch goos + "/" + goarch {
+	case "linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64", "windows/amd64":
+		return true
+	}
+	return false
+}
 
 // Channel is one published build stream: a rolling release tag holding the
 // artifacts, and the branch whose head decides whether a build is current.
@@ -156,6 +187,9 @@ func sameCommit(a, b string) bool {
 // Apply downloads the latest published binary, verifies its checksum, and
 // atomically replaces the running executable.
 func Apply() (string, error) {
+	if !supportedPlatform(runtime.GOOS, runtime.GOARCH) {
+		return "", fmt.Errorf("no published prowl build for %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "", err
