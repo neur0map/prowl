@@ -341,7 +341,7 @@ func runGatewayInject(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if configured > 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "\nstart the gateway (`prowl gateway up`) and select a prowl-gateway model in the harness.")
+		fmt.Fprintln(cmd.OutOrStdout(), "\nstart the gateway (`prowl gateway up`) and select Prowl's auto model in the harness.")
 	}
 	if failures > 0 {
 		return fmt.Errorf("gateway injection failed for %d of %d requested harnesses", failures, len(targets))

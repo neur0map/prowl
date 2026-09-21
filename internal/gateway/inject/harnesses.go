@@ -230,7 +230,7 @@ func (hermesWriter) apply(o Options) (Target, error) {
 		}
 	}
 	t := Target{Harness: "hermes", Files: []string{path},
-		Note: "select a prowl model in hermes; created " + boolWord(created)}
+		Note: "select prowl/auto in hermes; created " + boolWord(created)}
 	if created {
 		t.Ledger = []writtenEntry{{Path: path, CreatedFile: true}}
 	} else {

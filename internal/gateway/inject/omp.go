@@ -64,7 +64,7 @@ func (ompWriter) apply(o Options) (Target, error) {
 		}
 	}
 	t := Target{Harness: "omp", Files: []string{path},
-		Note: "select a prowl model in omp; created " + boolWord(created)}
+		Note: "select prowl/auto in omp; created " + boolWord(created)}
 	if created {
 		t.Ledger = []writtenEntry{{Path: path, CreatedFile: true}}
 	} else {
