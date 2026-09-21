@@ -41,14 +41,16 @@ type DaemonStopResult struct {
 
 // TrackedDaemonRunning reports whether the requested port's state record names
 // the same live process that identifies itself on that port. PID liveness alone
-// is insufficient because operating systems reuse process ids.
+// is insufficient because operating systems reuse process ids. Legacy integer
+// records are accepted only for the historical default port, and the
+// authenticated probe still has to bind that process to the listener.
 func TrackedDaemonRunning(port ...int) bool {
 	return trackedDaemonRunning(context.Background(), Dir(), pidFilePort(port))
 }
 
 func trackedDaemonRunning(ctx context.Context, dir string, port int) bool {
 	record, err := ReadPIDRecord(dir, port)
-	if err != nil || record.PID == 0 || record.Port != port || !ProcessAlive(record.PID) {
+	if err != nil || record.PID == 0 || !pidRecordMatchesPort(record, port) || !ProcessAlive(record.PID) {
 		return false
 	}
 	token, err := EnsureToken(dir)
@@ -57,6 +59,10 @@ func trackedDaemonRunning(ctx context.Context, dir string, port int) bool {
 	}
 	livePID, ok := probeGatewayPID(ctx, port, token)
 	return ok && livePID == record.PID
+}
+
+func pidRecordMatchesPort(record PIDRecord, port int) bool {
+	return record.Port == port || (record.Port == 0 && port == DefaultPort)
 }
 
 // StartDaemon starts the current Prowl executable as a detached gateway and
@@ -132,7 +138,7 @@ func stopTrackedDaemon(ctx context.Context, dir string, port int) (DaemonStopRes
 		}
 		return DaemonStopResult{State: DaemonStale, PID: pid}, nil
 	}
-	if record.Port != port {
+	if !pidRecordMatchesPort(record, port) {
 		return DaemonStopResult{}, fmt.Errorf("refusing to signal gateway pid %d: record port %d does not match requested port %d", pid, record.Port, port)
 	}
 	token, err := EnsureToken(dir)

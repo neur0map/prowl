@@ -28,6 +28,18 @@ func TestPIDRecordCarriesPortAndReadsLegacyRecords(t *testing.T) {
 	require.Equal(t, PIDRecord{PID: 1234}, record)
 }
 
+func TestPIDRecordPortCompatibility(t *testing.T) {
+	t.Run("explicit requested port", func(t *testing.T) {
+		require.True(t, pidRecordMatchesPort(PIDRecord{PID: 1234, Port: 17342}, 17342))
+		require.False(t, pidRecordMatchesPort(PIDRecord{PID: 1234, Port: 17342}, 17343))
+	})
+	t.Run("legacy default port", func(t *testing.T) {
+		legacy := PIDRecord{PID: 1234}
+		require.True(t, pidRecordMatchesPort(legacy, DefaultPort))
+		require.False(t, pidRecordMatchesPort(legacy, 17342))
+	})
+}
+
 func TestStopTrackedDaemonRefusesUnverifiableLivePID(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(PIDFilePath(dir), []byte(strconv.Itoa(os.Getpid())), 0o600))
