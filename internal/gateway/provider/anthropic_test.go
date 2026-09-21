@@ -53,7 +53,10 @@ func TestAnthropicProviderUsesMessagesWireAndConvertsResponse(t *testing.T) {
 
 	require.Equal(t, "claude-sonnet-5", captured["model"])
 	require.Equal(t, false, captured["stream"])
-	require.Equal(t, map[string]any{"effort": "high"}, captured["output_config"])
+	thinkingBlock, hasThinking := captured["thinking"].(map[string]any)
+	require.True(t, hasThinking, "reasoning_effort must enable Claude extended thinking")
+	require.Equal(t, "enabled", thinkingBlock["type"])
+	require.NotContains(t, captured, "output_config", "reasoning must map to thinking, not output_config.effort")
 	require.Len(t, captured["system"], 1)
 	messages := captured["messages"].([]any)
 	user := messages[0].(map[string]any)
@@ -69,51 +72,57 @@ func TestAnthropicProviderUsesMessagesWireAndConvertsResponse(t *testing.T) {
 	require.Equal(t, 17, response.Usage.TotalTokens)
 }
 
-// TestAnthropicEffortMapping proves reasoning_effort is normalised to the values
-// Anthropic accepts and is dropped when it maps to nothing, so an OpenAI-style
-// level like "xhigh" cannot make output_config.effort a 400. The dispatcher is
-// responsible for not sending it at all to a non-reasoning model; this covers
-// the value translation for a model that does reason.
-func TestAnthropicEffortMapping(t *testing.T) {
-	cases := []struct {
-		in       string
-		want     string
-		sendable bool
+// TestAnthropicReasoningBecomesThinking proves a client's reasoning_effort is
+// turned into Claude extended thinking (not output_config.effort, which Haiku
+// rejects), with a budget scaled to the effort and capped below max_tokens, and
+// that enabling thinking drops the conflicting sampling params.
+func TestAnthropicReasoningBecomesThinking(t *testing.T) {
+	budgets := []struct {
+		effort    string
+		maxTokens int
+		want      int
+		on        bool
 	}{
-		{"xhigh", "high", true},
-		{"high", "high", true},
-		{"medium", "medium", true},
-		{"low", "low", true},
-		{"minimal", "low", true},
-		{"", "", false},
-		{"bogus", "", false},
+		{"low", 16000, 2048, true},
+		{"medium", 16000, 6144, true},
+		{"high", 16000, 11904, true}, // 12288 capped to maxTokens-4096
+		{"xhigh", 16000, 11904, true},
+		{"high", 3000, 1500, true}, // small window: reserve halves to 1500
+		{"high", 1500, 0, false},   // no room to think meaningfully
+		{"bogus", 16000, 0, false},
+		{"", 16000, 0, false},
 	}
-	for _, c := range cases {
-		got, sendable := anthropicEffort(c.in)
-		if sendable != c.sendable || got != c.want {
-			t.Errorf("anthropicEffort(%q) = (%q,%v); want (%q,%v)", c.in, got, sendable, c.want, c.sendable)
+	for _, c := range budgets {
+		got, on := anthropicThinkingBudget(c.effort, c.maxTokens)
+		if on != c.on || got != c.want {
+			t.Errorf("anthropicThinkingBudget(%q,%d) = (%d,%v); want (%d,%v)", c.effort, c.maxTokens, got, on, c.want, c.on)
 		}
 	}
 
-	// End to end through the request build: "xhigh" reaches Anthropic as "high".
+	// End to end: reasoning_effort enables thinking and drops temperature.
 	var captured map[string]any
 	client := &http.Client{Transport: captureTransport(func(req *http.Request) (*http.Response, error) {
 		require.NoError(t, json.NewDecoder(req.Body).Decode(&captured))
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"application/json"}},
-			Body: io.NopCloser(strings.NewReader(`{"id":"m","type":"message","role":"assistant","model":"claude-opus-5",
+			Body: io.NopCloser(strings.NewReader(`{"id":"m","type":"message","role":"assistant","model":"claude-opus-4-8",
 				"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)),
 		}, nil
 	})}
 	p := &anthropicProvider{client: client}
 	_, err := p.ChatCompletion(context.Background(), "sk-ant-api-test", &ChatRequest{
-		Model:    "anthropic/claude-opus-5",
+		Model:    "anthropic/claude-opus-4-8",
 		Messages: []map[string]any{{"role": "user", "content": "hi"}},
-		Params:   map[string]any{"reasoning_effort": "xhigh"},
+		Params:   map[string]any{"reasoning_effort": "high", "max_completion_tokens": float64(16000), "temperature": 0.7},
 	})
 	require.NoError(t, err)
-	require.Equal(t, map[string]any{"effort": "high"}, captured["output_config"])
+	thinking, ok := captured["thinking"].(map[string]any)
+	require.True(t, ok, "reasoning_effort must enable extended thinking")
+	require.Equal(t, "enabled", thinking["type"])
+	require.Equal(t, float64(11904), thinking["budget_tokens"])
+	require.NotContains(t, captured, "temperature", "temperature must be dropped when thinking is on")
+	require.NotContains(t, captured, "output_config")
 }
 
 func TestAnthropicStreamMapsTextToolArgumentsAndFinish(t *testing.T) {

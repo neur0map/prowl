@@ -113,12 +113,6 @@ type Route struct {
 	// when it differs from the OpenAI usage total (NavyAI). Zero or below is
 	// one-to-one; the quota ledger reads it per lease.
 	TokenMultiplier float64
-	// SupportsReasoning is the chosen model's advertised reasoning capability.
-	// The dispatcher drops reasoning-only request params (reasoning_effort) for
-	// a model that lacks it, so a client that always sends an effort level does
-	// not make a non-reasoning model's upstream 400 ("does not support the
-	// effort parameter").
-	SupportsReasoning bool
 	// Release frees the in-flight lease taken when the route was selected. The
 	// loop calls it once the attempt finishes, however it finished. Optional.
 	Release func()

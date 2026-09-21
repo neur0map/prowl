@@ -112,7 +112,7 @@ var (
 	errPeakTimezone    = errors.New("peakTimezone must be a valid IANA timezone name")
 	errBadWeights      = errors.New("custom weights must be finite and non-negative")
 	errZeroWeights     = errors.New("custom weights cannot all be zero")
-	errBadStrategy     = errors.New("strategy must be one of priority, balanced, smartest, fastest, reliable, custom")
+	errBadStrategy     = errors.New("strategy must be one of priority, balanced, smartest, efficient, fastest, reliable, custom")
 	errBadKeySelection = errors.New("keySelectionStrategy must be auto or least-remaining")
 	errCooldownRange   = errors.New("cooldownCeilingMs must be between 60000 (1 minute) and 86400000 (24 hours)")
 )
@@ -150,7 +150,7 @@ func routingCustomWeights(db *sql.DB) gateway.Weights {
 // (getRoutingScores, router.ts:2207-2209).
 func routingDisplayWeights(strategy gateway.RoutingStrategy, custom gateway.Weights) gateway.Weights {
 	switch strategy {
-	case gateway.RoutingSmartest:
+	case gateway.RoutingSmartest, gateway.RoutingEfficient:
 		return gateway.WeightsSmartest
 	case gateway.RoutingFastest:
 		return gateway.WeightsFastest
@@ -1297,7 +1297,8 @@ func fieldPtr(b *routingPutBody, key string) any {
 func validRoutingStrategy(raw string) (gateway.RoutingStrategy, bool) {
 	switch s := gateway.RoutingStrategy(raw); s {
 	case gateway.RoutingPriority, gateway.RoutingBalanced, gateway.RoutingSmartest,
-		gateway.RoutingFastest, gateway.RoutingReliable, gateway.RoutingCustom:
+		gateway.RoutingFastest, gateway.RoutingReliable, gateway.RoutingCustom,
+		gateway.RoutingEfficient:
 		return s, true
 	default:
 		return "", false

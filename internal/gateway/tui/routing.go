@@ -156,7 +156,7 @@ func newRoutingModel(app *App) routingModel {
 	m.homeList.empty = "No model sets yet."
 	m.homeList.emptyHint = "Press n to name your first set, or enter on a preset to build one."
 	m.editorList = newList("Search models")
-	m.editorList.setHeaders("Model", "Access", "Ctx", "Tier")
+	m.editorList.setHeaders("Model", "Access", "Ctx", "Intel")
 	m.editorList.setWeights(6, 2, 1, 2)
 	m.editorList.empty = "No models from connected providers."
 	m.editorList.emptyHint = "Connect a provider on the Providers page (3) to see its models here."
@@ -799,7 +799,7 @@ func (m *routingModel) buildEditorRows() {
 					marker + model.DisplayName,
 					model.Access,
 					contextLabel(int(deref(model.ContextWindow))),
-					tierWord(model.IntelligenceRank, elite, frontier, strong),
+					tierRankCell(model.IntelligenceRank, elite, frontier, strong),
 				},
 				styles: []func(string) string{
 					func(value string) string {
@@ -1528,8 +1528,24 @@ func accessCell(access string) string {
 	}
 }
 
+// tierRankCell is the model-list capability cell: the tier word plus the raw
+// intelligence rank (rank 1 = best), so an operator sees both the band and the
+// exact ordinal the router sorts by. Kept as raw text so the list measures its
+// width correctly; tierCell colours it by the leading word.
+func tierRankCell(rank, elite, frontier, strong int) string {
+	word := tierWord(rank, elite, frontier, strong)
+	if rank <= 0 {
+		return word
+	}
+	return fmt.Sprintf("%s #%d", word, rank)
+}
+
 func tierCell(tier string) string {
-	switch tier {
+	word := tier
+	if i := strings.IndexByte(tier, ' '); i >= 0 {
+		word = tier[:i]
+	}
+	switch word {
 	case "elite":
 		return stKey.Render(tier)
 	case "frontier":
@@ -1544,11 +1560,12 @@ func tierCell(tier string) string {
 type strategyChoice struct{ id, name, blurb string }
 
 var strategyChoices = []strategyChoice{
-	{"balanced", "Balanced", "live reliability, latency and catalogue capability"},
-	{"smartest", "Smart routing", "classifies each prompt, then combines capability and live health"},
-	{"fastest", "Fastest", "observed latency first"},
-	{"reliable", "Most reliable", "observed success rate first"},
-	{"priority", "Priority", "preserves your selected model order without automatic re-ranking"},
+	{"efficient", "Efficient", "right-sizes the model to each prompt: simple work goes to cheaper models, hard tasks to the strongest"},
+	{"smartest", "Smartest", "always the most capable healthy model, whatever the task"},
+	{"balanced", "Balanced", "blends capability, reliability and speed for every prompt"},
+	{"fastest", "Fastest", "lowest observed latency first"},
+	{"reliable", "Most reliable", "highest observed success rate first"},
+	{"priority", "Priority", "your manual model order, no automatic re-ranking"},
 }
 
 func strategyDisplayName(id string) string {

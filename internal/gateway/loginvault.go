@@ -995,6 +995,12 @@ func enrichAnthropicModels(models []LinkedModel) []LinkedModel {
 		}
 		models[i].Tools = true
 		models[i].Attachments = true
+		// Every modern Claude model supports extended thinking; discovery does
+		// not advertise it, so a model outside the curated set would otherwise
+		// read as non-reasoning and have its reasoning request stripped before
+		// the Anthropic transform could turn it into a thinking budget - the
+		// "opus is far dumber through the gateway" report.
+		models[i].CanReason = true
 	}
 	return models
 }

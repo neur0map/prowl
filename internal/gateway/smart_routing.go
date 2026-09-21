@@ -46,6 +46,46 @@ func (p PromptProfile) ComplexityLabel() string {
 	}
 }
 
+// ComplexityCeilingTier is the highest capability tier a prompt of this
+// difficulty should be allowed to use under the Efficient strategy. Capability
+// is tier-dominated (IntelligenceComposite adds tier*1000), so a frontier model
+// outscores everything on every prompt - trivial ones included - and in an
+// unpriced pool no weighting can undo that. Capping the tier by difficulty is
+// what lets a simple prompt route to a cheaper model. High stakes lift the
+// ceiling one step, so a risky-but-short task still earns a stronger model.
+func ComplexityCeilingTier(p PromptProfile) Tier {
+	ceiling := TierMedium
+	switch {
+	case p.Complexity >= 0.72:
+		return TierFrontier
+	case p.Complexity >= 0.38:
+		ceiling = TierLarge
+	}
+	if p.Stakes >= 0.35 && ceiling < TierFrontier {
+		ceiling++
+	}
+	return ceiling
+}
+
+// CapChainToComplexityBand drops candidates above the prompt's capability
+// ceiling so Efficient right-sizes the model to the task. It never returns
+// empty: if no candidate fits the band (a pool of only frontier models, say)
+// the full chain is returned, so a cost heuristic never turns a routable
+// request into a 503.
+func CapChainToComplexityBand(chain []ChainEntry, p PromptProfile) []ChainEntry {
+	ceiling := ComplexityCeilingTier(p)
+	out := make([]ChainEntry, 0, len(chain))
+	for _, e := range chain {
+		if e.Tier <= ceiling {
+			out = append(out, e)
+		}
+	}
+	if len(out) == 0 {
+		return chain
+	}
+	return out
+}
+
 // ClassifyPrompt uses structural request facts and high-precision lexical cues.
 // It reads only the latest user turn, bounded to 24 KiB. Harness instructions,
 // accumulated history, and the mere availability of tools are capabilities of

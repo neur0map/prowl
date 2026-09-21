@@ -208,26 +208,3 @@ func TestSpeechCapabilityRefusalAdvancesToCompatibleRoute(t *testing.T) {
 	require.Equal(t, "success", outcome, "the run must record a success")
 	require.Equal(t, "custom", platform, "attributed to the route that actually served, not the one that refused")
 }
-
-// TestParamsForRouteDropsReasoningForNonReasoningModel pins the fix for a
-// non-reasoning model 400-ing on a reasoning-only param: a client that always
-// sends reasoning_effort must not have it forwarded to a model that cannot
-// reason (Anthropic Haiku: "this model does not support the effort parameter"),
-// and the shared params map must survive so a failover to a reasoning model
-// still carries it.
-func TestParamsForRouteDropsReasoningForNonReasoningModel(t *testing.T) {
-	t.Parallel()
-	params := map[string]any{"temperature": 0.2, "reasoning_effort": "xhigh"}
-
-	got := paramsForRoute(gateway.Route{SupportsReasoning: false}, params)
-	if _, ok := got["reasoning_effort"]; ok {
-		t.Fatal("reasoning_effort must be stripped for a non-reasoning route")
-	}
-	require.Equal(t, 0.2, got["temperature"], "non-reasoning params must be preserved")
-	if _, ok := params["reasoning_effort"]; !ok {
-		t.Fatal("the caller's params map must not be mutated; a reasoning failover still needs it")
-	}
-
-	got = paramsForRoute(gateway.Route{SupportsReasoning: true}, params)
-	require.Equal(t, "xhigh", got["reasoning_effort"], "a reasoning route must keep reasoning_effort")
-}

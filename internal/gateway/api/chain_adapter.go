@@ -68,10 +68,17 @@ func (s *Server) buildChain(ctx context.Context, req *chatRequestBody) (*request
 		ordered     []gateway.ChainEntry
 		smartScores map[int64]gateway.SmartScore
 	)
-	if resolved.OrderBy == gateway.RoutingSmartest {
-		benchmarks := gateway.LoadBenchmarkScores(ctx, s.engine.DB(), resolved.Chain)
+	if resolved.OrderBy == gateway.RoutingSmartest || resolved.OrderBy == gateway.RoutingEfficient {
+		candidates := resolved.Chain
+		if resolved.OrderBy == gateway.RoutingEfficient {
+			// Right-size the pool to the prompt before scoring: capping the tier
+			// is the only thing that stops a frontier model winning a trivial
+			// prompt on tier alone (see CapChainToComplexityBand).
+			candidates = gateway.CapChainToComplexityBand(resolved.Chain, profile)
+		}
+		benchmarks := gateway.LoadBenchmarkScores(ctx, s.engine.DB(), candidates)
 		ordered, smartScores = gateway.OrderSmartChain(
-			resolved.Chain, profile, benchmarks, sampled, scorer)
+			candidates, profile, benchmarks, sampled, scorer)
 	} else {
 		// Resolve the weight vector once - the preset for a named strategy, the
 		// operator's saved vector for custom - then apply the peak-hour shift so
@@ -237,18 +244,17 @@ func (c *requestChain) selectKey(group []gateway.ChainEntry, skip *gateway.SkipS
 		}
 		e := entryByKey[keyID]
 		return gateway.Route{
-			Platform:          platform,
-			ModelID:           modelID,
-			ModelDBID:         modelDBID,
-			KeyID:             keyID,
-			BaseURL:           c.server.keyBaseURL(keyID),
-			EndpointScope:     e.EndpointScope,
-			RPMLimit:          e.RPMLimit,
-			RPDLimit:          e.RPDLimit,
-			TPMLimit:          e.TPMLimit,
-			TPDLimit:          e.TPDLimit,
-			TokenMultiplier:   navyTokenMultiplier(platform, e),
-			SupportsReasoning: e.SupportsReasoning,
+			Platform:        platform,
+			ModelID:         modelID,
+			ModelDBID:       modelDBID,
+			KeyID:           keyID,
+			BaseURL:         c.server.keyBaseURL(keyID),
+			EndpointScope:   e.EndpointScope,
+			RPMLimit:        e.RPMLimit,
+			RPDLimit:        e.RPDLimit,
+			TPMLimit:        e.TPMLimit,
+			TPDLimit:        e.TPDLimit,
+			TokenMultiplier: navyTokenMultiplier(platform, e),
 		}, true
 	}
 	return gateway.Route{}, false

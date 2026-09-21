@@ -7,6 +7,18 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- New **Efficient** routing strategy: it classifies each prompt and caps the
+  candidate pool at the capability tier the difficulty warrants (high stakes
+  lift the cap one tier), then orders within the cap like Smartest. A simple
+  prompt can no longer reach a frontier/most-expensive model, which fixes the
+  case where an unpriced subscription pool sent trivial work to the top model on
+  tier alone. Opt-in per set (`auto:efficient` also works); existing strategies
+  are unchanged.
+- Model listings show each model's intelligence rank (the `Intel` column, e.g.
+  `frontier #5`), so it is clear why the router prefers one model over another.
+- Strategy names in the console are clearer: `smartest` now reads **Smartest**
+  (was the confusing "Smart routing"), alongside Efficient, Balanced, Fastest,
+  Most reliable and Priority, each with a one-line description.
 - Every push to `main` now cuts a stable release, not just `unstable`: the
   release workflow bumps the patch on each push (`0.15.x`), rolls the minor on
   the ninth bump (`0.15.8` -> `0.16.0`), builds all five targets, and publishes
@@ -64,13 +76,22 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
-- A model that does not support reasoning no longer 400s when the client sends a
-  reasoning-only parameter. A coding harness commonly sends a fixed
-  `reasoning_effort` on every request; the gateway now drops it for a
-  non-reasoning route (Anthropic Haiku returned "this model does not support the
-  effort parameter", wasting the whole attempt and its failover), and the
-  Anthropic transform maps effort levels to the values Anthropic accepts
-  (`xhigh` -> `high`), dropping any it cannot map instead of forwarding it.
+- Claude models routed through the gateway are no longer far weaker than calling
+  them directly. A client's `reasoning_effort` now becomes Claude **extended
+  thinking** (`thinking` with a budget scaled to the effort and capped below
+  `max_tokens`), instead of `output_config.effort` - which Haiku rejected
+  outright and which never engaged Opus's reasoning, so Opus ran as the
+  non-thinking model and repeated work. Conflicting sampling params
+  (`temperature`/`top_p`/`top_k`) are dropped when thinking is on, since
+  Anthropic rejects them. Discovered Claude models are also now marked
+  reasoning-capable, so their reasoning request is not stripped before the
+  transform can turn it into a thinking budget.
+- The gateway forwards a harness's request faithfully: it never strips a param,
+  drops the system prompt, or truncates context. It routes to the chosen model
+  and provider and passes everything through, translating only the wire protocol
+  to reach that provider. (This replaces an earlier attempt that dropped
+  reasoning params for models flagged non-reasoning, which mis-flagged Claude
+  and silently weakened it.)
 - Unmeasured keys now rotate fairly across a model's key pool. The round-robin
   base was rotating over a key order the exploration draw had already
   scrambled, so load was not actually spread and the behaviour was

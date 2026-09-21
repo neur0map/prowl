@@ -187,10 +187,27 @@ func anthropicRequest(request *ChatRequest, stream bool) (map[string]any, error)
 			body["stop_sequences"] = value
 		}
 	}
-	if effort, ok := request.Params["reasoning_effort"].(string); ok {
-		if level, sendable := anthropicEffort(effort); sendable {
-			body["output_config"] = map[string]any{"effort": level}
+	// Reasoning: a client's OpenAI-style reasoning_effort becomes Claude
+	// extended thinking. Thinking is what actually raises answer quality and,
+	// unlike output_config.effort (which Haiku rejects with a 400), every modern
+	// Claude model accepts it - so routing through the gateway is as capable as
+	// calling Claude directly instead of collapsing to the non-thinking model.
+	// The budget is derived from the effort and capped below max_tokens so the
+	// answer keeps room. A client that sent a native thinking block wins.
+	if _, native := body["thinking"]; !native {
+		if effort, ok := request.Params["reasoning_effort"].(string); ok {
+			if budget, on := anthropicThinkingBudget(effort, anthropicMaxTokens(body)); on {
+				body["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget}
+			}
 		}
+	}
+	// Extended thinking constrains sampling: Anthropic rejects temperature != 1
+	// (and limits top_p/top_k) once thinking is on, so drop the client's sampling
+	// params rather than 400 on them.
+	if _, thinking := body["thinking"]; thinking {
+		delete(body, "temperature")
+		delete(body, "top_p")
+		delete(body, "top_k")
 	}
 	if tools, ok := request.Params["tools"]; ok {
 		converted, err := anthropicTools(toAnySlice(tools))
@@ -331,22 +348,54 @@ func anthropicToolUseContent(value any) ([]any, error) {
 	return out, nil
 }
 
-// anthropicEffort maps an OpenAI-style reasoning_effort onto the values
-// Anthropic's output_config.effort accepts (high/medium/low), and reports
-// whether it is sendable at all. A client (or Codex) may send "xhigh" or
-// "minimal", which Anthropic rejects verbatim; an unrecognised or disabling
-// value drops output_config entirely rather than risking a 400. Callers gate
-// this on the model actually supporting reasoning.
-func anthropicEffort(effort string) (string, bool) {
+// anthropicThinkingBudget maps an OpenAI-style reasoning_effort to a Claude
+// extended-thinking token budget, and reports whether thinking should be
+// enabled at all. The budget is capped below max_tokens so the answer still has
+// room to be written (Anthropic requires max_tokens > budget_tokens); when
+// max_tokens is too small to leave a useful answer, thinking is skipped rather
+// than starving the response. An unrecognised effort disables thinking.
+func anthropicThinkingBudget(effort string, maxTokens int) (int, bool) {
+	var want int
 	switch strings.ToLower(strings.TrimSpace(effort)) {
-	case "xhigh", "high":
-		return "high", true
-	case "medium":
-		return "medium", true
 	case "minimal", "low":
-		return "low", true
+		want = 2048
+	case "medium":
+		want = 6144
+	case "high":
+		want = 12288
+	case "xhigh", "max":
+		want = 24576
 	default:
-		return "", false
+		return 0, false
+	}
+	// Reserve room for the answer: at least 4096 tokens, or half the window when
+	// it is small. The floor of 1024 is Anthropic's minimum thinking budget.
+	reserve := 4096
+	if maxTokens < reserve*2 {
+		reserve = maxTokens / 2
+	}
+	if ceiling := maxTokens - reserve; want > ceiling {
+		want = ceiling
+	}
+	if want < 1024 {
+		return 0, false
+	}
+	return want, true
+}
+
+// anthropicMaxTokens reads the max_tokens already resolved into the request
+// body (the client's max_tokens/max_completion_tokens, or the 8192 default),
+// tolerating the numeric types a JSON decode and the defaults produce.
+func anthropicMaxTokens(body map[string]any) int {
+	switch v := body["max_tokens"].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 8192
 	}
 }
 

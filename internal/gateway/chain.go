@@ -42,6 +42,13 @@ const (
 	RoutingReliable RoutingStrategy = "reliable"
 	// RoutingCustom scores with the operator's own normalised weight vector.
 	RoutingCustom RoutingStrategy = "custom"
+	// RoutingEfficient right-sizes the model to each prompt: it classifies the
+	// request, caps the candidate set at the capability tier the difficulty
+	// warrants (so a simple prompt cannot reach a frontier model), then orders
+	// within that cap by the same capability/health blend as Smartest. It is the
+	// cost/allowance-aware default for a mixed pool where an unpriced frontier
+	// model would otherwise win every prompt on tier alone.
+	RoutingEfficient RoutingStrategy = "efficient"
 	// RoutingCheapest orders by the catalogue's published input/output price,
 	// cheapest known route first. It backs the auto:cheap / auto:cheapest /
 	// auto:price / auto:budget aliases: there IS a real cost axis to sort on,
@@ -60,7 +67,7 @@ const DefaultRoutingStrategy = RoutingBalanced
 func ParseRoutingStrategy(raw string) RoutingStrategy {
 	switch s := RoutingStrategy(strings.TrimSpace(raw)); s {
 	case RoutingPriority, RoutingBalanced, RoutingSmartest, RoutingFastest,
-		RoutingReliable, RoutingCustom:
+		RoutingReliable, RoutingCustom, RoutingEfficient:
 		return s
 	default:
 		return DefaultRoutingStrategy
@@ -753,7 +760,8 @@ var globalSortAliases = map[string]string{
 	"fast": "fast", "fastest": "fast", "speed": "fast",
 	"cheap": "cheap", "cheapest": "cheap", "price": "cheap", "budget": "cheap",
 	"reliable": "reliable", "reliability": "reliable",
-	"balanced": "balanced",
+	"balanced":  "balanced",
+	"efficient": "efficient", "auto": "efficient", "right-size": "efficient",
 }
 
 // GlobalSortAliases returns the canonical axis tokens a client may call as
@@ -786,6 +794,8 @@ func aliasStrategy(axis string) RoutingStrategy {
 		return RoutingFastest
 	case "reliable":
 		return RoutingReliable
+	case "efficient":
+		return RoutingEfficient
 	case "cheap":
 		return RoutingCheapest
 	default: // "balanced"

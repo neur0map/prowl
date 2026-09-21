@@ -238,3 +238,42 @@ func TestRefreshBenchmarksPersistsAndKeepsLastGoodScores(t *testing.T) {
 	require.InDelta(t, .91, cached[modelID].Coding, .001,
 		"a failed refresh must not erase the last good benchmark")
 }
+
+// TestComplexityCeilingTierRightSizesByDifficulty pins the Efficient strategy's
+// core rule: a simple prompt is capped below the frontier tier, a hard prompt
+// is not, and high stakes lift the ceiling one step.
+func TestComplexityCeilingTierRightSizesByDifficulty(t *testing.T) {
+	require.Equal(t, TierMedium, ComplexityCeilingTier(PromptProfile{Complexity: 0.12}),
+		"a simple prompt must cap at Medium so it cannot reach a Large/Frontier model")
+	require.Equal(t, TierLarge, ComplexityCeilingTier(PromptProfile{Complexity: 0.5}),
+		"a moderate prompt caps at Large")
+	require.Equal(t, TierFrontier, ComplexityCeilingTier(PromptProfile{Complexity: 0.8}),
+		"a complex prompt has no cap")
+	require.Equal(t, TierLarge, ComplexityCeilingTier(PromptProfile{Complexity: 0.12, Stakes: 0.5}),
+		"high stakes lift a simple prompt's ceiling one tier")
+}
+
+// TestCapChainToComplexityBandExcludesOverTierWithFallback proves Efficient
+// drops over-tier candidates for an easy prompt (so a Large subscription model
+// like opus is excluded), but never returns an empty chain when nothing fits.
+func TestCapChainToComplexityBandExcludesOverTierWithFallback(t *testing.T) {
+	chain := []ChainEntry{
+		{ModelDBID: 1, Tier: TierSmall},
+		{ModelDBID: 2, Tier: TierMedium},
+		{ModelDBID: 3, Tier: TierLarge},
+		{ModelDBID: 4, Tier: TierFrontier},
+	}
+	got := CapChainToComplexityBand(chain, PromptProfile{Complexity: 0.1})
+	ids := map[int64]bool{}
+	for _, e := range got {
+		ids[e.ModelDBID] = true
+	}
+	require.Equal(t, map[int64]bool{1: true, 2: true}, ids,
+		"a simple prompt keeps only Small+Medium; Large and Frontier are excluded")
+
+	// A pool with nothing in-band still routes: fallback to the full chain.
+	onlyFrontier := []ChainEntry{{ModelDBID: 9, Tier: TierFrontier}}
+	got = CapChainToComplexityBand(onlyFrontier, PromptProfile{Complexity: 0.1})
+	require.Len(t, got, 1, "band cap must never empty the chain")
+	require.Equal(t, int64(9), got[0].ModelDBID)
+}
