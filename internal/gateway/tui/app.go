@@ -656,10 +656,11 @@ func (a *App) applyLayout() {
 	}
 	const headerH = 5
 	const headingH = 3
+	const footerH = 3
 	a.bodyX = 1
 	a.bodyY = headerH + headingH
 	a.bodyW = max(a.width-3, 20)
-	a.bodyH = max(a.height-headerH-headingH, 4)
+	a.bodyH = max(a.height-headerH-headingH-footerH, 4)
 	if resizable, ok := a.screen().(interface{ setSize(int, int) }); ok {
 		resizable.setSize(a.bodyW, a.bodyH)
 	}
@@ -686,6 +687,7 @@ func (a *App) View() tea.View {
 		a.header(),
 		a.pageHeading(),
 		body,
+		a.footer(),
 	}, "\n")
 	content = fillLines(content, max(a.width-1, 1), a.height)
 	if a.overlay != nil {
@@ -817,6 +819,81 @@ func joinEdges(left, right string, width int) string {
 
 func frameRow(content string, width int) string {
 	return stFaint.Render("│") + padRight(truncate(content, width), width) + stFaint.Render("│")
+}
+
+// footer keeps the current screen's keybinds visible. Toasts intentionally
+// render in pageHeading so transient messages never replace these controls.
+func (a *App) footer() string {
+	width := max(a.width-1, 8)
+	inner := width - 2
+	top := stFaint.Render("╭") + gradientRule(inner, a.motionPhase+inner/2) + stFaint.Render("╮")
+	bottom := stFaint.Render("╰" + strings.Repeat("─", inner) + "╯")
+
+	globals := []action{
+		{Key: "ctrl+r", Label: "Reload"},
+		{Key: "?", Label: "Help"},
+		{Key: "q", Label: "Quit"},
+	}
+	globalParts := make([]string, 0, len(globals))
+	for _, item := range globals {
+		globalParts = append(globalParts, actionChip(
+			item.Key,
+			item.Label,
+			false,
+			false,
+			a.hovered(hitAction, 0, item.Key),
+		))
+	}
+	globalLine := strings.Join(globalParts, " ")
+	globalW := lipgloss.Width(globalLine)
+	globalX := max(inner-globalW-1, 1)
+
+	var left strings.Builder
+	left.WriteString(" ")
+	x := 1
+	if provider, ok := a.screen().(actionProvider); ok {
+		screenActions := provider.actions()
+		more := actionChip(".", "More", false, false, a.hovered(hitAction, 0, "__more__"))
+		moreW := lipgloss.Width(more)
+		shown := 0
+		for i, item := range screenActions {
+			rendered := actionChip(
+				item.Key,
+				item.Label,
+				item.Primary,
+				item.Dangerous,
+				a.hovered(hitAction, 0, item.Key),
+			)
+			w := lipgloss.Width(rendered)
+			reserve := 0
+			if i < len(screenActions)-1 {
+				reserve = moreW + 1
+			}
+			if x+w+1+reserve >= globalX {
+				break
+			}
+			left.WriteString(rendered)
+			left.WriteString(" ")
+			a.hits = append(a.hits, hitRegion{x: 1 + x, y: a.height - 2, w: w, h: 1, kind: hitAction, key: item.Key})
+			x += w + 1
+			shown++
+		}
+		if shown < len(screenActions) && x+moreW+1 < globalX {
+			left.WriteString(more)
+			left.WriteString(" ")
+			a.hits = append(a.hits, hitRegion{x: 1 + x, y: a.height - 2, w: moreW, h: 1, kind: hitAction, key: "__more__"})
+		}
+	}
+	gap := max(globalX-lipgloss.Width(left.String()), 1)
+	line := left.String() + strings.Repeat(" ", gap) + globalLine
+
+	x = globalX
+	for i, item := range globals {
+		renderedW := lipgloss.Width(globalParts[i])
+		a.hits = append(a.hits, hitRegion{x: 1 + x, y: a.height - 2, w: renderedW, h: 1, kind: hitAction, key: item.Key})
+		x += renderedW + 1
+	}
+	return top + "\n" + frameRow(line, inner) + "\n" + bottom
 }
 
 func pillSuffix(kind string) string {

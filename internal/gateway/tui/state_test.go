@@ -35,26 +35,35 @@ func TestClearedToastDoesNotRearmTimer(t *testing.T) {
 	}
 }
 
-func TestConsoleOmitsKeybindFooterAndRendersToastInHeading(t *testing.T) {
+func TestConsoleKeepsKeybindFooterWhileToastUsesHeading(t *testing.T) {
 	app := New(&Client{}, true, "test")
 	app.ready = true
 	app.width = 100
 	app.height = 30
 
 	view := ansi.Strip(app.View().Content)
-	for _, unwanted := range []string{"ctrl+r Reload", "? Help", "q Quit"} {
-		if strings.Contains(view, unwanted) {
-			t.Fatalf("console still renders persistent footer action %q", unwanted)
+	for _, keybind := range []string{"ctrl+r Reload", "? Help", "q Quit"} {
+		if !strings.Contains(view, keybind) {
+			t.Fatalf("console is missing persistent footer action %q", keybind)
 		}
 	}
-	if app.bodyH != 22 {
-		t.Fatalf("body height = %d; want all 22 rows below header and heading", app.bodyH)
+	if app.bodyH != 19 {
+		t.Fatalf("body height = %d; want 19 rows above the three-row footer", app.bodyH)
 	}
 
 	app.toast = toastMsg{Text: "model set created", Kind: "ok"}
 	lines := strings.Split(ansi.Strip(app.pageHeading()), "\n")
 	if len(lines) != 3 || !strings.Contains(lines[2], "model set created") {
 		t.Fatalf("toast did not replace the heading rule: %q", lines)
+	}
+	footer := ansi.Strip(app.footer())
+	if strings.Contains(footer, "model set created") {
+		t.Fatalf("toast replaced the footer keybinds: %q", footer)
+	}
+	for _, keybind := range []string{"ctrl+r Reload", "? Help", "q Quit"} {
+		if !strings.Contains(footer, keybind) {
+			t.Fatalf("toast-visible footer is missing action %q", keybind)
+		}
 	}
 }
 

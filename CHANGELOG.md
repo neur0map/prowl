@@ -314,9 +314,9 @@ All notable changes are recorded here. The format follows
 ### Fixed
 - Newly created model sets now appear immediately and cannot be erased by an
   older in-flight refresh. A named set editor shows only that set's selected
-  models until search opens the full catalogue for additions. The console no
-  longer reserves a bottom keybind and message dock; transient status appears
-  in the page heading instead. Harness injection now advertises only canonical
+  models until search opens the full catalogue for additions. The console keeps
+  its bottom keybind dock visible while transient status appears in the page
+  heading instead. Harness injection now advertises only canonical
   `auto`, which follows the active set and strategy selected in Prowl, instead
   of exporting every strategy and named-set override into client model pickers.
   Re-injection also removes both retired OMP provider identities so an older
