@@ -95,10 +95,10 @@ when one is listening, and otherwise starts one for the session.`,
 		Use:   "inject [harness...]",
 		Short: "Write the gateway provider into coding harness configs",
 		Long: `Point the harnesses you name at this gateway: OMP, Pi, Claude Code,
-Codex, OpenCode, Hermes, OpenClaw, and Prowl Legacy. Only the routing aliases
-(auto, auto:* and your named sets) are offered - the gateway picks the provider per
-request. Every write is recorded so ` + "`gateway inject --remove`" + ` reverts
-exactly what was added.
+Codex, OpenCode, Hermes, OpenClaw, and Prowl Legacy. Only canonical auto is
+offered, so the harness follows the active set and strategy selected in Prowl.
+Every write is recorded so ` + "`gateway inject --remove`" + ` reverts exactly
+what was added.
 
 Skills and rules for repo navigation are a separate, existing step:
 ` + "`prowl skills`" + `.`,
@@ -323,12 +323,7 @@ func runGatewayInject(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(cmd.OutOrStdout(), "note: the gateway is not running on this port, so the machine-local token was written instead of the unified api key. Run `prowl gateway up` and re-inject to hand out the routing key.")
 	}
 
-	ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Second)
-	defer cancel()
 	models := inject.RoutingModels()
-	if sets := inject.DiscoverSets(ctx, baseURL, token); len(sets) > 0 {
-		models = append(models, sets...)
-	}
 
 	failures := 0
 	configured := 0

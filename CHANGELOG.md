@@ -312,6 +312,13 @@ All notable changes are recorded here. The format follows
   installs a skill under a name nothing resolves.
 
 ### Fixed
+- Newly created model sets now appear immediately and cannot be erased by an
+  older in-flight refresh. A named set editor shows only that set's selected
+  models until search opens the full catalogue for additions. The console no
+  longer reserves a bottom keybind and message dock; transient status appears
+  in the page heading instead. Harness injection now advertises only canonical
+  `auto`, which follows the active set and strategy selected in Prowl, instead
+  of exporting every strategy and named-set override into client model pickers.
 - The unified console no longer accumulates deleted test and temporary
   workspaces as projects; registry reads now retain only resolvable indexes and
   compact stale or duplicate entries atomically. Browser OAuth now outlives the

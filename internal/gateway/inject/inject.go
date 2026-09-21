@@ -1,8 +1,7 @@
 // Package inject writes the gateway into a coding harness's own config so the
-// harness can route through it: a provider entry carrying only the routing
-// aliases (never the full catalogue - a picker full of providers the user
-// never configured is the opposite of smart routing), plus the live named sets
-// when a gateway is running.
+// harness can route through it: one canonical `auto` model that follows the
+// active set and strategy selected in Prowl. It deliberately never exports the
+// full catalogue, strategy overrides, or named-set overrides into model pickers.
 //
 // Every writer is additive and reversible: it manages one named key or one
 // marker-bounded block and records exactly what it changed, so `remove`
@@ -15,8 +14,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -46,14 +43,6 @@ const prowlAliasHarness = "prowl"
 // ProviderName is the display name in a model picker.
 const ProviderName = "Prowl"
 
-// Routing alias ids the gateway resolves. These are the axes
-// internal/gateway/chain.go's globalSortAliases actually answers, plus plain
-// "auto" - an alias a client can select but the router cannot resolve is a
-// lie in a picker, and Prowl shipped exactly that bug for months.
-var Aliases = []string{
-	"auto", "auto:smart", "auto:fast", "auto:cheap", "auto:reliable", "auto:balanced",
-}
-
 // Model is one picker entry: an id, a label and a conservative envelope. The
 // gateway enforces the real per-model limits at dispatch.
 type Model struct {
@@ -64,84 +53,16 @@ type Model struct {
 	MaxTokens   int    `json:"maxTokens" yaml:"maxTokens"`
 }
 
-// RoutingModels returns the alias models, richest first.
+// RoutingModels returns the single canonical route exposed in harness pickers.
+// Explicit auto:<strategy> and auto:<set> routes remain valid API overrides,
+// but Prowl's active set and strategy own normal harness routing.
 func RoutingModels() []Model {
-	names := map[string]string{
-		"auto":          "Auto (smart routing)",
-		"auto:smart":    "Auto - most capable",
-		"auto:fast":     "Auto - fastest",
-		"auto:cheap":    "Auto - cheapest",
-		"auto:reliable": "Auto - most reliable",
-		"auto:balanced": "Auto - balanced",
-	}
-	out := make([]Model, 0, len(Aliases))
-	for _, id := range Aliases {
-		out = append(out, Model{
-			ID: id, Name: ProviderName + " - " + names[id],
-			Context: 128_000, MaxTokens: 16_000,
-		})
-	}
-	return out
-}
-
-// DiscoverSets asks a running gateway which named sets it can route, so the
-// presets built in the TUI are selectable in the harness without editing any
-// config. A gateway that is not running yields nothing: the picker still
-// offers the axes above.
-func DiscoverSets(ctx context.Context, baseURL, token string) []Model {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		strings.TrimSuffix(baseURL, "/")+"/models", nil)
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil
-	}
-	var body struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body) != nil {
-		return nil
-	}
-	known := map[string]bool{}
-	for _, a := range Aliases {
-		known[a] = true
-	}
-	var out []Model
-	for _, entry := range body.Data {
-		if !strings.HasPrefix(entry.ID, "auto:") || known[entry.ID] {
-			continue
-		}
-		name := strings.TrimPrefix(entry.ID, "auto:")
-		if strings.EqualFold(name, "default") {
-			// Plain `auto` already routes the default chain.
-			continue
-		}
-		out = append(out, Model{
-			ID: entry.ID, Name: "Set: " + title(name),
-			Context: 128_000, MaxTokens: 16_000,
-		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out
-}
-
-func title(s string) string {
-	r := []rune(s)
-	if len(r) == 0 {
-		return s
-	}
-	return strings.ToUpper(string(r[0])) + string(r[1:])
+	return []Model{{
+		ID:        "auto",
+		Name:      ProviderName + " - Auto (active set + strategy)",
+		Context:   128_000,
+		MaxTokens: 16_000,
+	}}
 }
 
 // Target describes one injected harness for display and removal. Ledger is
@@ -159,7 +80,7 @@ type Options struct {
 	Home    string
 	BaseURL string // e.g. http://127.0.0.1:8788/v1
 	Token   string // the unified key or local token (both authenticate)
-	// Models are the picker entries; RoutingModels() plus DiscoverSets().
+	// Models are picker entries; normally the single RoutingModels() result.
 	Models []Model
 	// tx captures the immediate pre-apply bytes of every file this apply
 	// touches, so a failure rolls each file back to exactly its pre-apply

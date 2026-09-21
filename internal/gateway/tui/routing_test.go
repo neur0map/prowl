@@ -75,6 +75,9 @@ func TestRoutingSetEditEditsExactSetWithoutActivating(t *testing.T) {
 		t.Fatal("Enter on a set must open that set's editor, not the defaults")
 	}
 
+	// An empty set intentionally shows no rows until search opens the catalogue.
+	app.routing.list.startSearch()
+	app.routing.buildModelRows()
 	// Space toggles model 41 into the set and rewrites ordered membership.
 	app.routing.list.cursor = 0
 	if mo, ok := app.routing.list.selected().key.(ModelRow); !ok || mo.ID != 41 {
@@ -391,16 +394,76 @@ func TestBlankTemplateCreatesAnActuallyEmptySet(t *testing.T) {
 	defer server.Close()
 
 	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
+	app.routing.loaded = true
 	_ = app.routing.openCreateSet()
 	form, ok := app.overlay.(*formOverlay)
 	if !ok {
 		t.Fatalf("blank template opened %T; want naming form", app.overlay)
 	}
 	form.fields[0].input.SetValue("scratch")
-	if msg := form.submit(form.values()); request.Name != "scratch" {
+	msg := runCmd(t, form.submitCmd())
+	if request.Name != "scratch" {
 		t.Fatalf("create request name = %q after %T; want scratch", request.Name, msg)
-	} else if !request.Empty {
+	}
+	if !request.Empty {
 		t.Fatal("Start from scratch copied the default models instead of creating an empty set")
+	}
+
+	// The POST response must populate the list synchronously. The refresh command
+	// returned here is deliberately not run: visibility cannot depend on it.
+	_, _ = app.Update(msg)
+	selected := app.routing.list.selected()
+	choice, selectedCreatedSet := selected.key.(setChoice)
+	if !selectedCreatedSet || choice.id != 11 || choice.name != "scratch" {
+		t.Fatalf("created set was not immediately selected in the list: %#v", selected)
+	}
+	if app.overlay != nil {
+		t.Fatal("successful create left the naming form open")
+	}
+}
+
+func TestStaleRoutingRefreshCannotEraseNewlyCreatedSet(t *testing.T) {
+	app := New(&Client{}, true, "test")
+	m := &app.routing
+	m.loaded = true
+	m.data.routing.Strategy = "balanced"
+
+	_ = m.load() // generation 1 was already in flight when create completed.
+	_, _ = m.Update(setCreatedMsg{profile: Profile{ID: 11, Name: "scratch"}})
+	if m.loadGen != 2 {
+		t.Fatalf("post-create refresh generation = %d; want 2", m.loadGen)
+	}
+	_, _ = m.Update(routingLoadedMsg{
+		gen:     1,
+		routing: RoutingState{Strategy: "balanced"},
+	})
+	if len(m.data.profiles) != 1 || m.data.profiles[0].ID != 11 {
+		t.Fatalf("stale refresh erased the new set: %#v", m.data.profiles)
+	}
+}
+
+func TestSetEditorShowsOnlyMembersUntilSearch(t *testing.T) {
+	app := New(&Client{}, true, "test")
+	m := &app.routing
+	m.loaded = true
+	m.data.models = []ModelRow{
+		{ID: 41, Platform: "anthropic", DisplayName: "Claude Opus", Enabled: true, Available: true},
+		{ID: 42, Platform: "openai", DisplayName: "GPT Codex", Enabled: true, Available: true},
+	}
+	m.wantSetID = 7
+	m.Update(setEditLoadedMsg{id: 7, name: "coding", order: []int64{41}})
+
+	if len(m.list.rows) != 1 {
+		t.Fatalf("set editor shows %d rows; want its single selected model", len(m.list.rows))
+	}
+	if model, ok := m.list.rows[0].key.(ModelRow); !ok || model.ID != 41 {
+		t.Fatalf("set editor row = %#v; want member model 41", m.list.rows[0].key)
+	}
+
+	m.list.startSearch()
+	m.buildModelRows()
+	if len(m.list.rows) != 2 {
+		t.Fatalf("search shows %d rows; want the full two-model catalogue for adding", len(m.list.rows))
 	}
 }
 
@@ -452,56 +515,6 @@ func TestRoutingDeleteRequiresConfirmationAndCallsDelete(t *testing.T) {
 		}
 	} else {
 		t.Fatal("confirmed delete never called DELETE /api/profiles/9")
-	}
-}
-
-func TestRoutingDeleteWorksThroughPointerFooterAndConfirmation(t *testing.T) {
-	deleted := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && r.URL.Path == "/api/profiles/9" {
-			deleted = true
-			_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer server.Close()
-
-	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.tab = TabRouting
-	app.routing.loaded = true
-	app.routing.data.profiles = []Profile{{ID: 9, Name: "throwaway"}}
-	app.routing.buildRows()
-	app.routing.list.selectRow(setChoice{id: 9, name: "throwaway"})
-	_, _ = app.Update(tea.WindowSizeMsg{Width: 220, Height: 36})
-	_ = app.View()
-
-	var deleteHit *hitRegion
-	for i := range app.hits {
-		if app.hits[i].kind == hitAction && app.hits[i].key == "d" {
-			deleteHit = &app.hits[i]
-			break
-		}
-	}
-	if deleteHit == nil {
-		t.Fatal("rendered footer did not expose a clickable Delete action")
-	}
-	_, _ = app.Update(tea.MouseClickMsg{X: deleteHit.x, Y: deleteHit.y})
-	confirm, ok := app.overlay.(*confirmOverlay)
-	if !ok {
-		t.Fatalf("Delete click opened %T; want confirmation", app.overlay)
-	}
-	_ = app.View() // records the rendered Remove button hit target
-	_, cmd := app.Update(tea.MouseClickMsg{X: confirm.yesHit.x, Y: confirm.yesHit.y})
-	if cmd == nil {
-		t.Fatal("clicking rendered Remove produced no delete command")
-	}
-	msg := cmd()
-	if _, ok := msg.(doneMsg); !ok {
-		t.Fatalf("pointer-confirmed delete produced %T; want doneMsg", msg)
-	}
-	if !deleted {
-		t.Fatal("pointer-confirmed delete never called DELETE /api/profiles/9")
 	}
 }
 

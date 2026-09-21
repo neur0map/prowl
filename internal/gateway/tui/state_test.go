@@ -35,6 +35,29 @@ func TestClearedToastDoesNotRearmTimer(t *testing.T) {
 	}
 }
 
+func TestConsoleOmitsKeybindFooterAndRendersToastInHeading(t *testing.T) {
+	app := New(&Client{}, true, "test")
+	app.ready = true
+	app.width = 100
+	app.height = 30
+
+	view := ansi.Strip(app.View().Content)
+	for _, unwanted := range []string{"ctrl+r Reload", "? Help", "q Quit"} {
+		if strings.Contains(view, unwanted) {
+			t.Fatalf("console still renders persistent footer action %q", unwanted)
+		}
+	}
+	if app.bodyH != 22 {
+		t.Fatalf("body height = %d; want all 22 rows below header and heading", app.bodyH)
+	}
+
+	app.toast = toastMsg{Text: "model set created", Kind: "ok"}
+	lines := strings.Split(ansi.Strip(app.pageHeading()), "\n")
+	if len(lines) != 3 || !strings.Contains(lines[2], "model set created") {
+		t.Fatalf("toast did not replace the heading rule: %q", lines)
+	}
+}
+
 // TestExpiredRevealDoesNotRearmTimer: a reveal that arrives already expired (a
 // zero deadline) must hide the secret and schedule nothing - a tick on a past
 // deadline would fire immediately and rearm forever.

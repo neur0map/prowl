@@ -15,10 +15,10 @@ import (
 )
 
 // Setup is the finish line: pick the coding harnesses this machine runs, and
-// the console writes the gateway provider (routing aliases only - never the
-// raw catalogue) plus Prowl's skills/rules into each one's own config,
-// with a ledger so it is exactly reversible. The checklist on Overview flips
-// as rows here go green.
+// the console writes the gateway provider (canonical `auto` only, never the raw
+// catalogue or override routes) plus Prowl's skills/rules into each one's own
+// config, with a ledger so it is exactly reversible. The checklist on Overview
+// flips as rows here go green.
 
 type setupLoadedMsg struct {
 	supported []string
@@ -138,7 +138,7 @@ func (m *setupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Home:    c.Home,
 					BaseURL: c.BaseURL + "/v1",
 					Token:   key,
-					Models:  m.modelsFor(ctx, c),
+					Models:  inject.RoutingModels(),
 				}
 				t, err := inject.Apply(opts, harness)
 				if err != nil {
@@ -222,16 +222,6 @@ func setupSkillsResult(res setup.UserApplyResult, conflicts int) tea.Msg {
 		}
 		return doneMsg{Tab: TabSetup, Text: text}
 	}
-}
-
-// modelsFor asks the running gateway which sets it routes, so presets built
-// in the TUI land in the harness picker too (the axes are static).
-func (m *setupModel) modelsFor(ctx context.Context, c *Client) []inject.Model {
-	models := inject.RoutingModels()
-	if sets := inject.DiscoverSets(ctx, c.BaseURL+"/v1", c.Token); len(sets) > 0 {
-		models = append(models, sets...)
-	}
-	return models
 }
 
 func (m *setupModel) buildRows() {

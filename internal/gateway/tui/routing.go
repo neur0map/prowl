@@ -17,6 +17,7 @@ import (
 // and provider visibility so the primary list remains short and predictable.
 
 type routingLoadedMsg struct {
+	gen      uint64
 	routing  RoutingState
 	profiles []Profile
 	activeID int64
@@ -43,6 +44,13 @@ type setEditLoadedMsg struct {
 	err   error
 }
 
+// setCreatedMsg carries the server-created set back to the routing screen so
+// it can appear immediately, before the authoritative refresh completes.
+type setCreatedMsg struct {
+	profile Profile
+	op      uint64
+}
+
 // profileMember is the slice of /api/profiles/{id}/models the editor reads:
 // the ordered member ids, including globally disabled members so a reorder
 // never silently drops one.
@@ -60,12 +68,13 @@ type reorderReq struct {
 }
 
 type routingModel struct {
-	app    *App
-	width  int
-	height int
-	list   list
-	data   routingLoadedMsg
-	loaded bool
+	app     *App
+	width   int
+	height  int
+	list    list
+	data    routingLoadedMsg
+	loaded  bool
+	loadGen uint64
 
 	// defaultModels edits the global fallback selection used when no named set
 	// is active. A specific set uses setID/setMembers instead.
@@ -104,11 +113,13 @@ func (m *routingModel) setSize(w, h int) {
 func (m *routingModel) editing() bool { return m.defaultModels || m.setID != 0 }
 
 func (m *routingModel) load() tea.Cmd {
+	m.loadGen++
+	gen := m.loadGen
 	c := m.app.Client
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		var out routingLoadedMsg
+		out := routingLoadedMsg{gen: gen}
 		var routing RoutingState
 		if err := c.Get(ctx, "/api/fallback/routing", &routing); err != nil {
 			out.err = err
@@ -155,6 +166,9 @@ func (m *routingModel) load() tea.Cmd {
 func (m *routingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case routingLoadedMsg:
+		if msg.gen != m.loadGen {
+			return m, nil
+		}
 		if !msg.complete() && m.loaded {
 			// Reject a partial or failed refresh: keep the good snapshot rather
 			// than blanking the editor, and surface a transient error as a toast.
@@ -169,6 +183,23 @@ func (m *routingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = ""
 		m.buildRows()
 		return m, nil
+
+	case setCreatedMsg:
+		found := false
+		for i := range m.data.profiles {
+			if m.data.profiles[i].ID == msg.profile.ID {
+				m.data.profiles[i] = msg.profile
+				found = true
+				break
+			}
+		}
+		if !found {
+			m.data.profiles = append(m.data.profiles, msg.profile)
+		}
+		m.loaded = true
+		m.buildRows()
+		m.list.selectRow(setChoice{id: msg.profile.ID, name: msg.profile.Name})
+		return m, m.load()
 
 	case setEditLoadedMsg:
 		// A late set-editor result must not reopen an editor the operator left
@@ -616,7 +647,7 @@ func (m *routingModel) openCreateSet() tea.Cmd {
 		if err := c.Post(ctx, "/api/profiles", map[string]any{"name": values[0], "empty": true}, &out); err != nil {
 			return errMsg{Screen: "routing", Err: err}
 		}
-		return doneMsg{Tab: TabRouting, Text: "model set created - Enter to choose models, Space to activate"}
+		return setCreatedMsg{profile: out}
 	}
 	m.app.overlay = f
 	return f.Init()
@@ -816,6 +847,9 @@ func (m *routingModel) buildModelRows() {
 	searching := m.list.isSearching() || strings.TrimSpace(m.list.filter) != ""
 	rows := make([]row, 0, len(m.data.models))
 	for _, model := range m.data.models {
+		if m.setID != 0 && !searching && !m.setMembers[model.ID] {
+			continue
+		}
 		if !searching {
 			switch m.providerMode {
 			case providerScopeActive:
@@ -909,10 +943,12 @@ func (m *routingModel) buildModelRows() {
 	}
 	m.list.empty = ""
 	if len(rows) == 0 && !searching {
-		switch m.providerMode {
-		case providerScopeActive:
+		switch {
+		case m.setID != 0:
+			m.list.empty = "This set has no selected models in the current view. Press / to find and add one."
+		case m.providerMode == providerScopeActive:
 			m.list.empty = "No active providers yet. Press p to browse all, or connect an account."
-		case providerScopeCustom:
+		case m.providerMode == providerScopeCustom:
 			m.list.empty = "The selected providers have no models. Press p to change the selection."
 		default:
 			m.list.empty = "No models are available yet. Connect a provider or account first."
@@ -1093,18 +1129,20 @@ func (m *routingModel) setActivityLabel() string {
 func (m *routingModel) setEditBanner() string {
 	name := m.setName
 	state := stFaint.Render("Saved but inactive; edits do not change current routing.")
+	scope := "Only selected models are shown; / searches every model to add one."
 	if m.setID == 0 {
 		name = "Default models"
 		state = stGood.Render("Active whenever no named model set is selected.")
+		scope = "/ searches every model outside the current provider view."
 	} else if m.setID == m.data.activeID {
 		state = stGood.Render("Active now; model changes take effect immediately.")
 	}
 	return fmt.Sprintf(
-		"Editing %s. %s selects a model; %s chooses visible providers; %s searches every model. %s returns.\n%s",
+		"Editing %s. %s %s selects a model; %s chooses visible providers; %s returns.\n%s",
 		stHead.Render(name),
+		scope,
 		stKey.Render("Space"),
 		stKey.Render("p"),
-		stKey.Render("/"),
 		stKey.Render("Esc"),
 		state,
 	)

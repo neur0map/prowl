@@ -12,18 +12,18 @@ import (
 //
 // Three more harnesses that route through the gateway, each written the same
 // additive, ledger-reversible way as the writers in writers.go: a single named
-// provider carrying only the routing aliases, never the free catalogue. Pi and
-// OpenClaw keep a native OpenAI-compatible provider map in JSON; Hermes keeps a
-// YAML provider mapping. Every writer records exactly what it changed so Remove
-// reverts that and nothing a user has since edited.
+// provider carrying only the canonical `auto` route, never the free catalogue.
+// Pi and OpenClaw keep a native OpenAI-compatible provider map in JSON; Hermes
+// keeps a YAML provider mapping. Every writer records exactly what it changed
+// so Remove reverts that and nothing a user has since edited.
 
 // ── Pi ────────────────────────────────────────────────────────────────────────
 //
 // Pi reads custom providers from ~/.pi/agent/models.json: a top-level
 // `providers` map whose entries carry baseUrl, api (openai-completions), apiKey,
-// authHeader and an explicit `models` array. Routing-only on purpose - the file
-// declares just the auto* aliases, so Pi's `/model` picker offers the gateway's
-// axes instead of pulling a whole free catalogue in.
+// authHeader and an explicit `models` array. Routing-only on purpose: the file
+// declares only `auto`, so Pi's `/model` picker follows the set and strategy
+// selected in Prowl instead of duplicating its internal controls.
 
 type piWriter struct{}
 
@@ -164,9 +164,9 @@ func removeJSONProvider(home, harness, path string) (Target, error) {
 	return t, nil
 }
 
-// compatModels renders the routing aliases as OpenAI-compatible model entries,
-// the shape Pi and OpenClaw both accept. Text-only: these are routing axes, not
-// vision models, and marking them so keeps the picker honest.
+// compatModels renders the canonical route as OpenAI-compatible model entries,
+// the shape Pi and OpenClaw both accept. Text-only: this is a routing target,
+// not a vision model, and marking it so keeps the picker honest.
 func compatModels(models []Model) []map[string]any {
 	out := make([]map[string]any, 0, len(models))
 	for _, m := range models {
@@ -185,11 +185,10 @@ func compatModels(models []Model) []map[string]any {
 //
 // Hermes reads a `providers` YAML mapping from ~/.hermes/config.yaml. The block
 // carries the endpoint (api), the key (api_key), discover_models:false - so
-// Hermes routes only the aliases we list instead of probing /models for a whole
-// catalogue - and the auto* routing aliases themselves. config.yaml is
-// hand-edited, so this writer manages exactly the `prowl:` block: it reuses the
-// same text-surgical YAML provider-block helpers as the OMP writer, leaving
-// every other key byte-identical.
+// Hermes routes only the canonical `auto` model instead of probing /models for
+// a whole catalogue. config.yaml is hand-edited, so this writer manages exactly
+// the `prowl:` block: it reuses the same text-surgical YAML provider-block
+// helpers as the OMP writer, leaving every other key byte-identical.
 
 type hermesWriter struct{}
 

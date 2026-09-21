@@ -64,7 +64,7 @@ func TestListPointerMotionTracksHoveredRow(t *testing.T) {
 	}
 }
 
-func TestPointerNavigationAndActionOverflow(t *testing.T) {
+func TestPointerNavigation(t *testing.T) {
 	app := New(&Client{BaseURL: "http://127.0.0.1:8788"}, true, "test")
 	_, _ = app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	_ = app.View()
@@ -84,23 +84,6 @@ func TestPointerNavigationAndActionOverflow(t *testing.T) {
 		t.Fatalf("tab = %v; want Providers", app.tab)
 	}
 
-	app.tab = TabKeys
-	app.applyLayout()
-	_ = app.View()
-	var moreHit *hitRegion
-	for i := range app.hits {
-		if app.hits[i].kind == hitAction && app.hits[i].key == "__more__" {
-			moreHit = &app.hits[i]
-			break
-		}
-	}
-	if moreHit == nil {
-		t.Fatal("overflowed actions have no More pointer target")
-	}
-	_, _ = app.Update(tea.MouseClickMsg{X: moreHit.x, Y: moreHit.y})
-	if _, ok := app.overlay.(*actionOverlay); !ok {
-		t.Fatalf("overlay = %T; want actionOverlay", app.overlay)
-	}
 }
 
 func TestFormPointerMovesFocusAndCancels(t *testing.T) {
@@ -307,9 +290,6 @@ func TestShellNeverWrapsTerminalEdge(t *testing.T) {
 		if got := lipgloss.Width(line); got >= width {
 			t.Fatalf("row %d width = %d; want less than terminal width %d", i, got, width)
 		}
-	}
-	if top := strings.TrimSpace(ansi.Strip(lines[height-3])); !strings.HasSuffix(top, "╮") {
-		t.Fatalf("action dock lost rounded corner: %q", top)
 	}
 }
 

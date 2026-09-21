@@ -92,25 +92,27 @@ A **model** is a concrete candidate such as `openai/gpt-5.6-codex` or
 it removes it from every automatic route. Selecting a concrete model ID in a
 client pins that request to that model.
 
-A **route** decides how to order and fail over among enabled candidates:
+A **route** decides which eligible model is tried first and how failover is
+ordered:
 
-- `auto` uses the active set and its configured strategy.
-- `auto:smart` classifies each prompt and orders candidates for that request.
-- `auto:fast`, `auto:reliable`, and `auto:balanced` select an explicit global
-  ordering axis.
-- `auto:<set>` uses a named, operator-curated candidate set.
+- `auto` uses the active set and the strategy selected in Prowl.
+- `auto:smart`, `auto:fast`, `auto:cheap`, `auto:reliable`, and
+  `auto:balanced` are explicit per-request overrides. They order the whole
+  enabled catalogue by that axis instead of using the active set and strategy.
+- `auto:<set>` explicitly uses that named set instead of the active set, while
+  retaining the strategy selected in Prowl.
 
-Sets answer **which models may be tried**. Routing answers **which eligible
+Sets answer **which models may be tried**. The strategy answers **which eligible
 model should be tried first for this prompt**. Provider/key health, quota,
-cooldowns, and context limits remain hard gates. User choices remain
-canonical: smart routing never silently enables a disabled model or escapes the
-selected set.
+cooldowns, and context limits remain hard gates. User choices remain canonical:
+smart routing never silently enables a disabled model or escapes the selected
+set.
 
 On **Models**, `Enter` edits a set and `Space` activates a set or toggles a
-model's membership, depending on context. `n` opens grouped templates, `s`
-opens routing strategies, and `p` opens a checkbox provider picker. The editor
-starts with active providers only; `/` deliberately searches the complete
-catalogue, including providers outside the current view.
+model's membership, depending on context. The set editor initially shows only
+that set's selected models; `/` deliberately searches the complete catalogue
+when adding another model. `n` opens grouped templates, `s` opens routing
+strategies, and `p` opens a checkbox provider picker.
 
 ## Subscription accounts and multiple models
 
@@ -212,8 +214,8 @@ read from `ARTIFICIAL_ANALYSIS_API_KEY`; it is never persisted or displayed.
 
 ## Use the gateway from coding tools
 
-Start a persistent loopback gateway and inject only routing aliases into the
-clients you use:
+Start a persistent loopback gateway and inject its canonical `auto` route into
+the clients you use:
 
 ```sh
 prowl gateway up
@@ -262,10 +264,11 @@ Pi requires each skill directly below its `skills/` directory. Hermes and
 OpenClaw discover the grouped recursive trees shown above. Prowl Legacy keeps
 the config and data roots it owned before the rename; detection uses the
 `prowl-legacy` launcher, never the current `prowl` product binary. Injection
-advertises only `auto`, `auto:*`, and named routing sets; it never floods a
-harness picker with Prowl's entire provider catalogue. Re-running either
-command is safe, and the corresponding removal path reverts only bytes Prowl
-still owns.
+advertises only `auto`, so every harness follows the active set and strategy
+selected in Prowl without duplicating Prowl's internal controls. Explicit
+`auto:<strategy>` and `auto:<set>` routes remain available to API clients that
+intentionally request an override. Re-running either command is safe, and the
+corresponding removal path reverts only bytes Prowl still owns.
 
 ## Code intelligence
 

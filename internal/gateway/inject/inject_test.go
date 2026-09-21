@@ -256,18 +256,14 @@ func TestRemoveWithoutRecordRefuses(t *testing.T) {
 func TestModelsListIsRoutingOnly(t *testing.T) {
 	t.Parallel()
 	models := RoutingModels()
-	seen := map[string]bool{}
-	for _, m := range models {
-		if seen[m.ID] {
-			t.Fatalf("duplicate model id %q in the picker list", m.ID)
-		}
-		seen[m.ID] = true
-		if !strings.HasPrefix(m.ID, "auto") {
-			t.Errorf("picker offers %q, which is not a routing alias", m.ID)
-		}
+	if len(models) != 1 {
+		t.Fatalf("picker models = %#v; want exactly the canonical auto route", models)
 	}
-	if !seen["auto"] || !seen["auto:cheap"] || !seen["auto:balanced"] {
-		t.Errorf("routing axes missing: %v", seen)
+	if models[0].ID != "auto" {
+		t.Fatalf("picker model id = %q; want auto", models[0].ID)
+	}
+	if !strings.Contains(strings.ToLower(models[0].Name), "active set + strategy") {
+		t.Fatalf("picker label %q does not explain what controls auto", models[0].Name)
 	}
 }
 
@@ -494,32 +490,13 @@ func aliasIDs(t *testing.T, harness, cfg string) []string {
 	return ids
 }
 
-// assertAliasesOnly proves the picker exposes exactly the auto* routing aliases
-// and nothing else - no catalogue model leaked in.
+// assertAliasesOnly proves the picker exposes exactly the canonical `auto`
+// route and nothing else: no catalogue, strategy override, or named set.
 func assertAliasesOnly(t *testing.T, harness, cfg string) {
 	t.Helper()
 	ids := aliasIDs(t, harness, cfg)
-	if len(ids) == 0 {
-		t.Fatalf("%s wrote no models:\n%s", harness, cfg)
-	}
-	want := map[string]bool{}
-	for _, m := range RoutingModels() {
-		want[m.ID] = true
-	}
-	seen := map[string]bool{}
-	for _, id := range ids {
-		if !strings.HasPrefix(id, "auto") {
-			t.Errorf("%s picker offers %q, which is not a routing alias", harness, id)
-		}
-		if !want[id] {
-			t.Errorf("%s picker offers unexpected model %q", harness, id)
-		}
-		seen[id] = true
-	}
-	for id := range want {
-		if !seen[id] {
-			t.Errorf("%s picker is missing routing alias %q", harness, id)
-		}
+	if len(ids) != 1 || ids[0] != "auto" {
+		t.Fatalf("%s picker models = %v; want exactly [auto]\n%s", harness, ids, cfg)
 	}
 }
 
