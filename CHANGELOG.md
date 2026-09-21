@@ -319,6 +319,8 @@ All notable changes are recorded here. The format follows
   in the page heading instead. Harness injection now advertises only canonical
   `auto`, which follows the active set and strategy selected in Prowl, instead
   of exporting every strategy and named-set override into client model pickers.
+  Re-injection also removes both retired OMP provider identities so an older
+  block cannot keep duplicate routes visible.
 - The unified console no longer accumulates deleted test and temporary
   workspaces as projects; registry reads now retain only resolvable indexes and
   compact stale or duplicate entries atomically. Browser OAuth now outlives the

@@ -31,6 +31,10 @@ const ProviderID = "prowl"
 // the former prowl-agent product name.
 const legacyProviderID = "prowl-agent-gateway"
 
+// legacyGatewayProviderID is the older pre-rename spelling found in the
+// original OMP gateway setup. It is migration-only and never written.
+const legacyGatewayProviderID = "prowl-gateway"
+
 // prowlLegacyHarness is the harness id for the standalone Prowl-legacy CLI,
 // whose model picker reads ~/.local/share/prowl/prowl.json.
 const prowlLegacyHarness = "prowl-legacy"

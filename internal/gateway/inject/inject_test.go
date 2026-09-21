@@ -202,7 +202,7 @@ func TestApplyMigratesLegacyProviderIdentity(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(ompPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	legacyOMP := "providers:\n  prowl-agent-gateway:\n    baseUrl: http://old/v1\n    models: []\n  other:\n    baseUrl: http://other/v1\n"
+	legacyOMP := "providers:\n  prowl-agent-gateway:\n    baseUrl: http://old/v1\n    models: []\n  prowl-gateway:\n    baseUrl: http://older/v1\n    models:\n      - auto\n      - auto:smart\n  other:\n    baseUrl: http://other/v1\n"
 	if err := os.WriteFile(ompPath, []byte(legacyOMP), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -211,6 +211,7 @@ func TestApplyMigratesLegacyProviderIdentity(t *testing.T) {
 	}
 	migratedOMP := read(t, ompPath)
 	if strings.Contains(migratedOMP, "prowl-agent-gateway:") ||
+		strings.Contains(migratedOMP, "prowl-gateway:") ||
 		strings.Count(migratedOMP, "  prowl:") != 1 ||
 		!strings.Contains(migratedOMP, "  other:") {
 		t.Fatalf("OMP provider migration was not clean:\n%s", migratedOMP)

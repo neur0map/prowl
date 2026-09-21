@@ -18,10 +18,6 @@ import (
 
 func (o Options) ompPath() string { return filepath.Join(o.Home, ".omp", "agent", "models.yml") }
 
-const ompHeader = "# Managed by Prowl: the local smart-routing gateway.\n" +
-	"# Select prowl/auto (or an auto:* bias, or a Set: entry) -\n" +
-	"# the gateway picks the provider and model per request and fails over.\n"
-
 type ompWriter struct{}
 
 func (ompWriter) apply(o Options) (Target, error) {
@@ -44,9 +40,14 @@ func (ompWriter) apply(o Options) (Target, error) {
 		return Target{}, err
 	default:
 		text := string(raw)
-		// Replace the provider key written before the product rename rather
-		// than leaving two Prowl entries in the model picker.
-		if start, end, ok := ompBlockRangeFor(text, legacyProviderID); ok {
+		// Replace either provider key written before the product rename rather
+		// than leaving duplicate Prowl entries in the model picker. Loop because
+		// a machine can carry both generations after repeated old injections.
+		for {
+			start, end, ok := ompBlockRangeFor(text, legacyProviderID, legacyGatewayProviderID)
+			if !ok {
+				break
+			}
 			text = text[:start] + text[end:]
 		}
 		if start, end, ok := ompBlockRange(text); ok {
@@ -108,7 +109,7 @@ func (ompWriter) remove(home, harness string) (Target, error) {
 		t.Note = "removed the models.yml we created"
 		return t, nil
 	}
-	newText, outcome := reviseYAMLBlock(string(raw), e, ProviderID, legacyProviderID)
+	newText, outcome := reviseYAMLBlock(string(raw), e, ProviderID, legacyProviderID, legacyGatewayProviderID)
 	switch outcome {
 	case blockAbsent:
 		t.Note = "the gateway block is not present (already removed or renamed?)"
