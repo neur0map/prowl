@@ -119,7 +119,7 @@ func (r *Repository) Lint(sourceRoot string, resolve SymbolResolver) ([]Finding,
 			case AnchorMoved:
 				findings = append(findings, Finding{
 					Code: "knowledge.moved_anchor", Severity: "info", Path: doc.Path,
-					Message: fmt.Sprintf("%s:%d-%d is intact at lines %d-%d; run `prowl-agent knowledge lint --repair` to update the anchor",
+					Message: fmt.Sprintf("%s:%d-%d is intact at lines %d-%d; run `prowl knowledge lint --repair` to update the anchor",
 						anchor.Path, anchor.LineStart, anchor.LineEnd, check.MovedStart, check.MovedEnd),
 				})
 			case AnchorMissing:

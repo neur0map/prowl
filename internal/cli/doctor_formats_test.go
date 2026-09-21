@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
+	"github.com/neur0map/prowl/internal/doctor"
 )
 
 func TestRenderDoctorSARIF(t *testing.T) {

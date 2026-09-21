@@ -17,7 +17,7 @@ never summarize omitted units away.
 ## Route and capture
 
 Start with the native plan command whose complete syntax is
-`prowl-agent review plan [--base ref --head ref | --commit ref] [--structured]`.
+`prowl review plan [--base ref --head ref | --commit ref] [--structured]`.
 Use no scope flags for the current workspace, `--base` and `--head` together for
 a branch or pull-request range, or `--commit` for one non-merge commit.
 
@@ -40,7 +40,7 @@ recommendation is presented.
    Respect dependency layers. Independent cohorts may be reviewed in parallel,
    but each reviewer remains responsible for explicit receipts.
 3. Fetch one bounded unit at a time with
-   `prowl-agent review unit <review-id>/<unit-id> [--budget-tokens N --budget-bytes N]`.
+   `prowl review unit <review-id>/<unit-id> [--budget-tokens N --budget-bytes N]`.
    Review its complete owned patch ranges, before/after symbols, graph context,
    attention signals, questions, omissions, and citations. Use only the packet's
    progressive-disclosure commands when more context is necessary; never load
@@ -79,7 +79,7 @@ recommendation is presented.
    disposition `confirmed`, `plausible`, `rejected`, or `unverified`; a rejection
    also needs a typed reason and supporting citations.
 9. Build the canonical report and run
-   `prowl-agent review check --review <id> --report <regular-file|->`.
+   `prowl review check --review <id> --report <regular-file|->`.
 10. If the checker names concrete missing IDs, review those exact gaps, update
     receipts, and check again. Do not start a recursive general re-review.
 

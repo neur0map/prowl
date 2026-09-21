@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/sketch"
+	"github.com/neur0map/prowl/internal/sketch"
 )
 
 // newSketchCmd renders a compact visual sketch of a UI component: its element

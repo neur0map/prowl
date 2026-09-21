@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/review"
+	"github.com/neur0map/prowl/internal/agenttrial"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/review"
 )
 
 func TestBuildOrderIsCompleteReproducibleAndBalanced(t *testing.T) {
@@ -110,7 +110,7 @@ func TestCollectLoadsPrivateClaudePluginAndScoreDoesNotRerunTrials(t *testing.T)
 			if len(config.PluginDirs) != 0 || len(config.Skills) != 0 {
 				t.Fatalf("Claude control received treatment assets: plugins %v skills %v", config.PluginDirs, config.Skills)
 			}
-			guard, err := os.ReadFile(filepath.Join(config.ConfigDir, "bin", "prowl-agent"))
+			guard, err := os.ReadFile(filepath.Join(config.ConfigDir, "bin", "prowl"))
 			if err != nil || !strings.Contains(string(guard), "unavailable in the control condition") {
 				t.Fatalf("control guard missing: %v %q", err, guard)
 			}
@@ -229,12 +229,12 @@ func TestPreparedRepoPreflightRejectsReviewChurnBoundary(t *testing.T) {
 
 func TestResolveExecutableUsesPathAndRecordsVersionAndHash(t *testing.T) {
 	directory := t.TempDir()
-	executable := filepath.Join(directory, "prowl-agent")
+	executable := filepath.Join(directory, "prowl")
 	if err := os.WriteFile(executable, []byte("#!/bin/sh\necho 'prowl deterministic'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", directory)
-	identity, err := resolveExecutable(context.Background(), "prowl", "prowl-agent")
+	identity, err := resolveExecutable(context.Background(), "prowl", "prowl")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,7 +360,7 @@ func TestCheckerArtifactsRequireStrictBoundProwlEvidence(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	prowl := filepath.Join(t.TempDir(), "prowl-agent")
+	prowl := filepath.Join(t.TempDir(), "prowl")
 	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'prowl 1'; exit 0; fi\ncat artifacts/check.json\n"
 	if err := os.WriteFile(prowl, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -539,7 +539,7 @@ func validStructuredReviewArtifacts(t *testing.T, baseSHA, headSHA string) (revi
 		ChangedPaths: []review.PlanPath{{PathID: pathID.Public, OldPath: pathName, NewPath: pathName, Status: "M", ReviewClass: string(review.ReviewClassFull), Coverage: string(review.PathCoverageFull), Roles: []string{review.RoleImplementation}}},
 		Cohorts:      []review.PlanCohort{{CohortID: cohortID.Public, Label: cohortLabel, Layers: []review.PlanLayer{{LayerID: layerID.Public, Ordinal: 0, UnitIDs: []string{unitID.Public}}}, UnitIDs: []string{unitID.Public}}},
 		PrimaryUnits: []review.Unit{unit},
-		NextCommands: []review.NextCommand{{Label: "check", Command: "prowl-agent review check"}},
+		NextCommands: []review.NextCommand{{Label: "check", Command: "prowl review check"}},
 	}
 	report := review.Report{
 		Schema: review.ReportSchemaV1, ReviewID: reviewID, PlanDigest: plan.PlanDigest, Base: base, Head: head, Recommendation: "approve",

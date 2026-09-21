@@ -10,8 +10,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/selfupdate"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/selfupdate"
 )
 
 // Card geometry. Content is laid out to exactly cardW columns so nothing wraps
@@ -254,7 +254,7 @@ func renderStatusCard(version, root, name string, st query.Status, upd selfupdat
 	var L []string
 
 	// Header: name, version, and home-relative path.
-	L = append(L, stTitle.Render("prowl-agent")+"  "+stFaint.Render(cleanVersion(version)))
+	L = append(L, stTitle.Render("prowl")+"  "+stFaint.Render(cleanVersion(version)))
 	L = append(L, stName.Render(truncate(name, cardW)))
 	L = append(L, stFaint.Render(truncateLeft(collapseHome(root), cardW)))
 	L = append(L, "")
@@ -325,7 +325,7 @@ func renderStatusCard(version, root, name string, st query.Status, upd selfupdat
 	L = append(L, "")
 	switch {
 	case upd.Available:
-		L = append(L, stWarn.Render("● update available")+stFaint.Render("  ·  run ")+stNum.Render("prowl-agent update"))
+		L = append(L, stWarn.Render("● update available")+stFaint.Render("  ·  run ")+stNum.Render("prowl update"))
 	case upd.Checked:
 		L = append(L, stGood.Render("●")+stFaint.Render(" up to date"))
 	}

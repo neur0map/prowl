@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse"
+	"github.com/neur0map/prowl/internal/parse"
 )
 
 // thresholdTextPrefixV1 is the NUL-scan prefix ThresholdTextV1 inspects on each

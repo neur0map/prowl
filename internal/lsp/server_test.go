@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/doctor"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func newTestServer(t *testing.T) (*Server, string) {
@@ -249,7 +249,7 @@ func TestPublishDiagnostics(t *testing.T) {
 	if len(note.Params.Diagnostics) == 0 {
 		t.Errorf("expected diagnostics for %s", ff)
 	}
-	if d := note.Params.Diagnostics; len(d) > 0 && d[0].Source != "prowl-agent" {
+	if d := note.Params.Diagnostics; len(d) > 0 && d[0].Source != "prowl" {
 		t.Errorf("diagnostic source = %q", d[0].Source)
 	}
 }

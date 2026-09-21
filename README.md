@@ -1,465 +1,368 @@
-# Prowl Agent
+# Prowl
 
-**Your coding agent greps the repo and re-reads the same files on every turn to rebuild context it already threw away. Prowl indexes the project once and answers those questions in a single command, cited to `file:line`, for a fraction of the tokens.**
-
-[![ci](https://github.com/neur0map/prowl-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/neur0map/prowl-agent/actions/workflows/ci.yml)
-[![version](https://img.shields.io/github/v/release/neur0map/prowl-agent?label=version&color=89b4fa)](https://github.com/neur0map/prowl-agent/releases/latest)
+[![ci](https://github.com/neur0map/prowl/actions/workflows/ci.yml/badge.svg)](https://github.com/neur0map/prowl/actions/workflows/ci.yml)
+[![version](https://img.shields.io/github/v/release/neur0map/prowl?label=version&color=89b4fa)](https://github.com/neur0map/prowl/releases/latest)
 [![platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-555)](#install)
 
-Prowl builds a small SQLite index of your project: the files, the symbols inside
-them, and how they wire together. Your agent runs one command and gets a short,
-exact, cited answer instead of a wall of grep hits. Answers come back in
-[TOON](https://toonformat.dev), which models read for roughly 40% fewer tokens
-than JSON. No server, no daemon, nothing leaves your machine.
+Prowl is one local tool for two related jobs:
 
-That is the whole pitch. It is not a chat wrapper, an autonomous agent, or a
-graph you stare at. It is the index your agent should have asked first.
+1. **Code intelligence** - a cited SQLite index of a repository's files,
+   symbols, relationships, documentation, and durable project knowledge.
+2. **Model routing** - an optional loopback AI gateway that joins API keys and
+   subscription accounts into a healthy, explainable model pool.
 
-```console
-$ prowl-agent find NewGui            # exact hits with signatures, all cited
-[4]{end_line,file,id,kind,line,name,signature}:
-  266,pkg/gocui/gui.go,2709,function,212,NewGui,"func NewGui(opts NewGuiOpts) (*Gui, error)"
-  799,pkg/gui/gui.go,4977,function,723,NewGui,"func NewGui( cmn *common.Common, configurer config.AppConfigurer, ... )"
-  44,pkg/commands/oscommands/gui_io.go,2314,function,32,NewGuiIO,"func NewGuiIO( log *logrus.Entry, ... ) *guiIO"
-  209,pkg/gocui/gui.go,2708,type,198,NewGuiOpts,"NewGuiOpts struct { OutputMode OutputMode ... }"
+Run `prowl` with no subcommand to open the unified terminal interface. It shows
+project index status, providers, credentials, subscription accounts, models,
+routing decisions, activity, setup, and a copyable map of Prowl's commands. No
+web dashboard or pre-existing background service is required.
 
-$ prowl-agent impact pkg/gui/gui.go  # who breaks if I touch this file
-total: 7
-direct: 2
-by_subsystem[5]{count,subsystem}:
-  2,pkg/cheatsheet
-  2,pkg/integration
-  ...
+The earlier agent harness that used the `prowl` name is preserved as
+`prowl-legacy`. The current product binary is `prowl`; the old `prowl-agent`
+command name is retired.
+
+## Quick start
+
+```sh
+# Install the current release.
+curl -fsSL https://raw.githubusercontent.com/neur0map/prowl/main/install.sh | sh
+
+# Index and configure a project. This performs the first real index.
+cd /path/to/project
+prowl init
+
+# Open the unified console.
+prowl
 ```
 
-The grep version of the first question dumps a hit list, then the agent opens
-each file to find the right `NewGui` and read its signature: kilobytes to tens of
-kilobytes just to locate one symbol. Prowl answers in under a kilobyte and hands
-the agent each signature inline, so it knows which one to call without opening a
-file.
+`prowl init` creates or refreshes `.prowl/`, builds lexical, structural, and
+semantic indexes, registers the project, and previews the selected harness and
+editor integrations before writing them. Re-running it incrementally indexes
+what changed; it does not reset project choices.
+
+Non-interactive setup is available for provisioning:
+
+```sh
+prowl init --no-input
+prowl init --dry-run --integrations auto
+prowl init --no-input --integrations cursor,vscode
+```
+
+## The unified console
+
+The console has nine tabs:
+
+- **Overview** -- combined estimated token savings across every indexed project,
+  gateway readiness, model capacity, recent activity, and next actions.
+- **Projects** -- every registered local project with files, symbols, edges,
+  semantic progress, last-index time, and estimated token savings. `Enter`
+  opens the full status report.
+- **Providers** -- production-wired providers only. Filter by access or
+  readiness, press `Enter` for details, or `o` for signup.
+- **Credentials** -- individual API keys, health, cooldown, and traffic state.
+- **Accounts** -- browser/device OAuth for ChatGPT, Claude, Charm Hyper, and
+  Copilot, with connection, routing, and published allowance state kept
+  separate. Routable accounts add their models automatically after sign-in.
+- **Models** -- a compact list of default and named model sets, grouped
+  task/access templates, provider checkboxes, full-catalogue search, live
+  health, and routing strategy.
+- **Activity** -- full-height request and token charts, provider/model usage,
+  exact or estimated cost, latency, outcome, route class, and failover attempts.
+  Exact, estimated (`~`), and unavailable (`-`) usage remain visibly distinct.
+- **Toolkit** - Prowl's major functions with copyable commands.
+- **Setup** - safe injection into supported coding harnesses.
+
+Use `Tab` / `Shift+Tab` to move between tabs, arrows or `j`/`k` to move, `/` to
+search, and `?` for the complete key guide. The first launch shows a short tip;
+each tab supplies one contextual hint without blocking work.
+
+The console leaves terminal mouse capture disabled. Drag normally to select and
+copy any rendered text with the terminal's native behavior; no `Shift` bypass is
+required. Every console action is keyboard-accessible, and `c` copies the
+selected command, path, URL, or code where offered.
+
+Usage and spend remain honest when upstreams differ. Provider-reported totals
+win when available; otherwise Prowl combines reported or visibly estimated
+tokens with published per-million prices. Missing usage is shown as unavailable,
+and models without a published price are unpriced rather than silently free.
+
+## Models and routing are different controls
+
+A **model** is a concrete candidate such as `openai/gpt-5.6-codex` or
+`anthropic/claude-sonnet-5`. Enabling a model means Prowl may use it; disabling
+it removes it from every automatic route. Selecting a concrete model ID in a
+client pins that request to that model.
+
+A **route** decides how to order and fail over among enabled candidates:
+
+- `auto` uses the active set and its configured strategy.
+- `auto:smart` classifies each prompt and orders candidates for that request.
+- `auto:fast`, `auto:reliable`, and `auto:balanced` select an explicit global
+  ordering axis.
+- `auto:<set>` uses a named, operator-curated candidate set.
+
+Sets answer **which models may be tried**. Routing answers **which eligible
+model should be tried first for this prompt**. Provider/key health, quota,
+cooldowns, and context limits remain hard gates. User choices remain
+canonical: smart routing never silently enables a disabled model or escapes the
+selected set.
+
+On **Models**, `Enter` edits a set and `Space` activates a set or toggles a
+model's membership, depending on context. `n` opens grouped templates, `s`
+opens routing strategies, and `p` opens a checkbox provider picker. The editor
+starts with active providers only; `/` deliberately searches the complete
+catalogue, including providers outside the current view.
+
+## Subscription accounts and multiple models
+
+Open **Accounts**, select a provider, and press `Enter`. Prowl starts the OAuth
+flow and opens the browser automatically. While it is pending:
+
+- `o` reopens the browser;
+- `u` copies the authorization URL;
+- `c` copies the device code when one exists, otherwise the URL;
+- `Esc` cancels the flow.
+
+After sign-in, compatible account models are added to routing automatically.
+`Space` then pauses or resumes that durable routing permission; it is not a
+second enrollment step. The console reports connection, routing, and allowance
+independently, so an allowance-service outage is not presented as a broken
+credential and an expired credential explicitly asks for another sign-in.
+
+Model enrollment is not a one-model alias:
+
+- **ChatGPT / Codex** reads the account-scoped Codex catalogue and enrolls every
+  visible model returned for that subscription, including its reasoning levels,
+  context window, and output limit.
+- **Claude Pro / Max** reads Anthropic's account-scoped `/v1/models` catalogue
+  with the OAuth credential and enriches current Claude metadata. A curated
+  September 2026 multi-model fallback is used only if catalogue discovery is
+  temporarily unavailable. Account details show the published five-hour,
+  weekly-all-model, and model-scoped weekly windows.
+- **Charm Hyper** reads its live OpenAI-shaped catalogue. Its no-charge credits
+  endpoint reports the current balance; Hyper grants 100 free credits monthly,
+  but does not publish a daily window or an account-specific monthly total and
+  reset timestamp.
+- **Copilot** sign-in can be stored, but it is not offered as routable capacity
+
+ChatGPT requests use the Codex Responses wire. Claude requests use the native
+Anthropic Messages wire, including the Claude Code OAuth headers, request
+identity, attestation, and tool-name round trip required by subscription
+tokens. These provider inference paths are direct integrations; ACP is not in
+the request path.
+
+## Smart prompt routing
+
+Smart routing begins with a bounded local decision, not a routing-model call.
+Prowl examines at most 24 KiB from the latest user turn and derives:
+
+- domain: general, coding, agentic/tool use, reasoning, math, research, writing,
+  or extraction;
+- effort: low, medium, or high;
+- signals such as tool use, context size, explicit constraints, and stakes.
+
+System instructions and older conversation turns do not inflate this profile.
+The router combines it with:
+
+1. model capability scores for the detected domain;
+2. the local catalogue prior when no external score exists;
+3. live reliability, latency, cooldown, quota, and context fit;
+4. published input/output prices, favoring economical models for simple work
+   without allowing price to displace capability for difficult work;
+5. the operator's enabled state, set membership, order, and weights.
+
+The decision is exposed rather than hidden. OpenAI-compatible responses include
+`X-Prowl-Route-Class`, `X-Prowl-Route-Effort`, `X-Prowl-Route-Reason`, and
+`X-Routed-Via`; the same facts appear in Activity and durable request logs.
+
+Research is the one intentional two-stage route. When an automatic request is
+classified as research, an enabled Perplexity credential is available, and the
+final pool contains a non-Perplexity model, Prowl asks the low-cost
+`perplexity/sonar` preset for current, cited findings. It adds those bounded
+findings to the final request as explicitly untrusted reference material and
+excludes Perplexity from the final model chain. A missing key or failed research
+call fails open to the normal route; a client-pinned model never gains an
+unexpected second billable call. Successful responses identify this pass with
+`X-Prowl-Research-Provider: perplexity`.
+
+This keeps ordinary classification local and fast while making current-source
+research explicit. A learned router can still be added behind the same profile
+seam when it demonstrates better end-to-end quality and latency on Prowl's own
+traffic.
+
+### Live benchmark refresh
+
+Prowl can enrich the catalogue from Artificial Analysis' model API. Supply the
+key only to the gateway process:
+
+```sh
+export ARTIFICIAL_ANALYSIS_API_KEY='…'
+prowl gateway up
+```
+
+The gateway fetches the paginated free model endpoint, conservatively matches
+external identities to local models, and stores intelligence, coding, agentic,
+math, and multilingual scores with provenance and refresh time. It refreshes at
+most daily, retries failures after six hours, and retains the last successful
+scores on any fetch or parse failure. Without a key, routing continues from the
+bundled catalogue and live local observations. The Models tab reports whether
+scores are configured, current, stale, or in error.
+
+Benchmark data is attributed in-product to Artificial Analysis. The API key is
+read from `ARTIFICIAL_ANALYSIS_API_KEY`; it is never persisted or displayed.
+
+## Use the gateway from coding tools
+
+Start a persistent loopback gateway and inject only routing aliases into the
+clients you use:
+
+```sh
+prowl gateway up
+prowl gateway status
+prowl gateway inject omp pi claude codex opencode hermes openclaw prowl-legacy
+
+# Revert only entries Prowl owns.
+prowl gateway inject --remove omp pi claude codex opencode hermes openclaw prowl-legacy
+prowl gateway down
+```
+
+The gateway serves OpenAI-compatible Chat Completions, Responses, legacy
+completions, Embeddings, Image Generations, Audio Speech, and Audio
+Transcriptions, plus an Anthropic-compatible Messages surface on loopback.
+Inference and management routes require a bearer credential. `GET /api/ping`
+is the sole unauthenticated
+route; it exposes liveness metadata and an optional port-bound proof that lets a
+credential-holding client verify the listener before transmitting its token.
+The Setup tab configures selected harnesses without displaying credentials.
+
+`prowl gateway` opens the same console as bare `prowl`. On Home, press `d` to
+switch **Keep running** on or off. When enabled, closing the console hands the
+in-process gateway to a tracked daemon; when disabled, closing a console
+attached to that daemon shuts it down safely. `up`, `down`, `status`, and
+`restart` remain scriptable lifecycle commands.
+
+### Harness files and portable skills
+
+Gateway injection and skill installation are separate, ledger-backed writes:
+
+```sh
+prowl gateway inject pi hermes openclaw prowl-legacy
+prowl skills --clients pi,hermes,openclaw,prowl-legacy
+```
+
+The custom harness paths are:
+
+| Harness | Gateway provider configuration | Portable Prowl skills |
+| --- | --- | --- |
+| Pi | `~/.pi/agent/models.json` | `~/.pi/agent/skills/<name>/SKILL.md` |
+| Hermes | `~/.hermes/config.yaml` | `~/.hermes/skills/prowl/skills/<name>/SKILL.md` |
+| OpenClaw | `~/.openclaw/agents/main/agent/models.json` | `~/.openclaw/skills/prowl/skills/<name>/SKILL.md` |
+| Prowl Legacy | `~/.local/share/prowl/prowl.json` | `~/.config/prowl/skills/prowl/<name>/SKILL.md` |
+
+Pi requires each skill directly below its `skills/` directory. Hermes and
+OpenClaw discover the grouped recursive trees shown above. Prowl Legacy keeps
+the config and data roots it owned before the rename; detection uses the
+`prowl-legacy` launcher, never the current `prowl` product binary. Injection
+advertises only `auto`, `auto:*`, and named routing sets; it never floods a
+harness picker with Prowl's entire provider catalogue. Re-running either
+command is safe, and the corresponding removal path reverts only bytes Prowl
+still owns.
+
+## Code intelligence
+
+Prowl reindexes changed files before every query and returns cited, bounded
+answers. Output is token-lean TOON by default; use `--format human`,
+`--format markdown`, or `--json` where needed.
+
+```sh
+prowl overview                         # repository map and entrypoints
+prowl search "how is auth validated"   # semantic + lexical search
+prowl find ValidateToken               # locate a named symbol
+prowl def ValidateToken                # read one symbol, not a whole file
+prowl outline internal/auth/service.go # file structure without bodies
+prowl references ValidateToken         # callers and references
+prowl callers internal/auth/service.go # incoming file relationships
+prowl impact internal/auth/service.go  # change blast radius
+prowl peek internal/auth/service.go:40-90
+
+prowl status                           # index health and saved-token estimate
+prowl doctor                           # structural and integration findings
+prowl wip                              # recover unfinished local work
+prowl changed                          # graph-aware changed surface
+prowl history ValidateToken            # symbol history
+```
+
+Other built-in surfaces include:
+
+```sh
+prowl context search "question"        # bounded context packets
+prowl docs add https://example.com/docs
+prowl knowledge init                   # reviewed durable project knowledge
+prowl review plan                      # bounded large-change review protocol
+prowl capabilities search "intent"     # find the right Prowl workflow
+prowl serve                            # MCP compatibility server
+prowl lsp                              # editor language server
+prowl skills                           # install/update agent routing skills
+```
+
+The Toolkit tab presents these functions in the console and copies the selected
+command with `c` or `Enter`.
 
 ## Install
 
-Linux and macOS (amd64 or arm64):
+Linux and macOS:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/neur0map/prowl-agent/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/neur0map/prowl/main/install.sh | sh
 ```
 
 Windows amd64 from PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/neur0map/prowl-agent/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/neur0map/prowl/main/install.ps1 | iex
 ```
 
-Windows may show "Windows protected your PC" or flag the `.exe`. It is an
-unsigned Go binary, which antivirus tools often flag as a false positive; the
-same code on Linux and macOS is fine. Verify the download against its `.sha256`
-file, then unblock it (`Unblock-File .\prowl-agent.exe`) or click **More info,
-Run anyway**. To avoid the warning, build from source (below).
-
-Both installers pick the native artifact and verify its SHA-256 checksum. Linux
-builds need a recent glibc. To build from source, install Go 1.26+, a C compiler,
-and SQLite development headers (`libsqlite3-dev` on Debian/Ubuntu):
+Both installers select the native `prowl-*` release artifact, verify its SHA-256
+checksum, and install it as `prowl`. Build from source with SQLite FTS enabled:
 
 ```sh
-CGO_ENABLED=1 go build -tags sqlite_fts5 -o prowl-agent ./cmd/prowl-agent
+git clone https://github.com/neur0map/prowl.git
+cd prowl
+CGO_ENABLED=1 go build -tags sqlite_fts5 -o prowl ./cmd/prowl
 ```
 
-Update in place with `prowl-agent update`. `prowl-agent status` tells you when a
-new build is out, through a quick anonymous checksum check cached for a day.
+Update a downloaded build with `prowl update`. Packaged builds defer to their
+package manager.
 
-## Demo
+## Integration safety
 
-![prowl-agent demo](demo/prowl.gif)
+`prowl init`, `prowl skills`, and gateway injection preview owned writes and use
+marker- or ledger-bounded updates. Removal reverts only Prowl-owned material.
+Project indexes stay under `.prowl/`; shared state remains under the existing
+`prowl-agent` XDG directories for upgrade compatibility.
 
-A short terminal recording of `init`, `overview`, `bench`, and `graph`, rendered
-from [`demo/prowl.tape`](demo/prowl.tape) with [VHS](https://github.com/charmbracelet/vhs).
-Regenerate it with `vhs demo/prowl.tape`, or from the Actions tab via the `demo` workflow.
+Prowl is local-first:
 
-## Set up in one command
+- source and index data stay on the machine;
+- repository secrets with unambiguous vendor/key shapes are masked before index
+  storage;
+- external model traffic occurs only when the optional gateway is used;
+- benchmark traffic occurs only when `ARTIFICIAL_ANALYSIS_API_KEY` is set;
+- configured automatic research traffic may make a Perplexity preflight before
+  the final model call, as described above;
+- the gateway binds to loopback and authenticates every route except the
+  deliberately minimal liveness endpoint.
 
-Run this once inside any project (a code repo, a dotfiles folder, `~/.config`):
+## Development
+
+The required gate uses SQLite FTS5:
 
 ```sh
-prowl-agent init                                      # interactive client selection
-prowl-agent init --dry-run --integrations auto        # exact preview, no writes
-prowl-agent init --no-input --integrations cursor,vscode
+CGO_ENABLED=1 go test -tags sqlite_fts5 ./...
+CGO_ENABLED=1 go vet -tags sqlite_fts5 ./...
+CGO_ENABLED=1 go build -tags sqlite_fts5 ./cmd/prowl
+bash scripts/onboarding-smoke.sh
 ```
 
-`init` builds the index, previews the selected integrations, and writes only the
-clients you choose. `--integrations auto` (the default) picks clients already
-present in the project and always writes both the `AGENTS.md` guidance and a
-client-agnostic `.mcp.json`, so any agent that reads the repo is told to prefer
-Prowl *and* sees Prowl's tools in its own tool list (prose alone is unreliable
-for coding agents with strong native grep/read priors). Use `none`, `all`, or a
-comma-separated list. `--remove-integrations` removes only Prowl-owned entries
-and leaves neighboring config alone. State lives in `.prowl/`, which it adds to
-`.gitignore`.
-
-Setup is transactional: a malformed client config aborts the run and restores any
-file it already touched. The optional `AGENTS.md` guidance sits between markers,
-so re-running setup refreshes only Prowl's block.
-
-Project setup installs Prowl's `code-search` skill for detected harnesses so
-structural repository questions start with the read-only CLI rather than a broad
-tree scan. To install the same release-matched routing assets in your user-level
-Claude and OMP configuration, run:
-
-```sh
-prowl-agent skills
-```
-
-`skills` first prints every destination and action, defaults to **No**, and
-writes only after an interactive confirmation. A piped or otherwise
-non-interactive invocation is always a read-only preview. Prowl records ownership
-per asset, refuses to overwrite foreign files, and removes only files it owns.
-The installed `code-search` skill handles natural repository questions;
-Claude also gets `/prowl:search` as an explicit entry point. Verify the CLI,
-assets, and whether either client needs a restart or reload with
-`prowl-agent doctor --integrations`.
-
-There is no server to keep running. Each CLI query re-indexes incrementally first
-(only what changed, in tens of milliseconds), so the agent never reads stale data
-and you never run a watcher by hand. The CLI is the canonical, lowest-overhead
-agent path; MCP remains available as an optional compatibility transport.
-
-## What your agent can ask
-
-After `init`, the agent (or you) queries the index by running a command. This is
-the lowest-overhead path: no server, and none of the tool-schema tokens an MCP
-server adds to every request.
-
-```sh
-prowl-agent overview            # project map: docs to read, roles, entrypoints, clusters (start here)
-prowl-agent brief <path>        # cited orientation for a subsystem: size, languages, guides, key files (warm-start a subagent)
-prowl-agent find <name>         # locate a symbol (function, setting, keybind, component)
-prowl-agent def <name>          # read one symbol's source (signature + body), cited and bounded, not the whole file
-prowl-agent span <name>         # a symbol's current file+range plus a content digest, to spot drift before editing a stale range
-prowl-agent outline <path>      # a file's structure: symbols, signatures, line ranges (no bodies) -- grasp a file without reading it
-prowl-agent sketch <name|path>  # how a UI looks and behaves without a screenshot: QML, React (jsx/tsx), Go/lipgloss, or CSS
-prowl-agent search <text>       # search by meaning or text; --smart rewrites+reranks, --compact lists files only
-prowl-agent callers <path>      # what includes / imports / execs / binds to a file
-prowl-agent callees <path>      # what a file includes / imports / execs / binds to
-prowl-agent impact <path>       # blast radius: count, subsystems, direct importers (--all = full list)
-prowl-agent relations <path>    # a file's symbols and include neighbors
-prowl-agent entrypoints <path>  # root files from which this file is reachable
-prowl-agent references <name>   # where a symbol is used: cited call sites (by name, or an id from find)
-prowl-agent history <name>      # commits that touched a symbol (git log -L), newest first -- why the code is the way it is
-prowl-agent clusters [name]     # subsystems (summaries); with a name, that subsystem's files
-prowl-agent hotspots            # files ranked by graph centrality, plus largest and most complex
-prowl-agent violations          # dangling refs, orphan scripts, hardcoded colors
-prowl-agent doctor              # general health: cycles, fan risk, dangling refs, score
-prowl-agent doctor --profile rice # add keybind, desktop command, color, orphan checks
-prowl-agent tests <path>        # configs/keybinds that launch or reload a file
-prowl-agent changed             # your git changes mapped to the files they could affect
-prowl-agent wip                 # uncommitted work: touched files, TODO/FIXME markers, blast radius
-prowl-agent graph               # interactive HTML dependency graph (self-contained, opens offline)
-prowl-agent bench               # token efficiency: cited packets vs reading files vs whole repo
-prowl-agent explore <path>      # index a repo you do not own, answer, and leave it untouched
-prowl-agent context search <question> --mode compact --budget-tokens 1800 --json
-prowl-agent capabilities search <query> # discover workflows without loading every schema
-```
-
-TTY output defaults to a human view; pipes and agent calls default to compact
-TOON. Choose `--format human|toon|json|markdown` explicitly (`--json` is a
-compatibility alias), or `--limit N` to cap results. Run from anywhere inside the
-project; Prowl finds the index by walking up to `.prowl/`. Each answer stays
-small: on a 2023-file Go repo, `overview` is about 1 KB and a typical `impact`
-answer is a dozen lines, not the few hundred dependent rows the raw graph prints.
-
-## Experimental native change review
-
-The `review` command group is **EXPERIMENTAL**. It deterministically captures
-and partitions a change for a host coding agent; Prowl itself does not perform
-semantic review.
-
-```sh
-prowl-agent review plan                         # current workspace
-prowl-agent review plan --base main --head HEAD # branch or pull-request range
-prowl-agent review plan --commit abc123         # one non-merge commit
-```
-
-`review plan` selects `direct` or `structured` mode. The mandatory boundary is
-exactly `raw_additions + raw_deletions > 300`: 300 lines remains direct, while
-301 requires structured review. `--structured` opts into structured mode below
-that boundary. Direct mode provides focused change context without a receipt
-matrix; structured mode provides ordered cohorts, bounded units, required
-cross-cutting audits, and an exact receipt contract.
-
-The plan prints the next command for every unit. Fetch one territory at a time;
-the owned patch is mandatory, while surrounding cited context is bounded:
-
-```sh
-prowl-agent review unit <review-id>/<unit-id>
-prowl-agent review unit <review-id>/<unit-id> --budget-tokens 1200 --budget-bytes 8192
-```
-
-Plan, unit, and check output use the normal human, TOON, JSON, or Markdown
-formats. The report input boundary is canonical `review.report.v1` JSON in a
-regular file or on standard input:
-
-```sh
-prowl-agent review check --review <review-id> --report review-results.json
-prowl-agent review check --review <review-id> --report -
-```
-
-The checker validates plan identity, evidence locations, workspace freshness,
-recommendation consistency, plus complete unit and audit receipts in structured
-mode. It rejects incomplete or stale reports with a non-zero exit; neither
-state can approve a change. It validates this deterministic boundary, not the
-semantic truth of a finding.
-
-The commands are available for explicit use, but mandatory generated routing
-and the GitHub Action integration are **not enabled** pending the frozen
-held-out gates. See [the native review design and protocol](docs/REVIEW.md).
-
-## Resume where you left off
-
-`prowl-agent wip` answers "what was I in the middle of?" so a fresh session does
-not have to re-read the tree to find out. It lists the files you have changed but
-not committed (staged, modified, untracked), the unfinished-work markers inside
-them (TODO, FIXME, HACK, XXX, BUG, WIP, OPTIMIZE, or your own via `--markers`),
-and the blast radius of each indexed file. Same tool over MCP as `investigate_wip`.
-
-## Keep durable project knowledge
-
-Accepted concepts, decisions, claims, and playbooks live as portable OKF
-Markdown, not inside the disposable SQLite index:
-
-```bash
-prowl-agent knowledge init
-prowl-agent knowledge propose --file candidate.md --target decisions/storage.md
-prowl-agent knowledge accept <proposal-id>
-prowl-agent knowledge list
-prowl-agent knowledge lint
-prowl-agent knowledge lint --repair   # re-point anchors whose code moved
-prowl-agent knowledge export ./knowledge-export
-```
-
-Every proposal shows a deterministic diff before acceptance. Source anchors keep
-each claim tied to real code, and they distinguish code that *moved* from code
-that *changed*: a line inserted above an anchored region reports `moved_anchor`
-with the range those lines occupy now, and `--repair` re-points it, so notes do
-not decay into stale warnings during ordinary refactoring. `stale_anchor` is
-reserved for the anchored lines actually changing, which is the case a human
-should look at. Anchor to a `symbol` (function, class, or component) to follow it
-when lines move; a renamed symbol whose body is untouched is still recovered by
-content. Unknown OKF v0.1 fields and future concept types round-trip without loss.
-
-See [Durable knowledge and OKF](docs/KNOWLEDGE.md) for the storage contract,
-review lifecycle, lint codes, and migration safeguards.
-
-## Search external documentation
-
-Point prowl at a library's docs once and query them offline, cited and token-
-bounded, the same way you query code:
-
-```bash
-prowl-agent docs add https://docs.example.com   # crawl a docs site to Markdown
-prowl-agent docs add ./vendor/docs --local      # or ingest a local Markdown tree
-prowl-agent docs list
-prowl-agent docs search "how do I configure retries"
-```
-
-Crawls are bounded and polite (depth, page cap, rate limit, robots.txt), and
-pages are stored in a shared per-machine corpus, so a library's docs are crawled
-once and reused across projects. Retrieval needs no model. Crawled pages are
-untrusted, so any carrying prompt-injection directives are quarantined out of the
-searchable corpus. Agents get the same over MCP through `search_docs`. When a site
-publishes an `llms.txt` or `llms-full.txt`, `docs add` uses it directly (one fetch
-of the whole docs, no crawl); pass `--no-llms` to force a plain crawl.
-
-## One index, three ways to use it
-
-The same `.prowl/index.db` is available three ways, with the CLI as the canonical
-agent path:
-
-- **Shell commands (recommended).** Any agent that can run a command can use
-  Prowl. Nothing needs to stay running, and no MCP tool schemas consume context
-  on every request. The installed `code-search` skill and Claude's
-  `/prowl:search` command route both natural and explicit structural questions
-  here.
-- **MCP server (optional compatibility).** Select the standard `.mcp.json`,
-  Cursor, VS Code, Oh My Pi, Factory droid, or OpenCode integration during
-  project setup when a client requires typed tools. MCP Resources and Prompts
-  remain additive on every surface. Use `prowl-agent serve --mcp-surface core`
-  for eleven intent-oriented tools, or `--mcp-surface all` during migration.
-  Point any other MCP client at `prowl-agent serve`.
-- **Editor language server.** `prowl-agent lsp` gives a human go-to-definition,
-  find-references, hover (with use counts), document and workspace symbols, code
-  lens, completion, and inline `doctor` diagnostics. Neovim attaches it
-  automatically; Helix and VS Code notes are in `.prowl/editor/SETUP.md`.
-
-```json
-{
-  "mcpServers": {
-    "prowl-agent": { "type": "stdio", "command": "prowl-agent", "args": ["serve"] }
-  }
-}
-```
-
-See [Context packets and MCP v2](docs/CONTEXT.md) for packet fields, resource
-URIs, prompts, compatibility modes, privacy-safe traces, capability discovery,
-and the retrieval evaluation.
-
-## It understands how code connects
-
-Locating a symbol is the easy half. The harder, more useful half is the graph:
-what imports what, what a change ripples into, which files form a subsystem.
-Prowl resolves real edges, not text matches:
-
-- **Code imports.** Go package imports, TypeScript/JavaScript relative imports,
-  Rust `mod` and `crate::` imports, Python absolute and relative imports, C/C++
-  `#include`, Java and Kotlin `import` class paths (which resolve to each other in
-  a mixed JVM project, and fold a member or nested-type import to its enclosing
-  class file), Ruby `require_relative`, C# `using` namespaces, PHP `use Ns\Class`
-  imports (resolved to the file declaring that class), Dart `package:` and
-  relative imports (resolved to a workspace package's `lib/`), and Elixir
-  `alias`/`import`/`use` (resolved to the file declaring that module).
-- **Monorepos and path aliases.** A bare import of a first-party workspace package
-  (`@scope/pkg` or `pkg/subpath`) resolves to that package's source, and a tsconfig
-  path alias (`@/components/Button` with `"paths": {"@/*": ["src/*"]}`) resolves to
-  the real file, scoped to the nearest `tsconfig.json` so a monorepo's per-package
-  aliases stay correct. So `callers`, `impact`, and `clusters` work across a
-  pnpm/turbo/Next.js project, not just within one package. The walk honors
-  `.gitignore` negation, so a repo that ignores a tree but keeps its source
-  (`packages/*/*/` then `!packages/*/src/`) is still indexed.
-- **Configs.** Include trees (`source=`, `@import`, `require()`), exec and keybind
-  chains (`exec-once`, `bind = ... exec script`), and shared colors, fonts, paths,
-  and variables across files.
-
-This is tested against real, popular repositories. A few results:
-
-| repo | language | what the graph now sees |
-|---|---|---|
-| [lazygit](https://github.com/jesseduffield/lazygit) | Go, 2023 files | `impact`, `callers`, `clusters` across every package |
-| [tRPC](https://github.com/trpc/trpc) | TS monorepo | 878 cross-package imports resolved; `impact @trpc/server` went 0 to 345 dependents |
-| [zod](https://github.com/colinhacks/zod) | TS subpaths | `zod/v4/core` resolves to `packages/zod/src/v4/core/index.ts` |
-| [Laravel](https://github.com/laravel/framework) | PHP, 2955 files | 8237 `use` imports resolved across components; `impact Str.php` reaches 1527 dependents |
-| [OkHttp](https://github.com/square/okhttp) | Kotlin + Java | 1944 imports resolved across Kotlin-Multiplatform source sets, including cross-language and companion-member imports |
-| [LocalSend](https://github.com/localsend/localsend) | Dart/Flutter | 977 `package:` imports resolved across a multi-package workspace; `impact` on a shared DTO reaches 73 files |
-| [shadcn/ui](https://github.com/shadcn-ui/ui) | TS, 8869 files | 8382 `@/` tsconfig-alias imports resolved across many per-package configs |
-
-Import resolution is strong for code and configs, and now models QML coupling
-too: a component used by type name (`Button { }`) resolves to its `.qml` file,
-and singleton or type member references (`Config.spacing`, `Theme.accent`)
-resolve to the file that defines them. On a 1,413-file Quickshell repo this took
-`impact` on the `Config.qml` singleton from 0 to 978 dependents. External and
-standard-library imports stay informational. More languages are on the way.
-
-## What it costs to run
-
-`prowl-agent status` prints a card with what is indexed and, once your agent has
-asked a few questions, how many tokens it saved. The number is grounded per
-answer: for each query prowl served, it compares the bytes it returned against the
-combined size of the files that answer pointed at (what an agent would otherwise
-have read), then keeps about 70% of that as a deliberately under-counted estimate.
-It tracks every project you have initialized and shows a combined total.
-
-Run it in your terminal for the full colored card; pipe it for plain text, or add
-`--json` for the raw numbers. Want to check the math on your own repos? See
-[Measuring token usage](docs/TOKENS.md).
-
-A rough idea of the gap, from a small test on real dotfile repos (not a benchmark
-suite): indexed and asked the same question, `find` returned about 3 KB of cited
-results in a couple of milliseconds, while opening every file ripgrep matched ran
-to a few megabytes. A few hundred tokens versus hundreds of thousands, just to
-locate something, before the agent reads anything. Your files, your question, and
-your editor move these numbers, so measure on your own setup.
-
-## Your code stays on your machine
-
-Prowl indexes only what your project tracks (it honors `.gitignore`) and keeps its
-own state in a local `.prowl/` folder, which it adds to `.gitignore`. The update
-check is an anonymous read of public commit data and sends nothing about you. No
-daemon, no network service.
-
-Gitignoring `.prowl/` does not hide your code from the agent: the agent reads your
-real files, and `.prowl/` only holds the rebuildable index. Because prowl indexes
-the same files git tracks, it never points the agent at a path it was told to
-ignore.
-
-### Committed credentials are masked before they are stored
-
-Prowl indexes whatever a repository contains, credentials committed in source
-included, and every retrieval path feeds stored text into an agent's context. So
-masking happens at storage time, not on the way out: the on-disk index -- chunk
-text, the full-text index, and the vectors -- never holds a cleartext secret.
-Five sinks are masked: chunk text, symbol signatures, doc comments, resource
-values, and raw dependency-edge text. The identifier survives and only the value
-is destroyed, so `search stripe token` still finds the line while the key itself
-reads `[redacted]`. `prowl-agent doctor` reports which files had values masked, so
-a committed secret surfaces as something to rotate rather than being quietly
-swallowed.
-
-What is masked is deliberately limited to shapes that can be recognized without
-guessing: vendor-prefixed provider keys, AWS key ids, Google keys, JWTs, the
-password in a URL's userinfo, and PEM private key bodies. A homegrown secret with
-no vendor prefix -- a random-looking value assigned to a secret-named variable --
-is **not** masked, because no entropy heuristic separates it from ordinary code
-reliably, and masking is destructive. Treat this as damage control for
-credentials that should not be in the repository, not as a reason to commit them.
-
-## Search by meaning, built in
-
-`prowl-agent search` matches on meaning, not just words. Ask "how do I refresh
-the widget" and it finds `reloadPanel()` even though they share no tokens. This
-works in every repo with nothing to set up: prowl ships a small code-trained
-embedding model (potion-code-16M, a static model that runs as a plain vector
-lookup, ~60 MB) inside the binary and runs it in-process. No download, no daemon,
-no GPU, no API key, and nothing leaves your machine. The first search in a
-project embeds its files once (a few seconds); after that answers are cached and
-fast. Embeddings live in `sqlite-vec` and are fused with full-text search, so you
-get files that mean the same thing even when they share no words (for example,
-"music spectrum" finds an `AudioVisualizer`).
-
-Doc comments are indexed as their own field, so a file whose docstring answers the
-question surfaces even when its code shares none of your words. This is added
-recall, not reordering: doc answers are appended below the existing code results
-and the top ten never move. It applies to `search` and `--smart`; the core MCP
-surface's `search_context` retrieves over chunk text only.
-
-Add `--smart` to rewrite the query and re-rank the results, which helps on vague
-questions. Plain `search` never spawns anything, so it stays fast enough for an
-agent to call on every turn.
-
-Embeddings always come from the code embedder compiled into the binary
-(`potion-code-16M`, a static model distilled from `bge-base-en-v1.5` and tuned
-for code). There is nothing to download, no daemon, no API key, and no cache: it
-works on first run and fully offline, identically on every machine. It is also
-the fast path: roughly 650 chunks/second in-process versus about 47 through a
-local Ollama embed model, which is the difference between a semantic index that
-builds in two minutes and one that takes half an hour on a large repo.
-
-Optionally add query rewrite and re-ranking (the `--smart` half), which helps on
-vague questions. That step genuinely needs an LLM, so it uses a local
-[Ollama](https://ollama.com) model, still no cloud and no API key. Pick a tier
-with `--tier fast|smart|max`:
-
-| tier | assist model | needs |
-|---|---|---|
-| fast | `gemma3:1b` | runs anywhere, CPU ok |
-| smart | `gemma4:e2b` | about 10 GB VRAM |
-| max | `gemma4:e4b` | about 16 GB VRAM |
-
-Or borrow an installed coding-agent CLI for that same rewrite and re-rank step
-with `--ai-provider agent` (it autodetects a cheap tier like `claude -p --model
-haiku`; override with `--ai-command`). Both are optional: without either, vector
-plus full-text search still answers every query. Over MCP, an agent can also pass
-`rerank: true` to have its own model reorder results in-process.
-
-## Supported formats
-
-Go, Rust, Java, Kotlin, Ruby, C#, PHP, Dart, Elixir, TypeScript/TSX, Lua, Python,
-JavaScript, Bash, Fish, C/C++, QML, CSS/SCSS, Markdown, TOML, YAML, JSON/JSONC,
-INI, and Hyprland (`hyprlang`), plus a line-based reader for everything else
-(sway/i3, rofi `rasi`, polybar, kitty, dunst, and similar).
-
-## More
-
-- [Architecture](docs/ARCHITECTURE.md): how indexing, the graph, and the servers fit together
-- [Measuring token usage](docs/TOKENS.md): how the savings number is computed, and how to check it
-- [Changelog](CHANGELOG.md)
-
-Built with Go, Tree-sitter, and SQLite for Linux, macOS, and Windows.
+Plain `go test ./...` is not the project gate because it omits SQLite FTS5.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+and [BENCHMARKS.md](BENCHMARKS.md) for implementation and measurement details.

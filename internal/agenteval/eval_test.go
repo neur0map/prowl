@@ -27,7 +27,7 @@ func TestPromptManifestIsBlindAndComplete(t *testing.T) {
 
 func TestParseClaudeStreamExtractsEvidence(t *testing.T) {
 	stream := strings.Join([]string{
-		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"prowl-agent find Register --format human"}}]}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"prowl find Register --format human"}}]}}`,
 		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{"file_path":"internal/cli/cli.go","offset":1,"limit":30}}]}}`,
 		`{"type":"result","duration_ms":25,"result":"Register is in internal/cli/cli.go:10"}`,
 	}, "\n")
@@ -66,7 +66,7 @@ func TestParseOMPAndMalformedEvidence(t *testing.T) {
 func TestParseOMPUsesCompletedArgumentsForDuplicateCall(t *testing.T) {
 	stream := strings.Join([]string{
 		`{"type":"message_start","message":{"role":"assistant","content":[{"type":"toolCall","id":"call-1","name":"bash","arguments":{}}]}}`,
-		`{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","toolCall":{"type":"toolCall","id":"call-1","name":"bash","arguments":{"command":"prowl-agent search harness"}}}}`,
+		`{"type":"message_update","assistantMessageEvent":{"type":"toolcall_end","toolCall":{"type":"toolCall","id":"call-1","name":"bash","arguments":{"command":"prowl search harness"}}}}`,
 		`{"type":"agent_end","message":{"role":"assistant","content":"internal/setup/harness.go DetectInstalledHarnesses"}}`,
 	}, "\n")
 	parsed := ParseStream("omp", []byte(stream), nil, time.Millisecond)
@@ -81,7 +81,7 @@ func TestClassifiersKeepBoundedAndControlOperationsNative(t *testing.T) {
 		{Name: "Glob", Input: json.RawMessage(`{"pattern":"*.go","path":"internal/cli"}`)},
 		{Name: "Read", Input: json.RawMessage(`{"file_path":"internal/cli/cli.go","offset":1,"limit":20}`)},
 		{Name: "Bash", Input: json.RawMessage(`{"command":"rg x internal/cli/cli.go"}`)},
-		{Name: "Bash", Input: json.RawMessage(`{"command":"printf prowl-agent"}`)},
+		{Name: "Bash", Input: json.RawMessage(`{"command":"printf prowl"}`)},
 	}
 	for i := range calls {
 		classifyTool(&calls[i])
@@ -259,7 +259,7 @@ func TestPreparedFixtureCopiesAreIndependent(t *testing.T) {
 }
 
 func TestProwlClassifierAcceptsWindowsExecutable(t *testing.T) {
-	for _, command := range []string{`"C:\Tools\prowl-agent.exe" find Register`, `"C:\Program Files\prowl-agent.exe" find Register`} {
+	for _, command := range []string{`"C:\Tools\prowl.exe" find Register`, `"C:\Program Files\prowl.exe" find Register`} {
 		input, err := json.Marshal(map[string]string{"command": command})
 		if err != nil {
 			t.Fatal(err)

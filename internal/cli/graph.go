@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // maxGraphNodes caps how many files the interactive graph draws so a very large
@@ -58,7 +58,7 @@ func newGraphCmd() *cobra.Command {
 				return err
 			}
 			if len(data.Nodes) == 0 {
-				return fmt.Errorf("no files indexed yet (try prowl-agent init)")
+				return fmt.Errorf("no files indexed yet (try prowl init)")
 			}
 			path := out
 			if path == "" {

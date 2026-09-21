@@ -6,7 +6,7 @@ import (
 
 	sitter "github.com/alexaandru/go-tree-sitter-bare"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse"
+	"github.com/neur0map/prowl/internal/parse"
 )
 
 // GoUI is the visual sketch of a Go terminal UI built with lipgloss: the color

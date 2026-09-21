@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // Server is a Language Server backed by the prowl index. It is safe for the
@@ -291,7 +291,7 @@ func (s *Server) initialize() initializeResult {
 			CodeLensProvider:        &codeLensOptions{ResolveProvider: false},
 			CompletionProvider:      &completionOptions{TriggerCharacters: []string{"$", "@"}},
 		},
-		ServerInfo: serverInfo{Name: "prowl-agent", Version: s.Version},
+		ServerInfo: serverInfo{Name: "prowl", Version: s.Version},
 	}
 }
 

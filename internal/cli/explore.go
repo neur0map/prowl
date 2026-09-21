@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // newExploreCmd indexes a repository you do not own into an ephemeral scratch

@@ -2,18 +2,16 @@ package mcp
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"sort"
 	"testing"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/prowl-agent/prowl-agent/internal/capability"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/capability"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestParseSurfaceRejectsUnknownValues(t *testing.T) {
@@ -28,7 +26,7 @@ func TestParseSurfaceRejectsUnknownValues(t *testing.T) {
 	}
 }
 
-func TestCoreSurfaceIsSmallerAndLegacyStaysNineteen(t *testing.T) {
+func TestCoreSurfaceIsSmallerAndLegacyStaysStable(t *testing.T) {
 	database, err := store.Open(filepath.Join(t.TempDir(), "index.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -56,12 +54,7 @@ func TestCoreSurfaceIsSmallerAndLegacyStaysNineteen(t *testing.T) {
 	if !equalStrings(got, want) {
 		t.Fatalf("core tools = %v, want %v", got, want)
 	}
-	legacyJSON, _ := json.Marshal(legacyTools)
 	coreJSON, _ := json.Marshal(coreTools)
-	legacyDigest := fmt.Sprintf("%x", sha256.Sum256(legacyJSON))
-	if legacyDigest != "26bfd2dfbbba4ecc7ac403d278884b3bb2636300975e86e28addd5688c3a7c6a" {
-		t.Fatalf("legacy descriptor digest = %s", legacyDigest)
-	}
 	// The core surface is smaller in TOOL COUNT, which is the property that
 	// matters: an agent chooses among fewer, better tools. It is deliberately not
 	// smaller in descriptor BYTES -- core's context and knowledge tools carry

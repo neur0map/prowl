@@ -1,7 +1,7 @@
 ---
 description: Review a workspace, pull request, commit, large diff, or agent-authored change through Prowl's bounded coverage protocol.
 argument-hint: [[--base <ref> --head <ref> | --commit <ref>] [--structured]]
-allowed-tools: Bash(prowl-agent:*), Read, Grep, Glob
+allowed-tools: Bash(prowl:*), Read, Grep, Glob
 ---
 
 Review the change selected by these arguments:

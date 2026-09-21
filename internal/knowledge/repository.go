@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/neur0map/prowl/internal/boundedio"
 )
 
 const (

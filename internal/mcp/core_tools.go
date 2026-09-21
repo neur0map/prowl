@@ -11,14 +11,14 @@ import (
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/prowl-agent/prowl-agent/internal/capability"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/docs"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge/okfv01"
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/sketch"
+	"github.com/neur0map/prowl/internal/capability"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/docs"
+	"github.com/neur0map/prowl/internal/knowledge"
+	"github.com/neur0map/prowl/internal/knowledge/okfv01"
+	"github.com/neur0map/prowl/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/sketch"
 )
 
 var falseHint = false
@@ -31,7 +31,7 @@ func registerCoreTools(server *sdk.Server, h *handlers) {
 	sdk.AddTool(server, &sdk.Tool{Name: "search_context", Description: "Answer a 'where is X / how does X work / which files implement feature Y' question about this repo with a small, cited context packet (file:line evidence) instead of grepping and reading whole files. It ranks the whole repo by relevance, so it locates a feature, module, or concept even when the term is scattered across many files -- prefer it over grep for finding code. Prowl reindexes changed files before answering, so results reflect the current working tree. Set rerank=true on a relevance-sensitive question to have your own model reorder candidates (one extra model call, no local model needed). Then call get_context for a chosen item.", Annotations: readOnlyAnnotations("Search context")}, tracked(h, h.searchContext))
 	sdk.AddTool(server, &sdk.Tool{Name: "find", Description: "Locate where a symbol is defined -- a function, type, class, component, setting, keybind, or id -- by name (exact or fuzzy), ranked and cited to file:line. Your first move for 'where is X defined' or 'which file defines X', instead of globbing filenames or grepping the tree. Returns matching definitions, not file contents; read one with read_symbol or a file's shape with outline. For a feature or concept rather than a named symbol, use search_context. Read-only.", Annotations: readOnlyAnnotations("Find symbol")}, tracked(h, h.findSymbol))
 	sdk.AddTool(server, &sdk.Tool{Name: "get_context", Description: "Fetch fuller detail for specific context IDs returned by search_context, within an explicit token budget (mode compact, standard, or full). Use after search_context when the packet summary is not enough for a chosen item. This does not search; call search_context to find items first.", Annotations: readOnlyAnnotations("Get context")}, tracked(h, h.getContext))
-	sdk.AddTool(server, &sdk.Tool{Name: "search_docs", Description: "Answer a question from external documentation ingested with `prowl-agent docs add` (library/framework docs crawled to Markdown, or a local Markdown tree): a small, cited, budget-bounded context packet instead of fetching whole doc pages. Searches the shared documentation corpus, not this repo's code; use search_context for code. Read-only.", Annotations: readOnlyAnnotations("Search docs")}, tracked(h, h.searchDocs))
+	sdk.AddTool(server, &sdk.Tool{Name: "search_docs", Description: "Answer a question from external documentation ingested with `prowl docs add` (library/framework docs crawled to Markdown, or a local Markdown tree): a small, cited, budget-bounded context packet instead of fetching whole doc pages. Searches the shared documentation corpus, not this repo's code; use search_context for code. Read-only.", Annotations: readOnlyAnnotations("Search docs")}, tracked(h, h.searchDocs))
 	sdk.AddTool(server, &sdk.Tool{Name: "analyze_change", Description: "Report the structural blast radius of a project-relative file: which files and subsystems depend on it and would be affected if you change it. Use before editing to size the risk. Read-only; returns dependents, not file contents.", Annotations: readOnlyAnnotations("Analyze change")}, tracked(h, h.analyzeChange))
 	sdk.AddTool(server, &sdk.Tool{Name: "propose_knowledge_change", Description: "Propose durable project knowledge for human review (an OKF proposal); a person approves it later. This never writes accepted knowledge. Use to record a lasting architecture fact or decision, not transient notes.", Annotations: &sdk.ToolAnnotations{Title: "Propose knowledge change", ReadOnlyHint: false, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, tracked(h, h.proposeKnowledge))
 	sdk.AddTool(server, &sdk.Tool{Name: "validate_knowledge", Description: "Check that stored project knowledge is well-formed: evidence anchors still resolve, links are valid, and entries are current. Use before relying on or proposing knowledge. Read-only.", Annotations: readOnlyAnnotations("Validate knowledge")}, tracked(h, h.validateKnowledge))
@@ -406,7 +406,7 @@ func approveProposal(ctx context.Context, request *sdk.CallToolRequest, target s
 			return nil
 		}
 	}
-	return fmt.Errorf("client does not support host-approved elicitation; use `prowl-agent knowledge propose` locally")
+	return fmt.Errorf("client does not support host-approved elicitation; use `prowl knowledge propose` locally")
 }
 
 func (h *handlers) validateKnowledge(_ context.Context, _ *sdk.CallToolRequest, _ Empty) (*sdk.CallToolResult, findingsOut, error) {

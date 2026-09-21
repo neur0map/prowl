@@ -1,4 +1,4 @@
-// Package lsp serves Prowl Agent's index to editors over the Language Server
+// Package lsp serves Prowl's index to editors over the Language Server
 // Protocol (stdio). It is the human-facing counterpart to the MCP server: both
 // read the same per-project index, so a developer gets cross-file navigation,
 // references, hover, and inline health for config formats that usually have no

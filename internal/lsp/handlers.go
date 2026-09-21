@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/doctor"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // entity is the thing the cursor denotes: a target file, a shared resource, or
@@ -269,7 +269,7 @@ func (s *Server) publishDiagnostics(uri string) {
 		diags = append(diags, Diagnostic{
 			Range:    lineRange(f.Line),
 			Severity: diagSeverity(f.Severity),
-			Source:   "prowl-agent",
+			Source:   "prowl",
 			Code:     f.Check,
 			Message:  f.Detail,
 		})

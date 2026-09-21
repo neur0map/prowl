@@ -1,0 +1,28 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 160 160"
+  fill="none"
+  aria-hidden="true"
+>
+  <defs>
+    <linearGradient
+      id="prowl-metal"
+      x1="22"
+      y1="38"
+      x2="137"
+      y2="122"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop stop-color="#e0863c" />
+      <stop offset="0.48" stop-color="#f0c18c" />
+      <stop offset="1" stop-color="#ede6d6" />
+    </linearGradient>
+  </defs>
+  <g fill="url(#prowl-metal)">
+    <path d="M48 40h56v14H62v14h42v14H62v28H48V40Zm56 14h14v14h-14V54Z" />
+    <path
+      d="M22 40h3v70h-3zm11 0h7v70h-7zm94 0h7v70h-7zm15 0h2v70h-2z"
+      opacity="0.55"
+    />
+  </g>
+</svg>

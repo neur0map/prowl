@@ -896,13 +896,13 @@ func signalIDsForPaths(planned map[string]*plannedPath, pathIDs []string) []stri
 func nextCommands(plan Plan) []NextCommand {
 	commands := make([]NextCommand, 0, len(plan.PrimaryUnits)+1)
 	for _, unit := range plan.PrimaryUnits {
-		commands = append(commands, NextCommand{Label: "review unit " + unit.UnitID, Command: "prowl-agent review unit " + plan.ReviewID + "/" + unit.UnitID})
+		commands = append(commands, NextCommand{Label: "review unit " + unit.UnitID, Command: "prowl review unit " + plan.ReviewID + "/" + unit.UnitID})
 	}
 	if plan.Mode == ModeStructured {
-		commands = append(commands, NextCommand{Label: "check review", Command: "prowl-agent review check --review " + plan.ReviewID + " --report review-results.json"})
+		commands = append(commands, NextCommand{Label: "check review", Command: "prowl review check --review " + plan.ReviewID + " --report review-results.json"})
 	}
 	if len(commands) == 0 {
-		commands = append(commands, NextCommand{Label: "inspect review gaps", Command: "prowl-agent review plan"})
+		commands = append(commands, NextCommand{Label: "inspect review gaps", Command: "prowl review plan"})
 	}
 	return commands
 }

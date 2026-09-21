@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenteval"
+	"github.com/neur0map/prowl/internal/agenteval"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 	flag.StringVar(&cfg.Fixture, "fixture", "", "fixture repository override (default: manifest fixture)")
 	flag.StringVar(&cfg.OutputDir, "output", "", "required local relative artifact directory")
 	flag.StringVar(&cfg.ManifestPath, "manifest", "testdata/agent-adoption/prompts.json", "prompt manifest path")
-	flag.StringVar(&cfg.ProwlBinary, "prowl", "prowl-agent", "prowl-agent binary")
+	flag.StringVar(&cfg.ProwlBinary, "prowl", "prowl", "Prowl binary")
 	flag.StringVar(&cfg.ClaudeBinary, "claude", "claude", "Claude binary")
 	flag.StringVar(&cfg.OMPBinary, "omp", "omp", "OMP binary")
 	flag.DurationVar(&cfg.Timeout, "timeout", 3*time.Minute, "per-process timeout")

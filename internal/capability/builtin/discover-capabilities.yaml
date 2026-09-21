@@ -11,5 +11,5 @@ prompts: []
 resources: []
 tools: [search_capabilities]
 commands:
-  - prowl-agent capabilities search "<intent>"
-  - prowl-agent capabilities get <name>
+  - prowl capabilities search "<intent>"
+  - prowl capabilities get <name>

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultUserAgent = "prowl-agent-docs/1 (+https://github.com/neur0map/prowl-agent)"
+	defaultUserAgent = "prowl-docs/1 (+https://github.com/neur0map/prowl)"
 	maxPageBytes     = 4 << 20 // 4 MiB per fetched page
 )
 

@@ -60,15 +60,15 @@ func TestTextKeepsSurroundingCode(t *testing.T) {
 func TestTextLeavesOrdinaryCodeAlone(t *testing.T) {
 	ordinary := []string{
 		`func BuildVectors(ctx context.Context, s *store.Store) (VectorPass, error) {`,
-		`const releaseAt = "https://github.com/neur0map/prowl-agent/releases/download/"`,
+		`const releaseAt = "https://github.com/neur0map/prowl/releases/download/"`,
 		`hash := sha256.Sum256(body)`,
 		`// Applies pattern matching to mask API keys, tokens, and credentials.`,
-		`import "github.com/prowl-agent/prowl-agent/internal/store"`,
+		`import "github.com/neur0map/prowl/internal/store"`,
 		`css := "#cdd6f4"`,
 		`BudgetTokens: budgetTokens,`,
 		`Author: proposal.Author,`,
 		`MaxTokens:    rerankMaxTokens(len(candidates))`,
-		`const tokensDocURL = "github.com/neur0map/prowl-agent/blob/main/docs/TOKENS.md"`,
+		`const tokensDocURL = "github.com/neur0map/prowl/blob/main/docs/TOKENS.md"`,
 		`sum := "d41d8cd98f00b204e9800998ecf8427e"`,
 		`auth_note = "Use the token from the dashboard"`,
 		`private_key_path = "C:\\Users\\me\\keys\\id_rsa"`,

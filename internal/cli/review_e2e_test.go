@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/review"
+	"github.com/neur0map/prowl/internal/review"
 )
 
 func TestReviewCLIE2E(t *testing.T) {
@@ -294,11 +294,11 @@ func TestReviewCLILinkedWorktreeE2E(t *testing.T) {
 
 func buildReviewE2EBinary(t *testing.T, temp string) string {
 	t.Helper()
-	binary := filepath.Join(temp, "prowl-agent")
-	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", binary, "./cmd/prowl-agent")
+	binary := filepath.Join(temp, "prowl")
+	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", binary, "./cmd/prowl")
 	build.Dir = filepath.Join("..", "..")
 	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build prowl-agent: %v\n%s", err, output)
+		t.Fatalf("build prowl: %v\n%s", err, output)
 	}
 	return binary
 }

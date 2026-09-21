@@ -368,7 +368,7 @@ func validPlan() Plan {
 			PathID: "p_1", NewPath: "a.go", Status: "M",
 			ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"},
 		}},
-		NextCommands: []NextCommand{{Label: "check", Command: "prowl-agent review check --review rvw_x --report r.json"}},
+		NextCommands: []NextCommand{{Label: "check", Command: "prowl review check --review rvw_x --report r.json"}},
 	}
 }
 

@@ -1,5 +1,5 @@
 name: "Prowl review"
-description: "Index the repository and run prowl-agent doctor, emitting SARIF for GitHub code scanning so new issues surface inline on the pull request."
+description: "Index the repository and run prowl doctor, emitting SARIF for GitHub code scanning so new issues surface inline on the pull request."
 inputs:
   fail-on:
     description: "Exit non-zero when findings reach this severity: none, warn, or error."
@@ -19,10 +19,10 @@ runs:
   steps:
     - name: Index the repository
       shell: bash
-      run: prowl-agent init --no-input --no-ai >/dev/null
+      run: prowl init --no-input --no-ai >/dev/null
     - name: Run prowl doctor (SARIF)
       shell: bash
-      run: prowl-agent doctor --profile "${{ inputs.profile }}" --format sarif > "${{ inputs.sarif-path }}"
+      run: prowl doctor --profile "${{ inputs.profile }}" --format sarif > "${{ inputs.sarif-path }}"
     - name: Gate on findings
       shell: bash
-      run: prowl-agent doctor --profile "${{ inputs.profile }}" --fail-on "${{ inputs.fail-on }}"
+      run: prowl doctor --profile "${{ inputs.profile }}" --fail-on "${{ inputs.fail-on }}"

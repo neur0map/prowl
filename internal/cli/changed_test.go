@@ -19,8 +19,8 @@ func TestChangedCLIE2E(t *testing.T) {
 		t.Skip("git not available")
 	}
 	tmp := t.TempDir()
-	bin := filepath.Join(tmp, "prowl-agent")
-	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", bin, "./cmd/prowl-agent")
+	bin := filepath.Join(tmp, "prowl")
+	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", bin, "./cmd/prowl")
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build binary: %v\n%s", err, out)

@@ -12,11 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/store"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 // runQuery is the shared core behind every read-only query subcommand. It
@@ -24,7 +24,7 @@ import (
 // incrementally so the agent never reads stale data, builds a querier, runs fn,
 // and prints the result in the requested format.
 //
-// This is the CLI-first delivery path: an agent shells out to `prowl-agent find
+// This is the CLI-first delivery path: an agent shells out to `prowl find
 // battery` and gets a cited, token-lean answer. No MCP server, no `serve`, no
 // per-client process spawn, and none of MCP's upfront tool-schema token cost.
 func runQuery(ctx context.Context, needsAI bool, format outputFormat, limit int, kind string, w, errW io.Writer, fn func(*query.Querier) (any, error)) error {
@@ -41,8 +41,8 @@ func runQuery(ctx context.Context, needsAI bool, format outputFormat, limit int,
 	// pay for fewer tokens. The cap is applied before stats and output, so both
 	// reflect what was actually returned.
 	out = capSlice(out, limit)
-	// Count this answer toward the savings report, so 'prowl-agent status'
-	// reflects shell usage, not just MCP. Never fail a query over a stat write.
+	// Count this answer toward the savings report, so 'prowl status' reflects
+	// shell usage, not just MCP. Never fail a query over a stat write.
 	_ = s.RecordAnswer(out)
 	str, err := formatValue(out, format)
 	if err != nil {
@@ -68,19 +68,19 @@ func emitHint(w io.Writer, kind string, out any) {
 	case "find":
 		switch {
 		case n == 0:
-			fmt.Fprintln(w, `hint: no symbol matched; try 'prowl-agent search <text>' for content or concepts, or 'prowl-agent capabilities search "<intent>"' to find the right command`)
+			fmt.Fprintln(w, `hint: no symbol matched; try 'prowl search <text>' for content or concepts, or 'prowl capabilities search "<intent>"' to find the right command`)
 		case n > 1:
 			if hits, ok := out.([]store.SymbolHit); ok && len(hits) > 0 {
-				fmt.Fprintf(w, "hint: %d matches; 'prowl-agent def %d' reads the top one, 'prowl-agent references %s' shows its uses\n", n, hits[0].ID, hits[0].Name)
+				fmt.Fprintf(w, "hint: %d matches; 'prowl def %d' reads the top one, 'prowl references %s' shows its uses\n", n, hits[0].ID, hits[0].Name)
 			}
 		}
 	case "references":
 		if n == 0 {
-			fmt.Fprintln(w, "hint: no references; verify the name with 'prowl-agent find', or 'prowl-agent search <text>' for textual mentions")
+			fmt.Fprintln(w, "hint: no references; verify the name with 'prowl find', or 'prowl search <text>' for textual mentions")
 		}
 	case "callers", "callees", "tests", "entrypoints":
 		if n == 0 {
-			fmt.Fprintln(w, "hint: no edges found; 'prowl-agent relations <path>' shows this file's symbols and neighbors")
+			fmt.Fprintln(w, "hint: no edges found; 'prowl relations <path>' shows this file's symbols and neighbors")
 		}
 	}
 }
@@ -92,12 +92,12 @@ func searchHint(w io.Writer, matches []store.ChunkHit, compact bool) {
 		return
 	}
 	if len(matches) == 0 {
-		fmt.Fprintln(w, "hint: no matches; broaden the query, or 'prowl-agent find <name>' to look up a symbol by name")
+		fmt.Fprintln(w, "hint: no matches; broaden the query, or 'prowl find <name>' to look up a symbol by name")
 		return
 	}
 	if compact {
 		h := matches[0]
-		fmt.Fprintf(w, "hint: 'prowl-agent peek %s:%d-%d' reads a hit in place\n", h.File, h.StartLine, h.EndLine)
+		fmt.Fprintf(w, "hint: 'prowl peek %s:%d-%d' reads a hit in place\n", h.File, h.StartLine, h.EndLine)
 	}
 }
 
@@ -161,7 +161,7 @@ func semanticBuildReporter(out io.Writer) func(index.VectorPass) {
 		}
 		if !announced {
 			announced = true
-			fmt.Fprintln(out, "prowl-agent: rebuilding the semantic index after an update (one time; lexical search already works)")
+			fmt.Fprintln(out, "prowl: rebuilding the semantic index after an update (one time; lexical search already works)")
 		}
 		if pass.Remaining > 0 && time.Since(lastReport) < time.Second {
 			return
@@ -430,7 +430,7 @@ func newDefCmd() *cobra.Command {
 			defer closer()
 			def, err := q.Definition(ws.Root, a[0])
 			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "hint: no symbol %q; 'prowl-agent find %s' lists candidates, then 'prowl-agent def <id>'\n", a[0], a[0])
+				fmt.Fprintf(cmd.ErrOrStderr(), "hint: no symbol %q; 'prowl find %s' lists candidates, then 'prowl def <id>'\n", a[0], a[0])
 				return err
 			}
 			_ = s.RecordAnswer(def)

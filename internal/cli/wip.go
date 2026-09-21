@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/wip"
+	"github.com/neur0map/prowl/internal/wip"
 )
 
 // newWipCmd reports uncommitted work: the files touched since the last commit,

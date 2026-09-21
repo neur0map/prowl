@@ -1,6 +1,6 @@
 ---
 name: issue-resolution
-description: Use when asked to work through open GitHub issues end to end -- review, investigate, fix, then comment and close -- or phrasings like "clear the open issues", "triage and fix the bugs in gh", or "resolve the tracker". Investigates each issue against the code with the read-only prowl-agent CLI, lands a real fix that builds and passes the repo's checks, and closes the issue with a short, human-toned note. Keep grep for exact literal text and gh for the GitHub API itself.
+description: Use when asked to work through open GitHub issues end to end -- review, investigate, fix, then comment and close -- or phrasings like "clear the open issues", "triage and fix the bugs in gh", or "resolve the tracker". Investigates each issue against the code with the read-only prowl CLI, lands a real fix that builds and passes the repo's checks, and closes the issue with a short, human-toned note. Keep grep for exact literal text and gh for the GitHub API itself.
 ---
 
 # Issue resolution
@@ -27,12 +27,12 @@ Route every "where is this / what depends on it" question through the index:
 
 | Question | First command |
 |---|---|
-| Locate the feature or subsystem named | `prowl-agent search "<question>"` |
-| Locate a named symbol | `prowl-agent find <name>` |
-| Read the offending code | `prowl-agent def <name-or-id>` |
-| See a file's shape | `prowl-agent outline <path>` |
-| Find every caller before you change a contract | `prowl-agent references <name-or-id>` |
-| Size the blast radius of the fix | `prowl-agent impact <path>` |
+| Locate the feature or subsystem named | `prowl search "<question>"` |
+| Locate a named symbol | `prowl find <name>` |
+| Read the offending code | `prowl def <name-or-id>` |
+| See a file's shape | `prowl outline <path>` |
+| Find every caller before you change a contract | `prowl references <name-or-id>` |
+| Size the blast radius of the fix | `prowl impact <path>` |
 
 Reserve grep for an exact literal (an error string, a config key) and glob for
 filename patterns. When an issue quotes an error message, grep for that exact
@@ -40,12 +40,12 @@ string to find where it is emitted, then switch back to `find`/`def` to read it.
 
 An error string that no longer exists in the tree usually means the issue was
 fixed since the reporter's build. Confirm the current code path with
-`prowl-agent def`/`references` before deciding the bug is gone.
+`prowl def`/`references` before deciding the bug is gone.
 
 ## 3. Fix at the source
 
 - Change the cause, not the symptom. Migrate every caller a contract change
-  touches -- `prowl-agent references` before editing an exported symbol so no
+  touches -- `prowl references` before editing an exported symbol so no
   callsite is missed.
 - Follow the repo's own conventions and its `AGENTS.md`/`CONTRIBUTING.md`. Do not
   invent a second pattern beside an existing one.
@@ -56,7 +56,7 @@ fixed since the reporter's build. Confirm the current code path with
 
 - Build and run the specific test or scenario that covers the change; a passing
   targeted test is the proof, not the whole suite.
-- `prowl-agent changed` maps your edits to what they could affect, so you check
+- `prowl changed` maps your edits to what they could affect, so you check
   the right things before committing.
 - Commit through the repo's hooks. Never bypass them (`--no-verify` is
   forbidden); match the project's commit-message format.

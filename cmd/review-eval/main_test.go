@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
-	"github.com/prowl-agent/prowl-agent/internal/revieweval"
+	"github.com/neur0map/prowl/internal/agenttrial"
+	"github.com/neur0map/prowl/internal/revieweval"
 )
 
 func TestHelpExitsSuccessfully(t *testing.T) {

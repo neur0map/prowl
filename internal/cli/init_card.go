@@ -14,7 +14,7 @@ import (
 // lines with a compact, scannable summary.
 func renderInitCard(name string, indexed, symbols, edges, resolved int, langs map[string]int, integrations []string, aiOn bool) string {
 	var L []string
-	L = append(L, stTitle.Render("prowl-agent")+"  "+stGood.Render("ready"))
+	L = append(L, stTitle.Render("prowl")+"  "+stGood.Render("ready"))
 	if name != "" {
 		L = append(L, stName.Render(truncate(name, cardW)))
 	}

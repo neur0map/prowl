@@ -11,9 +11,9 @@ prompts: [understand-project, research-topic]
 resources: [prowl://workspace/current/overview, prowl://workspace/current/knowledge/index]
 tools: [search_context, get_context]
 commands:
-  - prowl-agent search <query>
-  - prowl-agent def <name>
-  - prowl-agent peek <file:start-end>
-  - prowl-agent brief <path>
-  - prowl-agent overview
-  - prowl-agent context search "<question>"
+  - prowl search <query>
+  - prowl def <name>
+  - prowl peek <file:start-end>
+  - prowl brief <path>
+  - prowl overview
+  - prowl context search "<question>"

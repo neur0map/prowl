@@ -13,17 +13,17 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/capability"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge/okfv01"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/review"
-	"github.com/prowl-agent/prowl-agent/internal/store"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/capability"
+	"github.com/neur0map/prowl/internal/config"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/knowledge"
+	"github.com/neur0map/prowl/internal/knowledge/okfv01"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/review"
+	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 // InferencerProvider resolves an optional project inferencer from configuration.
@@ -102,9 +102,35 @@ type Project struct {
 	afterIndex func()
 }
 
+// WithRoot scopes an explicit project root to ctx. OpenProject then resolves a
+// cwd-relative start ("" or ".") against dir instead of the process working
+// directory, so an in-process host can serve a workspace without mutating
+// process-global cwd and while other goroutines keep their own working
+// directory. An empty dir leaves resolution unchanged.
+func WithRoot(ctx context.Context, dir string) context.Context {
+	if dir == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, rootKey{}, dir)
+}
+
+type rootKey struct{}
+
+// resolveStart substitutes the context root for a cwd-relative start; a start
+// naming a concrete path is honored as given.
+func resolveStart(ctx context.Context, start string) string {
+	if start == "" || start == "." {
+		if root, ok := ctx.Value(rootKey{}).(string); ok && root != "" {
+			return root
+		}
+	}
+	return start
+}
+
 // OpenProject resolves a workspace, opens its derived store, loads strict
 // configuration, refreshes stale structural data, and assembles shared services.
 func OpenProject(ctx context.Context, start string, opts Options) (*Project, error) {
+	start = resolveStart(ctx, start)
 	project, err := assembleProject(ctx, start, opts, func(_ context.Context, start string) (*workspace.Workspace, error) {
 		return workspace.Resolve(start)
 	}, func(_ context.Context, path string) (config.Config, error) {

@@ -1,5 +1,5 @@
-// Package skills embeds the agent skills prowl-agent installs into a project so
-// coding agents learn when to reach for prowl. Each skill is a SKILL.md with
+// Package skills embeds the agent skills Prowl installs into a project so
+// coding agents learn when to reach for Prowl. Each skill is a SKILL.md with
 // YAML frontmatter (name, description) whose description states the triggering
 // conditions, following the convention agents use to decide when a skill applies.
 package skills
@@ -22,8 +22,8 @@ var files embed.FS
 const legacyDir = "legacy"
 
 // nativeDir holds harness-native integration assets (Claude plugin files, omp
-// agent and extension files) exposed through Native. They are not portable
-// skills, so they never appear in All().
+// agent and extension files, and prowl's routing skill) exposed through Native.
+// They are not portable skills, so they never appear in All().
 const nativeDir = "native"
 
 // Skill is one installable agent skill: a directory name and its SKILL.md body.
@@ -66,7 +66,7 @@ func Legacy(name string) (Skill, bool) {
 }
 
 // Asset is one embedded native integration file for a coding-agent client.
-// Client is the client name ("claude" or "omp"); Path is the install path
+// Client is the client name ("claude", "omp", or "prowl"); Path is the install path
 // relative to that client's native root (e.g. ".claude-plugin/plugin.json");
 // Content is the file body; Executable marks files the installer must write
 // with the execute bit. Native assets are concrete embedded files, not a plugin
@@ -80,12 +80,12 @@ type Asset struct {
 
 // Native returns the embedded native integration assets for client, sorted by
 // relative path so every consumer sees the same files in the same order. Only
-// the immediate supported clients "claude" and "omp" resolve; any other name --
-// unknown, nested (e.g. "claude/agents"), or traversal-like -- returns nil, so a
-// caller can never walk an arbitrary embedded subtree.
+// the immediate supported clients "claude", "omp", and "prowl" resolve; any
+// other name -- unknown, nested (e.g. "claude/agents"), or traversal-like --
+// returns nil, so a caller can never walk an arbitrary embedded subtree.
 func Native(client string) []Asset {
 	switch client {
-	case "claude", "omp":
+	case "claude", "omp", "prowl":
 	default:
 		return nil
 	}

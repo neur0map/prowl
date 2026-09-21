@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/setup"
+	"github.com/neur0map/prowl/internal/setup"
 )
 
 func integrationDoctorEnv(t *testing.T) (home, state string) {
@@ -45,10 +45,11 @@ func TestDoctorIntegrationsRunsOutsideProjectAndRendersJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("decode report: %v\n%s", err, out.String())
 	}
-	if report.PackageVersion != "v9.9.9" || len(report.Clients) != 2 {
+	if report.PackageVersion != "v9.9.9" || len(report.Clients) != 3 {
 		t.Fatalf("report: %+v", report)
 	}
-	if report.Clients[0].Client != setup.IntegrationClaude || report.Clients[1].Client != setup.IntegrationOMP {
+	if report.Clients[0].Client != setup.IntegrationClaude || report.Clients[1].Client != setup.IntegrationOMP ||
+		report.Clients[2].Client != setup.IntegrationProwl {
 		t.Fatalf("client order: %+v", report.Clients)
 	}
 	if _, err := os.Stat(state); !os.IsNotExist(err) {
@@ -61,7 +62,7 @@ func TestDoctorIntegrationsHonorsInheritedRootFormat(t *testing.T) {
 	cases := [][]string{{"--format=json"}, {"--format", "json"}, {"--json"}}
 	for _, flags := range cases {
 		t.Run(strings.Join(flags, "_"), func(t *testing.T) {
-			root := &cobra.Command{Use: "prowl-agent"}
+			root := &cobra.Command{Use: "prowl"}
 			Register(root, "v9.9.9", "")
 			var out bytes.Buffer
 			root.SetOut(&out)

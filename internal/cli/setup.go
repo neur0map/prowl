@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/prowl-agent/prowl-agent/internal/setup"
+	"github.com/neur0map/prowl/internal/setup"
 )
 
 const (
@@ -19,6 +19,12 @@ const (
 )
 
 var allIntegrations = setup.AllIntegrations()
+
+// completeIntegrations is the full registry -- project-level integrations plus
+// the user-level-only harnesses init folds in from DetectInstalledHarnesses --
+// so the interactive picker can display and preserve a detected user-only
+// harness rather than silently dropping a pre-selected value it never rendered.
+var completeIntegrations = setup.KnownIntegrations()
 
 // SetupAction remains the CLI's compatibility spelling for setup.Action.
 type SetupAction = setup.Action

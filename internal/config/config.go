@@ -10,7 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/neur0map/prowl/internal/boundedio"
 )
 
 // AI holds the optional semantic-assist settings. There is deliberately no embed

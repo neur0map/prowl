@@ -1,4 +1,4 @@
-// Package mcp exposes Prowl Agent's structural queries to coding agents as MCP
+// Package mcp exposes Prowl's structural queries to coding agents as MCP
 // tools over stdio, using the official MCP Go SDK.
 package mcp
 
@@ -6,12 +6,12 @@ import (
 	"context"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/prowl-agent/prowl-agent/internal/capability"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/capability"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/doctor"
+	"github.com/neur0map/prowl/internal/knowledge"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // ReindexFunc refreshes the index and returns a human-readable summary.
@@ -49,7 +49,7 @@ func NewServerWithOptions(q *query.Querier, st *store.Store, version string, rei
 	if options.Surface == SurfaceLegacy || options.Surface == SurfaceAll {
 		server = newLegacyServer(h, version)
 	} else {
-		server = sdk.NewServer(&sdk.Implementation{Name: "prowl-agent", Version: version}, nil)
+		server = sdk.NewServer(&sdk.Implementation{Name: "prowl", Version: version}, nil)
 	}
 	if options.Surface == SurfaceCore || options.Surface == SurfaceAll {
 		registerCoreTools(server, h)
@@ -60,7 +60,7 @@ func NewServerWithOptions(q *query.Querier, st *store.Store, version string, rei
 }
 
 func newLegacyServer(h *handlers, version string) *sdk.Server {
-	s := sdk.NewServer(&sdk.Implementation{Name: "prowl-agent", Version: version}, nil)
+	s := sdk.NewServer(&sdk.Implementation{Name: "prowl", Version: version}, nil)
 
 	sdk.AddTool(s, &sdk.Tool{Name: "find_symbol",
 		Description: "Find symbols (functions, settings, keybinds, components, ids) by name."}, tracked(h, h.findSymbol))
@@ -83,7 +83,7 @@ func newLegacyServer(h *handlers, version string) *sdk.Server {
 	sdk.AddTool(s, &sdk.Tool{Name: "smart_search",
 		Description: "Assist-augmented search: rewrites the query, runs hybrid retrieval, and reranks. Best for fuzzy/natural-language queries. Falls back to full-text when the semantic layer is off."}, tracked(h, h.smartSearch))
 	sdk.AddTool(s, &sdk.Tool{Name: "search_docs",
-		Description: "Search external documentation ingested via `prowl-agent docs add` (crawled library/framework docs or a local Markdown tree): a small, cited, budget-bounded context packet. For this repo's code use search_context or similar_code."}, tracked(h, h.searchDocs))
+		Description: "Search external documentation ingested via `prowl docs add` (crawled library/framework docs or a local Markdown tree): a small, cited, budget-bounded context packet. For this repo's code use search_context or similar_code."}, tracked(h, h.searchDocs))
 	sdk.AddTool(s, &sdk.Tool{Name: "architecture_violations",
 		Description: "Dangling references, orphan scripts, and hardcoded colors."}, tracked(h, h.architectureViolations))
 	sdk.AddTool(s, &sdk.Tool{Name: "repo_hotspots",

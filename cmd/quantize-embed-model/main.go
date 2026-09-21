@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/prowl-agent/prowl-agent/internal/embed"
+	"github.com/neur0map/prowl/internal/embed"
 )
 
 func main() {

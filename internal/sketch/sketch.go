@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse"
+	"github.com/neur0map/prowl/internal/parse"
 )
 
 // Model is a renderable visual sketch. Each supported dialect produces its own

@@ -1,6 +1,6 @@
 # Measuring token usage
 
-The `prowl-agent status` card shows an estimate of the tokens prowl saved your
+The `prowl status` card shows an estimate of the tokens Prowl saved your
 agent. This page explains how that number is computed and how to check it on your
 own machine. Nothing here phones home; it is all local.
 
@@ -28,8 +28,8 @@ It is an estimate, labeled as one. Treat it as a rough idea, not a guarantee.
 ## See your own numbers
 
 ```sh
-prowl-agent status          # the card, with per-project and combined savings
-prowl-agent status --json   # raw counters, including the savings block
+prowl status          # the card, with per-project and combined savings
+prowl status --json   # raw counters, including the savings block
 ```
 
 The JSON `savings` block looks like:
@@ -68,7 +68,7 @@ rg -l "$kw" | xargs wc -c | tail -1
 reads a small, ranked answer instead. After it has run a few queries, compare:
 
 ```sh
-prowl-agent status --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["savings"])'
+prowl status --json | python3 -c 'import sys,json; print(json.load(sys.stdin)["savings"])'
 ```
 
 You will usually see the answer measured in a few kilobytes where the
@@ -84,5 +84,5 @@ public ones to index and poke at:
 - https://github.com/end-4/dots-hyprland
 - https://github.com/noctalia-dev/noctalia-shell
 
-Clone one, run `prowl-agent init`, point your agent at it, and watch the savings
-add up across projects in `prowl-agent status`.
+Clone one, run `prowl init`, point your agent at it, and watch the savings
+add up across projects in `prowl status`.

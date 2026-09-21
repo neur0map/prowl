@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/store"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 // TestGoGraphPipeline verifies the full Go path: init detects the module from

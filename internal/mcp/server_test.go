@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/doctor"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestTrackedRejectsCallWhenFreshnessFails(t *testing.T) {

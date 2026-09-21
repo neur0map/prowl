@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
-	"github.com/prowl-agent/prowl-agent/internal/review"
+	"github.com/neur0map/prowl/internal/agenttrial"
+	"github.com/neur0map/prowl/internal/boundedio"
+	"github.com/neur0map/prowl/internal/review"
 )
 
 func BuildOrder(cases []Case, clients []string, repetitions int, seed uint64) ([]TrialSpec, error) {
@@ -347,7 +347,7 @@ func runOne(ctx context.Context, cfg RunConfig, scoring ScoringConfig, launcher 
 	}
 	record.ResolvedLocations = resolveLocations(repository, output.Findings)
 	if spec.Condition == ConditionTreatment {
-		evidence, planData, reportData, checkData, err := validateCheckerArtifacts(repository, *output.Checker, c, scoring.MaxOutputBytes, filepath.Join(clientRoot, "bin", "prowl-agent"), toolchain.Prowl.SHA256)
+		evidence, planData, reportData, checkData, err := validateCheckerArtifacts(repository, *output.Checker, c, scoring.MaxOutputBytes, filepath.Join(clientRoot, "bin", "prowl"), toolchain.Prowl.SHA256)
 		record.ProwlPlan, record.ProwlReport, record.CheckResult, record.Checker = planData, reportData, checkData, evidence
 		if err != nil {
 			record.Error = err.Error()
@@ -380,7 +380,7 @@ func installTreatment(clientRoot, skillSource, prowlSource, client string) (trea
 	if err := os.MkdirAll(binaryRoot, 0o700); err != nil {
 		return treatmentInstall{}, err
 	}
-	privateProwl := filepath.Join(binaryRoot, "prowl-agent")
+	privateProwl := filepath.Join(binaryRoot, "prowl")
 	if err := copyRegular(prowlSource, privateProwl, 0o700); err != nil {
 		return treatmentInstall{}, fmt.Errorf("install prowl binary: %w", err)
 	}
@@ -420,8 +420,8 @@ func installControlGuard(clientRoot string) error {
 	if err := os.MkdirAll(binaryRoot, 0o700); err != nil {
 		return err
 	}
-	const unavailable = "#!/bin/sh\nprintf '%s\\n' 'prowl-agent is unavailable in the control condition' >&2\nexit 127\n"
-	if err := os.WriteFile(filepath.Join(binaryRoot, "prowl-agent"), []byte(unavailable), 0o700); err != nil {
+	const unavailable = "#!/bin/sh\nprintf '%s\\n' 'prowl is unavailable in the control condition' >&2\nexit 127\n"
+	if err := os.WriteFile(filepath.Join(binaryRoot, "prowl"), []byte(unavailable), 0o700); err != nil {
 		return fmt.Errorf("disable control Prowl binary: %w", err)
 	}
 	return nil
@@ -1053,7 +1053,7 @@ func resolveExecutable(parent context.Context, label, requested string) (Executa
 
 func preflightToolchain(ctx context.Context, cfg *RunConfig, scoring ScoringConfig) (ToolchainIdentity, error) {
 	if cfg.ProwlBinary == "" {
-		cfg.ProwlBinary = "prowl-agent"
+		cfg.ProwlBinary = "prowl"
 	}
 	if cfg.ClaudeBinary == "" {
 		cfg.ClaudeBinary = "claude"

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/parse/extract"
 )
 
 type failingSymbolExtractor struct{}

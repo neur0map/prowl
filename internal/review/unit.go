@@ -14,8 +14,8 @@ import (
 	"sort"
 	"strings"
 
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 const (
@@ -288,7 +288,7 @@ func unitNextCommands(plan Plan, unitID string) []NextCommand {
 	}
 	out = append(out, NextCommand{
 		Label:   "check review",
-		Command: "prowl-agent review check --review " + plan.ReviewID + " --report review-results.json",
+		Command: "prowl review check --review " + plan.ReviewID + " --report review-results.json",
 	})
 	return out
 }

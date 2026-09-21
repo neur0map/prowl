@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // Resolve clears prior resolution and re-links every edge it can.

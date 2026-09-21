@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/neur0map/prowl/internal/query"
 	"github.com/spf13/cobra"
 	toon "github.com/toon-format/toon-go"
 )

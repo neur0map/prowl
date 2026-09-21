@@ -11,5 +11,5 @@ prompts: [update-knowledge]
 resources: [prowl://workspace/current/knowledge/index]
 tools: [propose_knowledge_change, validate_knowledge]
 commands:
-  - prowl-agent knowledge validate
-  - prowl-agent knowledge propose <file>
+  - prowl knowledge validate
+  - prowl knowledge propose <file>

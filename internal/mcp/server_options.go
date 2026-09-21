@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/capability"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
+	"github.com/neur0map/prowl/internal/capability"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/knowledge"
 )
 
 // Surface selects MCP tool registration without changing legacy schemas.

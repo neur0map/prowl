@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 // DefaultMarkers are the unfinished-work tags scanned inside uncommitted files.

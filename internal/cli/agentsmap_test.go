@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/setup"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/setup"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func sampleOverview() query.Overview {

@@ -72,7 +72,7 @@ func (s *Store) FileSizes() (map[string]int64, error) {
 // RecordAnswer measures one served answer for the savings report: the bytes the
 // answer serialized to, and the combined size of the indexed files it referenced
 // (what an agent would otherwise have read to find the same thing). It is called
-// once per query the CLI or MCP server answers, so 'prowl-agent status' reflects
+// once per query the CLI or MCP server answers, so 'prowl status' reflects
 // every delivery path, not just MCP.
 func (s *Store) RecordAnswer(out any) error {
 	data, err := json.Marshal(out)

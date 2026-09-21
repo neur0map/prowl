@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/review"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/review"
+	"github.com/neur0map/prowl/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -294,7 +294,7 @@ func assertReviewCommandsResolve(t *testing.T, next []review.NextCommand) {
 	root := newReviewTestRoot()
 	commands := commandPaths(root)
 	for _, advertised := range next {
-		invocation := strings.TrimSpace(strings.TrimPrefix(advertised.Command, "prowl-agent "))
+		invocation := strings.TrimSpace(strings.TrimPrefix(advertised.Command, "prowl "))
 		path, remainder, ok := resolveInvocation(commands, invocation)
 		if !ok {
 			t.Errorf("advertised command does not resolve: %q", advertised.Command)
@@ -312,7 +312,7 @@ func assertReviewCommandsResolve(t *testing.T, next []review.NextCommand) {
 }
 
 func newReviewTestRoot() *cobra.Command {
-	root := &cobra.Command{Use: "prowl-agent", SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "prowl", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().String("format", "", "")
 	root.PersistentFlags().Bool("json", false, "")
 	root.AddCommand(newReviewCmd())

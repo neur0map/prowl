@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
-	"github.com/prowl-agent/prowl-agent/internal/review"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/boundedio"
+	"github.com/neur0map/prowl/internal/review"
 	"github.com/spf13/cobra"
 )
 

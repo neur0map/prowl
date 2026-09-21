@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestFormatValueTOONTabular(t *testing.T) {

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // AddResult summarizes an ingest.

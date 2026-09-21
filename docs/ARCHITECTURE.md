@@ -1,14 +1,20 @@
 # Architecture
 
-Prowl Agent is a single Go binary. It indexes a project into a per-folder SQLite
-database and answers questions three ways from one index: read-only shell
-commands (the primary path coding agents use), an MCP stdio server, and an LSP
-stdio server for editors. There is no daemon and no network service; each query
-runs the binary, and MCP/LSP clients start it themselves.
+Prowl is a single Go binary with two independent planes. The code-intelligence
+plane indexes a project into per-folder SQLite and answers from the same index
+through read-only shell commands, an MCP stdio server, and an LSP stdio server.
+Those queries run in-process; no daemon or network service is required. The
+optional model-gateway plane is a loopback HTTP service whose inference and
+control routes require a bearer credential. Its minimal public `/api/ping`
+route returns liveness metadata and a port-bound challenge proof, allowing
+clients to authenticate the listener before sending a token. Bare `prowl`
+starts the gateway only for the lifetime of the unified TUI unless a persistent
+`prowl gateway up` daemon already exists.
 
-Shell commands are the recommended path: an agent runs `prowl-agent find foo`
-(or `overview`, `impact`, `changed`, ...) and gets a cited, token-lean answer
-with no server to start and none of MCP's upfront per-call tool-schema cost.
+Shell commands are the recommended code-intelligence path: an agent runs
+`prowl find foo` (or `overview`, `impact`, `changed`, ...) and gets a cited,
+token-lean answer with no server to start and none of MCP's upfront per-call
+tool-schema cost.
 Output defaults to TOON (Token-Oriented Object Notation): uniform result arrays
 collapse to one header plus CSV-style rows, which models read more cheaply than
 JSON. `--json` switches any command to JSON, the shape MCP also returns.
@@ -16,7 +22,7 @@ JSON. `--json` switches any command to JSON, the shape MCP also returns.
 ## Packages
 
 ```
-cmd/prowl-agent      entry point (cobra)
+cmd/prowl            entry point (cobra); bare invocation opens the unified TUI
 internal/parse       Tree-sitter grammar loading and per-language extractors
 internal/graph       include / exec / resource resolution and role inference
 internal/index       ignore-aware walk and hash-based incremental indexing
@@ -27,11 +33,15 @@ internal/revieweval  developer-only corpus preparation, trial collection, frozen
 internal/doctor      health checks (cycles, conflicts, hotspots)
 internal/mcp         MCP stdio server
 internal/lsp         Language Server (stdio) for editors (definition, references, hover, ...)
-internal/cli         commands: init (setup + optional Ollama lifecycle), the read-only query commands (find, search, overview, impact, changed, hotspots, ...), status, doctor, restart, update, version, hidden serve/lsp, file watcher, injection, TOON/JSON formatting
+internal/cli         commands: init, read-only queries, status/doctor, gateway lifecycle/injection, review, update, hidden serve/lsp, TOON/JSON formatting
 internal/config      per-project config.toml / rules.toml and a global ~/.config/prowl-agent/config.toml that remembers the semantic tier and backend
 internal/workspace   .prowl/ workspace, global registry, gitignore wiring
 internal/embed       in-process static embedder: bundled model2vec model + WordPiece tokenizer (semantic search, no setup)
 internal/assist      optional Ollama / coding-agent inferencer (higher-quality embeddings, query rewrite, rerank)
+internal/gateway     model catalogue, encrypted credential/login vaults, routing, quota/health, benchmark refresh, and lifecycle
+internal/gateway/api authenticated local control plane plus OpenAI/Anthropic/Responses-compatible inference routes
+internal/gateway/provider outbound native and OpenAI-compatible provider adapters
+internal/gateway/tui unified terminal console over the same loopback API used by daemon clients
 ```
 
 ## How it works
@@ -75,14 +85,41 @@ internal/assist      optional Ollama / coding-agent inferencer (higher-quality e
    All three carry `file:line` provenance and share the one `.prowl/index.db`.
    Each shell query and the MCP server freshen the index incrementally first, so
    answers are never stale; both also record the token savings behind
-   `prowl-agent status`.
+   `prowl status`.
 
 Indexing is incremental: only files whose content hash changed are reparsed, and
 graph resolution re-runs globally so the index stays correct as files move around.
 
+## Gateway and smart routing
+
+The gateway keeps provider keys and OAuth logins in encrypted local vaults,
+seeds account-discovered models into the shared catalogue, and resolves a
+request into an eligible chain. Hard gates (enabled state, selected set, model
+capabilities, context, credential health, cooldown, and quota) run before any
+ordering policy. A concrete model ID pins the route; `auto` uses the active
+chain, `auto:<set>` selects a named chain, and `auto:<axis>` requests one of the
+published global strategies.
+
+The smart strategy classifies at most 24 KiB of prompt content locally into a
+domain and effort profile. It performs no model call. Domain capability is
+blended with catalogue priors or fresh Artificial Analysis scores, then with
+live reliability, latency, quota headroom, and operator weights. The ordered
+chain still passes through the normal failover engine. Classification, effort,
+and reason are returned in response headers and persisted with the request log.
+
+The optional benchmark refresher reads `ARTIFICIAL_ANALYSIS_API_KEY` from the
+gateway process environment, fetches at most once daily, and atomically replaces
+only conservatively matched model rows. A failed fetch retains the last
+successful scores. The external key is never stored in the gateway database.
+
+OAuth is a credential source, not a model alias. Enrollment discovers every
+account-visible Codex or Claude model and creates keyed catalogue rows. Codex
+uses its subscription Responses adapter; Claude uses the native Messages wire
+plus its OAuth-specific Claude Code request contract.
+
 ## Native change review
 
-The experimental `prowl-agent review` command group is CLI-first and has no MCP
+The experimental `prowl review` command group is CLI-first and has no MCP
 core tool. `internal/cli/review.go` contains only Cobra wiring and presentation;
 `internal/review` owns the transport-independent Git capture, raw churn
 accounting, deterministic planning, bounded unit assembly, persistence, and

@@ -14,15 +14,15 @@ import (
 	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/parse"
-	"github.com/prowl-agent/prowl-agent/internal/setup"
-	"github.com/prowl-agent/prowl-agent/internal/store"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/doctor"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/parse"
+	"github.com/neur0map/prowl/internal/setup"
+	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 // InitOptions controls a non-interactive init.
@@ -271,12 +271,12 @@ func languageFilterMostlyExcludes(root string, ignore, languages []string) bool 
 	return excluded > allowed && excluded >= 10
 }
 
-func newInitCmd() *cobra.Command {
+func newInitCmd(version string) *cobra.Command {
 	var yes, noInput, reconfigure, dryRun, asJSON, remove bool
 	var tier, integrationValue, languagesValue, aiProvider, aiCommand string
 	c := &cobra.Command{
 		Use:   "init",
-		Short: "Plan, preview, and set up Prowl in the current folder",
+		Short: "Index the current project and configure Prowl integrations",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, _ := os.Getwd()
 			out := cmd.OutOrStdout()
@@ -308,8 +308,15 @@ func newInitCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				options := make([]huh.Option[string], 0, len(allIntegrations))
-				for _, name := range allIntegrations {
+				// Build options from the complete registry so a detected user-only
+				// harness (Pi, Hermes, OpenClaw, Prowl Legacy) that `auto`
+				// pre-selected still gets a rendered option and survives the
+				// multiselect: huh rebuilds the bound slice from rendered options
+				// only, so a pre-selected value with no option is silently dropped
+				// -- which skipped that harness's user-level skills.
+				names := initPickerNames(integrations)
+				options := make([]huh.Option[string], 0, len(names))
+				for _, name := range names {
 					options = append(options, huh.NewOption(name, name).Selected(containsString(integrations, name)))
 				}
 				form := huh.NewForm(huh.NewGroup(
@@ -329,16 +336,33 @@ func newInitCmd() *cobra.Command {
 				return err
 			}
 			if dryRun {
-				return printSetupPlan(out, plan, asJSON, true)
+				userSkills, err := planInitUserSkills(version, integrations, remove)
+				if err != nil {
+					return err
+				}
+				return printSetupPlan(out, plan, asJSON, true, userSkills)
 			}
 			if remove {
 				if err := RemoveIntegrations(root, integrations); err != nil {
 					return err
 				}
+				// Symmetric removal: the user-only harnesses (Pi, Hermes,
+				// OpenClaw, Prowl Legacy) have no project entry, so their
+				// Prowl-owned user-level skills come out through the same
+				// transaction that installed them.
+				userSkills, err := applyInitUserSkills(version, integrations, true)
+				if err != nil {
+					return err
+				}
 				if asJSON {
-					return json.NewEncoder(out).Encode(map[string]any{"root": root, "removed": integrations})
+					report := map[string]any{"root": root, "removed": integrations}
+					if userSkills != nil {
+						report["user_skills"] = userSkills
+					}
+					return json.NewEncoder(out).Encode(report)
 				}
 				fmt.Fprintf(out, "Removed Prowl-owned entries from %d integration(s).\n", len(integrations))
+				renderInitUserSkills(out, userSkills, true)
 				return nil
 			}
 
@@ -439,6 +463,15 @@ func newInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Install the user-level skills for the user-only harnesses in the
+			// selection (Pi, Hermes, OpenClaw, Prowl Legacy). They carry no
+			// project-level action, so this is the only place init configures
+			// them -- previously init counted them "configured" while writing
+			// nothing. omp and claude are covered by the project plan above.
+			userSkills, err := applyInitUserSkills(version, integrations, false)
+			if err != nil {
+				return err
+			}
 			// Run AI setup against the final saved models (resolved or preserved).
 			if provider == "ollama" {
 				final, _ := config.Load(projDir)
@@ -452,7 +485,11 @@ func newInitCmd() *cobra.Command {
 				setupAI(cmd.Context(), aiOut, config.ModelPreset{Name: tier, AssistModel: final.AI.AssistModel}, !nonInteractive)
 			}
 			if asJSON {
-				return json.NewEncoder(out).Encode(map[string]any{"root": root, "indexed": sum, "integrations": integrations, "verified": true})
+				report := map[string]any{"root": root, "indexed": sum, "integrations": integrations, "verified": true}
+				if userSkills != nil {
+					report["user_skills"] = userSkills
+				}
+				return json.NewEncoder(out).Encode(report)
 			}
 			if f, ok := out.(*os.File); ok && isTTY(f) {
 				// Pull languages and the resolution split for the card; the index
@@ -468,16 +505,17 @@ func newInitCmd() *cobra.Command {
 				}
 				fmt.Fprintln(out, renderInitCard(filepath.Base(root), sum.Indexed, sum.Symbols, sum.Edges, resolved, langs, integrations, true))
 			} else {
-				fmt.Fprintf(out, "Prowl Agent ready: %d files indexed (%d symbols, %d edges).\n", sum.Indexed, sum.Symbols, sum.Edges)
-				fmt.Fprintln(out, "Query it from your shell, no server to run:")
-				fmt.Fprintln(out, "  prowl-agent overview        a map of this project")
-				fmt.Fprintln(out, "  prowl-agent find <name>     locate any symbol")
-				fmt.Fprintln(out, "  prowl-agent search <text>   search by meaning or text")
-				fmt.Fprintln(out, "  prowl-agent docs add <url>  index external documentation")
+				fmt.Fprintf(out, "Prowl ready: %d files indexed (%d symbols, %d edges).\n", sum.Indexed, sum.Symbols, sum.Edges)
+				fmt.Fprintln(out, "Query it from your shell; no background indexer is required:")
+				fmt.Fprintln(out, "  prowl overview        a map of this project")
+				fmt.Fprintln(out, "  prowl find <name>     locate any symbol")
+				fmt.Fprintln(out, "  prowl search <text>   search by meaning or text")
+				fmt.Fprintln(out, "  prowl docs add <url>  index external documentation")
 				fmt.Fprintf(out, "%d selected integration(s) configured; .prowl/ is gitignored.\n", len(integrations))
 			}
+			renderInitUserSkills(out, userSkills, true)
 			if healed {
-				fmt.Fprintln(out, "Notice: .prowl/config.toml indexed only a minority of this repo, so indexing was reset to all detected languages (languages = auto). Run 'prowl-agent init --languages <list>' to keep a narrow set.")
+				fmt.Fprintln(out, "Notice: .prowl/config.toml indexed only a minority of this repo, so indexing was reset to all detected languages (languages = auto). Run 'prowl init --languages <list>' to keep a narrow set.")
 			}
 			for _, blocked := range blockedDestinations {
 				fmt.Fprintf(out, "Warning: %s integration skipped -- %s. Point it at a real file, or re-run with --integrations without %s.\n", blocked.Integration, blocked.Reason, blocked.Integration)
@@ -521,9 +559,13 @@ func parseLanguagesFlag(value string) ([]string, bool) {
 	return langs, true
 }
 
-func printSetupPlan(out io.Writer, plan SetupPlan, asJSON, dryRun bool) error {
+func printSetupPlan(out io.Writer, plan SetupPlan, asJSON, dryRun bool, userSkills *initUserSkillPlan) error {
 	if asJSON {
-		return json.NewEncoder(out).Encode(map[string]any{"dry_run": dryRun, "plan": plan})
+		report := map[string]any{"dry_run": dryRun, "plan": plan}
+		if userSkills != nil {
+			report["user_skills"] = userSkills
+		}
+		return json.NewEncoder(out).Encode(report)
 	}
 	fmt.Fprintf(out, "Setup plan for %s\n", collapseHome(plan.Root))
 	fmt.Fprintln(out, "  • create or refresh the local .prowl workspace and index")
@@ -552,10 +594,107 @@ func printSetupPlan(out io.Writer, plan SetupPlan, asJSON, dryRun bool) error {
 	for _, blocked := range plan.Blocked {
 		fmt.Fprintf(out, "  ! %-12s skipped: %s\n", blocked.Integration, blocked.Reason)
 	}
+	renderInitUserSkills(out, userSkills, false)
 	if dryRun {
 		fmt.Fprintln(out, "Dry run: no files were changed.")
 	}
 	return nil
+}
+
+// initUserSkillPlan is the reviewed user-level skill plan init previews or
+// applies for the user-only harnesses in an integration selection. It carries
+// the plan the transaction produced plus the options that produced it, so a
+// preview and its apply target the exact same clients and roots.
+type initUserSkillPlan struct {
+	Clients []string       `json:"clients"`
+	Remove  bool           `json:"remove"`
+	Plan    setup.UserPlan `json:"plan"`
+	opts    setup.UserInstallOptions
+}
+
+// planInitUserSkills builds the user-level skill plan for the user-only
+// harnesses in the selection (Pi, Hermes, OpenClaw, Prowl Legacy), reusing the
+// same reviewed transaction `prowl skills` drives. It returns nil when the
+// selection has no user-only harness, so init writes nothing for a project that
+// targets only project-level clients. remove switches the install plan for the
+// symmetric removal plan.
+func planInitUserSkills(version string, integrations []string, remove bool) (*initUserSkillPlan, error) {
+	clients := setup.UserOnlyInitClients(integrations)
+	if len(clients) == 0 {
+		return nil, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := setup.UserInstallOptions{Home: home, Version: version, Clients: clients}
+	var plan setup.UserPlan
+	if remove {
+		plan, err = setup.PlanUserSkillsRemoval(opts)
+	} else {
+		plan, err = setup.PlanUserSkills(opts)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &initUserSkillPlan{Clients: clients, Remove: remove, Plan: plan, opts: opts}, nil
+}
+
+// applyInitUserSkills plans and applies the user-only harness skills for the
+// selection through the same transaction, returning the reviewed plan (nil when
+// there is no user-only harness) so the caller can report what changed. It
+// applies only when the plan has writes, so an up-to-date install or an empty
+// removal touches nothing.
+func applyInitUserSkills(version string, integrations []string, remove bool) (*initUserSkillPlan, error) {
+	up, err := planInitUserSkills(version, integrations, remove)
+	if err != nil || up == nil {
+		return nil, err
+	}
+	if !planHasWrites(up.Plan) {
+		return up, nil
+	}
+	if remove {
+		_, err = setup.ApplyUserSkillsRemoval(up.opts, up.Plan, true)
+	} else {
+		_, err = setup.ApplyUserSkills(up.opts, up.Plan, true)
+	}
+	return up, err
+}
+
+// renderInitUserSkills prints the user-level skill actions init previewed
+// (applied=false) or carried out (applied=true) for the user-only harnesses,
+// including every conflict Prowl refused to touch so a preview is never
+// silently narrower than the write.
+func renderInitUserSkills(out io.Writer, up *initUserSkillPlan, applied bool) {
+	if up == nil {
+		return
+	}
+	var verb string
+	switch {
+	case up.Remove && applied:
+		verb = "removed"
+	case up.Remove:
+		verb = "remove"
+	case applied:
+		verb = "installed"
+	default:
+		verb = "install"
+	}
+	writes := writeActions(up.Plan)
+	fmt.Fprintf(out, "\nUser-level agent skills (%s) for %s:\n", verb, strings.Join(up.Clients, ", "))
+	if len(writes) == 0 && len(up.Plan.Conflicts) == 0 {
+		if up.Remove {
+			fmt.Fprintln(out, "  • nothing Prowl-owned to remove")
+		} else {
+			fmt.Fprintln(out, "  • already up to date")
+		}
+	}
+	for _, action := range writes {
+		fmt.Fprintf(out, "  • %-7s %-7s %s\n", action.Kind, action.Client, action.Destination)
+	}
+	for _, conflict := range up.Plan.Conflicts {
+		fmt.Fprintf(out, "  ! %-7s %s -- %s\n", conflict.Client, conflict.Destination, conflict.Reason)
+	}
 }
 
 func containsString(values []string, value string) bool {
@@ -565,6 +704,22 @@ func containsString(values []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// initPickerNames returns the integration names the interactive picker offers,
+// in registry order: every project-level integration, plus any user-only
+// harness currently selected (a detected Pi, Hermes, OpenClaw, or Prowl
+// Legacy). Every selected name is always included, so the multiselect -- which
+// rebuilds the bound slice from rendered options only -- can never silently
+// drop a pre-selected harness it never rendered an option for.
+func initPickerNames(selected []string) []string {
+	names := make([]string, 0, len(completeIntegrations))
+	for _, name := range completeIntegrations {
+		if containsString(selected, name) || containsString(allIntegrations, name) {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // detectAgentCLI returns a headless completion command for the first installed

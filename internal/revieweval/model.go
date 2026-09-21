@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
+	"github.com/neur0map/prowl/internal/agenttrial"
 )
 
 const (

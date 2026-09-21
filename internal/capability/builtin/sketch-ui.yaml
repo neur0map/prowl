@@ -11,4 +11,4 @@ prompts: []
 resources: []
 tools: [sketch_ui]
 commands:
-  - prowl-agent sketch <file-or-component>
+  - prowl sketch <file-or-component>

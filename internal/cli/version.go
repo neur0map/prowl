@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/selfupdate"
+	"github.com/neur0map/prowl/internal/selfupdate"
 )
 
 // newVersionCmd prints the running version and, when the daily cached check has
@@ -17,9 +17,9 @@ func newVersionCmd(version string) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "prowl-agent %s\n", version)
+			fmt.Fprintf(out, "prowl %s\n", version)
 			if r := selfupdate.Check(version); r.Available {
-				fmt.Fprintln(out, "update available; run 'prowl-agent update'")
+				fmt.Fprintln(out, "update available; run 'prowl update'")
 			}
 			return nil
 		},

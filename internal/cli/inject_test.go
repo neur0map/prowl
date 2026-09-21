@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/prowl-agent/prowl-agent/internal/setup"
+	"github.com/neur0map/prowl/internal/setup"
 	"os"
 	"path/filepath"
 	"strings"

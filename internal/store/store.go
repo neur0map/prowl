@@ -1,5 +1,5 @@
 // Package store is the SQLite persistence layer: schema, files/graph writes,
-// FTS search, and graph read queries for Prowl Agent's per-folder index.
+// FTS search, and graph read queries for Prowl's per-folder index.
 package store
 
 import (

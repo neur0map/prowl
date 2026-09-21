@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	sitter "github.com/alexaandru/go-tree-sitter-bare"
-	"github.com/prowl-agent/prowl-agent/internal/parse"
+	"github.com/neur0map/prowl/internal/parse"
 )
 
 // extractSwiftUI derives the visual sketch of a SwiftUI View from Swift source.

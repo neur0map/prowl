@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 type serviceTestStore struct {
@@ -371,11 +371,11 @@ func TestServiceCommittedEndToEndDirectAndForcedStructured(t *testing.T) {
 			if packet.Mandatory.ReviewID != plan.ReviewID || packet.Mandatory.UnitID != plan.PrimaryUnits[0].UnitID {
 				t.Fatalf("unit=%+v plan=%+v", packet.Mandatory, plan)
 			}
-			wantCheck := "prowl-agent review check --review " + plan.ReviewID + " --report review-results.json"
+			wantCheck := "prowl review check --review " + plan.ReviewID + " --report review-results.json"
 			if len(packet.NextCommands) == 0 || packet.NextCommands[len(packet.NextCommands)-1].Command != wantCheck {
 				t.Fatalf("next commands=%+v, want final %q", packet.NextCommands, wantCheck)
 			}
-			ownFetch := "prowl-agent review unit " + plan.ReviewID + "/" + plan.PrimaryUnits[0].UnitID
+			ownFetch := "prowl review unit " + plan.ReviewID + "/" + plan.PrimaryUnits[0].UnitID
 			for _, command := range packet.NextCommands {
 				if command.Command == ownFetch {
 					t.Fatalf("unit packet retained its own fetch command: %+v", packet.NextCommands)

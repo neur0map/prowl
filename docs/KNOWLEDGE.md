@@ -22,8 +22,8 @@ Older repositories may contain a broad `.prowl/` ignore. Prowl preserves that us
 ## Start a bundle
 
 ```bash
-prowl-agent knowledge init
-prowl-agent knowledge list
+prowl knowledge init
+prowl knowledge list
 ```
 
 A concept is an OKF v0.1 Markdown file:
@@ -56,14 +56,14 @@ Unknown OKF types, top-level fields, nested `prowl:` fields, and YAML scalar typ
 Proposal ingestion is deterministic and requires no model:
 
 ```bash
-prowl-agent knowledge propose \
+prowl knowledge propose \
   --file /tmp/candidate.md \
   --target decisions/storage.md \
   --author codex
 
-prowl-agent knowledge accept <proposal-id>
+prowl knowledge accept <proposal-id>
 # or
-prowl-agent knowledge reject <proposal-id>
+prowl knowledge reject <proposal-id>
 ```
 
 `propose` validates the candidate and prints a deterministic diff without modifying accepted knowledge. `accept` prints the same diff, writes atomically, appends `log.md`, refreshes the marker-owned index, and only then marks the proposal accepted. Destination collisions are refused. A failed later write restores the prior accepted document, index, and log.
@@ -71,7 +71,7 @@ prowl-agent knowledge reject <proposal-id>
 Instead of authoring the OKF file, pass the fields and prowl assembles it:
 
 ```bash
-prowl-agent knowledge propose \
+prowl knowledge propose \
   --type Claim \
   --title "Foo guards empty input" \
   --body "Foo returns early when input is empty." \
@@ -88,10 +88,10 @@ silently ignored.
 ## Inspect and validate
 
 ```bash
-prowl-agent knowledge show decision-storage
-prowl-agent knowledge show decisions/storage.md
-prowl-agent knowledge lint
-prowl-agent knowledge export ./knowledge-export
+prowl knowledge show decision-storage
+prowl knowledge show decisions/storage.md
+prowl knowledge lint
+prowl knowledge export ./knowledge-export
 ```
 
 Every command that returns structured records supports `--json`.
@@ -129,7 +129,7 @@ final newline does not affect the digest. Omit `content_hash` in a candidate and
 `propose` computes it from the current source. An unreadable path or an
 unresolved symbol is reported by lint.
 
-`prowl-agent knowledge lint --repair` rewrites the line range of every anchor
+`prowl knowledge lint --repair` rewrites the line range of every anchor
 reported as `moved_anchor`, then reports what remains. Only the coordinates
 change: the stored `content_hash` still describes the same lines, so a repaired
 anchor stays verifiable rather than merely silenced. Genuinely changed, missing,

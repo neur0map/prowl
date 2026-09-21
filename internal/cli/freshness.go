@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/index"
+	"github.com/neur0map/prowl/internal/index"
 )
 
 // freshness keeps the index current for MCP clients without a separate daemon or

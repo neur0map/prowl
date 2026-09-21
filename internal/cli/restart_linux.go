@@ -9,7 +9,7 @@ import (
 	"syscall"
 )
 
-// findProwlServers returns the PIDs of prowl-agent serve/lsp processes matching
+// findProwlServers returns the PIDs of prowl serve/lsp processes matching
 // scope (see matchProwlServer), skipping this process. It uses Linux /proc.
 func findProwlServers(scope string) []int {
 	entries, err := os.ReadDir("/proc")

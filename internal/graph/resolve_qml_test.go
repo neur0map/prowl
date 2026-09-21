@@ -3,7 +3,7 @@ package graph
 import (
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestResolveQMLComponent(t *testing.T) {

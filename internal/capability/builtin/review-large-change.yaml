@@ -11,6 +11,6 @@ prompts: [review-change]
 resources: []
 tools: []
 commands:
-  - prowl-agent review plan --base <base> --head <head>
-  - prowl-agent review unit <review-id>/<unit-id>
-  - prowl-agent review check --review <review-id> --report <report.json>
+  - prowl review plan --base <base> --head <head>
+  - prowl review unit <review-id>/<unit-id>
+  - prowl review check --review <review-id> --report <report.json>

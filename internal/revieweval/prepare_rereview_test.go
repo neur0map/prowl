@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/review"
+	"github.com/neur0map/prowl/internal/review"
 )
 
 func TestPreparationNativeDiffMatchesReviewCapturer(t *testing.T) {

@@ -33,7 +33,7 @@ func newSpanCmd() *cobra.Command {
 				return err
 			}
 			if len(spans) == 0 {
-				fmt.Fprintf(cmd.ErrOrStderr(), "hint: no symbol %q; 'prowl-agent find %s' lists candidates\n", a[0], a[0])
+				fmt.Fprintf(cmd.ErrOrStderr(), "hint: no symbol %q; 'prowl find %s' lists candidates\n", a[0], a[0])
 			}
 			_ = s.RecordAnswer(spans)
 			str, err := formatValue(spans, format)

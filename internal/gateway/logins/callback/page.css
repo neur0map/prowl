@@ -1,0 +1,400 @@
+:root {
+  color-scheme: dark;
+  --night: #201f26;
+  --surface: #2c2930;
+  --ember: #e0863c;
+  --bone: #ede6d6;
+  --bone-muted: #c7b79c;
+  --error: #e9a08e;
+  --line: rgb(237 230 214 / 12%);
+  --font: "Manrope", "Segoe UI", sans-serif;
+  --font-mono:
+    ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 280px;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: clamp(1.25rem, 5vw, 5rem);
+  background: var(--night);
+  color: var(--bone);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--ember);
+  color: var(--night);
+}
+
+.page {
+  width: min(100%, 62rem);
+}
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0 0.25rem;
+  margin-bottom: 2rem;
+}
+
+.wordmark {
+  display: block;
+  width: 8.75rem;
+  color: var(--bone);
+}
+
+.wordmark svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.context {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--bone-muted);
+}
+
+.confirmation {
+  --accent: var(--ember);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--line);
+  border-radius: 1.75rem;
+  background: var(--surface);
+  box-shadow:
+    0 2px 3px rgb(0 0 0 / 10%),
+    0 32px 80px -32px rgb(0 0 0 / 55%);
+}
+
+.confirmation.failed {
+  --accent: var(--error);
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  align-items: center;
+  gap: 2.5rem;
+  padding: 4.75rem 4rem 4.5rem;
+}
+
+.message {
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+h1 {
+  max-width: 11ch;
+  margin: 0 0 1.75rem;
+  font-size: clamp(3rem, 5.6vw, 4.75rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.06em;
+  text-wrap: balance;
+}
+
+.detail {
+  margin: 0;
+  color: var(--bone-muted);
+  font-size: 0.9375rem;
+  line-height: 1.8;
+}
+
+.subject {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--bone);
+  font-size: 1.125rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.art {
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 0;
+}
+
+.signal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 15.75rem;
+  aspect-ratio: 1;
+  border: 1px solid rgb(237 230 214 / 20%);
+  border-radius: 3rem;
+  background: linear-gradient(145deg, #494047, #302b32 48%, #252229);
+  box-shadow:
+    inset 0 1px 1px rgb(237 230 214 / 13%),
+    inset 0 -1px 2px rgb(0 0 0 / 25%),
+    14px 26px 32px -8px rgb(0 0 0 / 35%);
+  transform: perspective(800px) rotateY(-12deg) rotateZ(-9deg);
+}
+
+.signal::before {
+  content: "";
+  position: absolute;
+  inset: 0.65rem;
+  border: 1px solid rgb(237 230 214 / 6%);
+  border-radius: 2.4rem;
+  pointer-events: none;
+}
+
+.signal > svg {
+  width: 82%;
+  height: auto;
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 30%));
+}
+
+.ok .signal > svg {
+  animation: illuminate 900ms ease-out both;
+}
+
+.failed .signal > svg {
+  opacity: 0.5;
+}
+
+.seal {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  right: -0.65rem;
+  bottom: -0.65rem;
+  width: 3.5rem;
+  aspect-ratio: 1;
+  border: 6px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--night);
+  transform: rotateZ(9deg);
+}
+
+.seal svg {
+  width: 65%;
+}
+
+.reason {
+  margin-top: 1.75rem;
+  border-left: 2px solid var(--accent);
+  padding: 0.1rem 0 0.1rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.reason code {
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+.reason p {
+  margin: 0.4rem 0 0;
+  color: var(--bone-muted);
+}
+
+.handoff {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  padding: 1.75rem 2.5rem;
+  border-top: 1px solid var(--line);
+  background: rgb(0 0 0 / 7%);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.next-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.next-step svg {
+  width: 1.5rem;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.status {
+  margin: 0;
+  min-height: 1.6em;
+  color: var(--bone-muted);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  color: var(--bone);
+}
+
+.rail {
+  position: absolute;
+  right: 1.75rem;
+  bottom: 0;
+  left: 1.75rem;
+  height: 2px;
+  overflow: hidden;
+  background: rgb(237 230 214 / 5%);
+}
+
+.rail span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+}
+
+.rail.running span {
+  animation: drain var(--delay, 5s) linear forwards;
+}
+
+.colophon {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1.5rem 0.25rem 0;
+  font-size: 0.75rem;
+}
+
+.colophon a {
+  color: var(--bone-muted);
+  text-decoration: none;
+  text-underline-offset: 0.35em;
+}
+
+.colophon a:hover {
+  color: var(--bone);
+  text-decoration: underline;
+}
+
+.colophon a:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 6px;
+  border-radius: 2px;
+}
+
+@keyframes illuminate {
+  from {
+    opacity: 0.25;
+    filter: brightness(0.5) drop-shadow(0 2px 1px rgb(0 0 0 / 30%));
+  }
+  to {
+    opacity: 1;
+    filter: brightness(1) drop-shadow(0 2px 1px rgb(0 0 0 / 30%));
+  }
+}
+
+@keyframes drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (width <= 800px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr) 11rem;
+    gap: 1.5rem;
+    padding: 3rem 2rem;
+  }
+
+  .signal {
+    width: 10rem;
+    border-radius: 2rem;
+  }
+
+  .signal::before {
+    border-radius: 1.5rem;
+  }
+
+  .seal {
+    width: 3rem;
+    border-width: 5px;
+  }
+
+  .handoff {
+    flex-wrap: wrap;
+    padding: 1.5rem 2rem;
+  }
+}
+
+@media (width <= 560px) {
+  body {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .masthead {
+    margin-bottom: 1.5rem;
+  }
+
+  .wordmark {
+    width: 7rem;
+  }
+
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    padding: 2rem;
+  }
+
+  .art {
+    grid-row: 1;
+    justify-self: start;
+    padding: 0.5rem;
+  }
+
+  .signal {
+    width: 7.5rem;
+    border-radius: 1.5rem;
+  }
+
+  .signal::before {
+    inset: 0.45rem;
+    border-radius: 1.1rem;
+  }
+
+  .seal {
+    width: 2.5rem;
+  }
+
+  h1 {
+    margin-bottom: 1.25rem;
+    font-size: clamp(2.25rem, 11vw, 3.5rem);
+  }
+
+  .subject {
+    font-size: 1rem;
+  }
+
+  .handoff {
+    gap: 0.5rem;
+  }
+
+  .status {
+    flex-basis: 100%;
+    padding-left: 2.25rem;
+  }
+
+  .colophon {
+    padding-top: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ok .signal > svg,
+  .rail.running span {
+    animation: none;
+  }
+}

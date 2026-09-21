@@ -10,12 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/capability"
-	"github.com/prowl-agent/prowl-agent/internal/embed"
+	"github.com/neur0map/prowl/internal/capability"
+	"github.com/neur0map/prowl/internal/embed"
 )
 
 func newCapabilitiesCmd() *cobra.Command {
-	command := &cobra.Command{Use: "capabilities", Short: "Discover Prowl workflows and the prowl-agent commands that run them"}
+	command := &cobra.Command{Use: "capabilities", Short: "Discover Prowl workflows and the commands that run them"}
 	command.AddCommand(newCapabilitiesSearchCmd(nil), newCapabilitiesGetCmd(nil))
 	return command
 }
@@ -23,7 +23,7 @@ func newCapabilitiesCmd() *cobra.Command {
 func newCapabilitiesSearchCmd(catalog *capability.Catalog) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "search [intent]",
-		Short: "Find the right workflow (and its prowl-agent commands) by intent",
+		Short: "Find the right workflow (and its Prowl commands) by intent",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			resolved, err := resolveCapabilityCatalog(catalog)
@@ -72,7 +72,7 @@ func newCapabilitiesGetCmd(catalog *capability.Catalog) *cobra.Command {
 			}
 			manifest, ok := resolved.Get(args[0])
 			if !ok {
-				fmt.Fprintf(command.ErrOrStderr(), "hint: unknown capability %q; run 'prowl-agent capabilities search \"<intent>\"' to list workflows\n", args[0])
+				fmt.Fprintf(command.ErrOrStderr(), "hint: unknown capability %q; run 'prowl capabilities search \"<intent>\"' to list workflows\n", args[0])
 				return fmt.Errorf("capability not found: %s", args[0])
 			}
 			format, err := resolveFormat(command, command.OutOrStdout())
@@ -100,7 +100,7 @@ func newCapabilitiesGetCmd(catalog *capability.Catalog) *cobra.Command {
 }
 
 // writeCapabilitySummaries renders discovery results CLI-first: each workflow's
-// runnable prowl-agent commands sit right under its description, so the agent's
+// runnable prowl commands sit right under its description, so the agent's
 // next action is a command it can paste, not an MCP tool name.
 func writeCapabilitySummaries(w io.Writer, summaries []capability.Summary) error {
 	for _, summary := range summaries {

@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/revieweval"
+	"github.com/neur0map/prowl/internal/revieweval"
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
@@ -34,8 +34,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	flags.StringVar(&cfg.OutputDir, "output", "", "required local relative artifact directory")
 	flags.StringVar(&cfg.PreparedRoot, "prepared-root", ".", "root containing offline prepared repositories")
 	flags.StringVar(&cfg.ReviewSkill, "review-skill", "skills/prowl-pr-review", "review skill installed only for treatment")
-	flags.StringVar(&cfg.ProwlBinary, "prowl", "prowl-agent", "built Prowl binary")
-	flags.StringVar(&cfg.ProwlBinary, "prowl-binary", "prowl-agent", "built Prowl binary")
+	flags.StringVar(&cfg.ProwlBinary, "prowl", "prowl", "built Prowl binary")
+	flags.StringVar(&cfg.ProwlBinary, "prowl-binary", "prowl", "built Prowl binary")
 	flags.StringVar(&cfg.ClaudeBinary, "claude", "claude", "Claude binary")
 	flags.StringVar(&cfg.ClaudeBinary, "claude-binary", "claude", "Claude binary")
 	flags.StringVar(&cfg.OMPBinary, "omp", "omp", "OMP binary")

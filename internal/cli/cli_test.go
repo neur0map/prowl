@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func copyDir(t *testing.T, src, dst string) {
@@ -51,9 +51,9 @@ func TestRunInit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".prowl", "index.db")); err != nil {
 		t.Fatalf("index.db missing: %v", err)
 	}
-	// .mcp.json registers prowl-agent.
+	// .mcp.json registers prowl.
 	mcpData, err := os.ReadFile(filepath.Join(root, ".mcp.json"))
-	if err != nil || !strings.Contains(string(mcpData), "prowl-agent") {
+	if err != nil || !strings.Contains(string(mcpData), `"prowl"`) {
 		t.Fatalf(".mcp.json = %q err=%v", mcpData, err)
 	}
 	// AGENTS.md has the instruction block.
@@ -93,16 +93,16 @@ func TestInjectMergePreservesServers(t *testing.T) {
 	}
 	data, _ := os.ReadFile(filepath.Join(root, ".mcp.json"))
 	got := string(data)
-	if !strings.Contains(got, "prowl-agent") || !strings.Contains(got, "other") {
+	if !strings.Contains(got, `"prowl"`) || !strings.Contains(got, "other") {
 		t.Fatalf("merge lost a server: %s", got)
 	}
 	// Cursor and VS Code configs are written too.
 	cur, _ := os.ReadFile(filepath.Join(root, ".cursor", "mcp.json"))
-	if !strings.Contains(string(cur), "prowl-agent") {
-		t.Fatalf(".cursor/mcp.json missing prowl-agent: %s", cur)
+	if !strings.Contains(string(cur), `"prowl"`) {
+		t.Fatalf(".cursor/mcp.json missing prowl: %s", cur)
 	}
 	vsc, _ := os.ReadFile(filepath.Join(root, ".vscode", "mcp.json"))
-	if !strings.Contains(string(vsc), "\"servers\"") || !strings.Contains(string(vsc), "prowl-agent") {
+	if !strings.Contains(string(vsc), "\"servers\"") || !strings.Contains(string(vsc), `"prowl"`) {
 		t.Fatalf(".vscode/mcp.json wrong shape: %s", vsc)
 	}
 	// Oh My Pi, Factory droid, and OpenCode configs are written too.
@@ -111,8 +111,8 @@ func TestInjectMergePreservesServers(t *testing.T) {
 		filepath.Join(root, ".factory", "mcp.json"),
 		filepath.Join(root, "opencode.json"),
 	} {
-		if d, _ := os.ReadFile(p); !strings.Contains(string(d), "prowl-agent") {
-			t.Fatalf("%s missing prowl-agent: %s", p, d)
+		if d, _ := os.ReadFile(p); !strings.Contains(string(d), `"prowl"`) {
+			t.Fatalf("%s missing prowl: %s", p, d)
 		}
 	}
 	// OpenCode uses its own shape: an `mcp` map with a local command array.

@@ -14,11 +14,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge/okfv01"
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
-	"github.com/prowl-agent/prowl-agent/internal/store"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/knowledge"
+	"github.com/neur0map/prowl/internal/knowledge/okfv01"
+	"github.com/neur0map/prowl/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 type knowledgeSummary struct {
@@ -121,7 +121,7 @@ func newKnowledgeListCmd() *cobra.Command {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(summaries)
 			}
 			if len(summaries) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No accepted knowledge yet. Add a proposal with 'prowl-agent knowledge propose'.")
+				fmt.Fprintln(cmd.OutOrStdout(), "No accepted knowledge yet. Add a proposal with 'prowl knowledge propose'.")
 				return nil
 			}
 			for _, summary := range summaries {

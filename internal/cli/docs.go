@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/docs"
+	"github.com/neur0map/prowl/internal/docs"
 )
 
 func newDocsCmd() *cobra.Command {
@@ -105,7 +105,7 @@ func newDocsListCmd() *cobra.Command {
 				return json.NewEncoder(out).Encode(m.Sources)
 			}
 			if len(m.Sources) == 0 {
-				fmt.Fprintln(out, "No documentation sources. Add one with `prowl-agent docs add <url>`.")
+				fmt.Fprintln(out, "No documentation sources. Add one with `prowl docs add <url>`.")
 				return nil
 			}
 			for _, s := range m.Sources {

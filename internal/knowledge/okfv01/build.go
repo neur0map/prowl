@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
+	"github.com/neur0map/prowl/internal/knowledge"
 )
 
 // CaptureInput is a structured knowledge candidate. It lets a caller record a

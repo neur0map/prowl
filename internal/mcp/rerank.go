@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
+	contextpacket "github.com/neur0map/prowl/internal/context"
 )
 
 // samplingReranker orders context candidates using the connected MCP host model

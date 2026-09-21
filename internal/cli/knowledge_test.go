@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/knowledge"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 func TestKnowledgeCommandLifecycleAndDatabaseIndependence(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
+	"github.com/neur0map/prowl/internal/knowledge"
 	"gopkg.in/yaml.v3"
 )
 

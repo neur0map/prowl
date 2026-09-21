@@ -14,7 +14,7 @@ Prowl is a local-first Go application with CGO-backed SQLite extensions. Keep ch
 ```sh
 CGO_ENABLED=1 go test -tags sqlite_fts5 ./...
 CGO_ENABLED=1 go vet -tags sqlite_fts5 ./...
-CGO_ENABLED=1 go build -tags sqlite_fts5 ./cmd/prowl-agent
+CGO_ENABLED=1 go build -tags sqlite_fts5 ./cmd/prowl
 bash scripts/onboarding-smoke.sh
 ```
 

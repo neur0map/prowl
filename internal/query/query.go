@@ -1,4 +1,4 @@
-// Package query implements the 12 structural queries Prowl Agent exposes to
+// Package query implements the structural queries Prowl exposes to
 // agents. All results are deterministic and carry file:line provenance.
 package query
 
@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // Querier answers structural queries against an index.

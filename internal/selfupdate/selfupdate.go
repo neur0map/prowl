@@ -25,9 +25,9 @@ import (
 const (
 	// DevVersion is the default version string of a locally built binary.
 	DevVersion = "v0.8.1"
-	asset      = "prowl-agent-linux-amd64"
-	releaseAt  = "https://github.com/neur0map/prowl-agent/releases/download/"
-	commitsAt  = "https://api.github.com/repos/neur0map/prowl-agent/commits/"
+	asset      = "prowl-linux-amd64"
+	releaseAt  = "https://github.com/neur0map/prowl/releases/download/"
+	commitsAt  = "https://api.github.com/repos/neur0map/prowl/commits/"
 	cacheTTL   = 2 * time.Minute
 	// ChannelEnv opts a binary into a non-default channel.
 	ChannelEnv = "PROWL_UPDATE_CHANNEL"
@@ -180,7 +180,7 @@ func Apply() (string, error) {
 		return "", errors.New("checksum mismatch on downloaded binary")
 	}
 	dir := filepath.Dir(exe)
-	tmp, err := os.CreateTemp(dir, ".prowl-agent-update-*")
+	tmp, err := os.CreateTemp(dir, ".prowl-update-*")
 	if err != nil {
 		return "", fmt.Errorf("cannot write to %s (try a writable install dir or sudo): %w", dir, err)
 	}
@@ -203,7 +203,7 @@ func Apply() (string, error) {
 	return "updated to the latest " + channel.Name + " build (" + shortSum(want) + ")", nil
 }
 
-// Managed reports whether prowl-agent must defer updates to a package manager,
+// Managed reports whether Prowl must defer updates to a package manager,
 // and the message to print when it must. A binary is managed when a build-time
 // managedBy value is set (packaged builds stamp "-X main.managedBy=pacman") or
 // when the running executable's directory is not writable by the current user
@@ -226,7 +226,7 @@ func managedGuard(managedBy string, dirWritable bool) (message string, managed b
 	if name == "" {
 		name = "your package manager"
 	}
-	return "prowl-agent is managed by " + name + "; update it with your package manager (on Ryoku: ryoku update)", true
+	return "prowl is managed by " + name + "; update it with your package manager (on Ryoku: ryoku update)", true
 }
 
 // execDirWritable reports whether the directory holding the running executable
@@ -247,7 +247,7 @@ func execDirWritable() bool {
 // creating and removing a private temp file -- so the guard's verdict matches
 // what an actual replacement would find, across every OS and permission model.
 func dirWritable(dir string) bool {
-	f, err := os.CreateTemp(dir, ".prowl-agent-writable-*")
+	f, err := os.CreateTemp(dir, ".prowl-writable-*")
 	if err != nil {
 		return false
 	}
@@ -279,7 +279,7 @@ func download(url string, timeout time.Duration) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "prowl-agent")
+	req.Header.Set("User-Agent", "prowl")
 	resp, err := (&http.Client{Timeout: timeout}).Do(req)
 	if err != nil {
 		return nil, err
@@ -329,7 +329,7 @@ func cachePath() string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "prowl-agent", "update.json")
+	return filepath.Join(dir, "prowl", "update.json")
 }
 
 func readCache() (cache, bool) {

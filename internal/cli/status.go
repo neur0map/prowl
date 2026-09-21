@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/selfupdate"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/selfupdate"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 func newStatusCmd(version string) *cobra.Command {
@@ -30,10 +30,10 @@ func newStatusCmd(version string) *cobra.Command {
 					return json.NewEncoder(out).Encode(entries)
 				}
 				if len(entries) == 0 {
-					fmt.Fprintln(out, "No prowl-agent workspaces yet. Run 'prowl-agent init'.")
+					fmt.Fprintln(out, "No Prowl projects yet. Run 'prowl init'.")
 					return nil
 				}
-				fmt.Fprintln(out, "Prowl Agent workspaces:")
+				fmt.Fprintln(out, "Prowl projects:")
 				for _, e := range entries {
 					fmt.Fprintf(out, "  %s  (ai=%v)\n", e.Root, e.AI)
 				}
@@ -98,7 +98,7 @@ func printPlainStatus(out io.Writer, root string, st query.Status, upd selfupdat
 		if sem.Complete {
 			fmt.Fprintf(out, "Semantic:  fully built (%d chunks embedded)\n", sem.Embedded)
 		} else {
-			fmt.Fprintf(out, "Semantic:  building, %d of %d chunks embedded, %d to go (lexical search covers the rest; 'prowl-agent init' continues it)\n",
+			fmt.Fprintf(out, "Semantic:  building, %d of %d chunks embedded, %d to go (lexical search covers the rest; 'prowl init' continues it)\n",
 				sem.Embedded, sem.Chunks, sem.Remaining)
 		}
 	}
@@ -111,7 +111,7 @@ func printPlainStatus(out io.Writer, root string, st query.Status, upd selfupdat
 			humanTokens(combined.SavedTokens))
 	}
 	if upd.Available {
-		fmt.Fprintln(out, "Update:    available. Run 'prowl-agent update'.")
+		fmt.Fprintln(out, "Update:    available. Run 'prowl update'.")
 	} else if upd.Checked {
 		fmt.Fprintln(out, "Update:    up to date.")
 	}

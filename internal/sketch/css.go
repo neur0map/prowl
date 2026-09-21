@@ -6,7 +6,7 @@ import (
 
 	sitter "github.com/alexaandru/go-tree-sitter-bare"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse"
+	"github.com/neur0map/prowl/internal/parse"
 )
 
 // maxCSSRules bounds how many rules a sheet lists, keeping large stylesheets

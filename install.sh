@@ -1,10 +1,10 @@
 #!/bin/sh
 # Install the latest stable Prowl build on Linux or macOS. Set PROWL_RELEASE_BASE
 # to .../releases/download/preview for the unreviewed preview channel.
-#   curl -fsSL https://raw.githubusercontent.com/neur0map/prowl-agent/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/neur0map/prowl/main/install.sh | sh
 set -eu
 
-REPO="neur0map/prowl-agent"
+REPO="neur0map/prowl"
 BASE="${PROWL_RELEASE_BASE:-https://github.com/$REPO/releases/download/stable}"
 DEST="${PROWL_INSTALL_DIR:-$HOME/.local/bin}"
 
@@ -20,7 +20,7 @@ case "$(uname -m)" in
   *) echo "Unsupported architecture: $(uname -m). Build from source instead." >&2; exit 1 ;;
 esac
 
-BIN="prowl-agent-${os}-${arch}"
+BIN="prowl-${os}-${arch}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 
@@ -37,8 +37,15 @@ fi
 [ "$want" = "$got" ] || { echo "Checksum mismatch; aborting." >&2; exit 1; }
 
 mkdir -p "$DEST"
-install -m 0755 "$tmp/$BIN" "$DEST/prowl-agent"
-printf '\n  Prowl installed to %s/prowl-agent\n  Next: cd <project> && prowl-agent init\n\n' "$DEST"
+install -m 0755 "$tmp/$BIN" "$DEST/prowl"
+
+# The transitional prowl-agent command is retired. Now that the new prowl binary
+# is in place, remove the legacy sibling from this installer's own destination
+# only -- a prowl-agent found elsewhere on PATH is never touched. Skipping a
+# directory of that name and using rm -f keep a repeat install idempotent.
+legacy="$DEST/prowl-agent"
+[ -d "$legacy" ] || rm -f "$legacy"
+printf '\n  Prowl installed to %s/prowl\n  Next: cd <project> && prowl init\n\n' "$DEST"
 
 case ":$PATH:" in
   *":$DEST:"*) ;;

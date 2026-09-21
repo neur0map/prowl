@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/capability"
+	"github.com/neur0map/prowl/internal/capability"
 )
 
 func TestCapabilitiesSearchHasHumanAndJSONContracts(t *testing.T) {

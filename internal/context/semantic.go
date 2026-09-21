@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/assist"
+	"github.com/neur0map/prowl/internal/assist"
 )
 
 // AssistSemanticReranker adapts the existing optional local inferencer to context

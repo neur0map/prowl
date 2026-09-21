@@ -16,8 +16,8 @@ func TestQueryCLIE2E(t *testing.T) {
 		t.Skip("skipping process e2e in -short mode")
 	}
 	tmp := t.TempDir()
-	bin := filepath.Join(tmp, "prowl-agent")
-	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", bin, "./cmd/prowl-agent")
+	bin := filepath.Join(tmp, "prowl")
+	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", bin, "./cmd/prowl")
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build binary: %v\n%s", err, out)
@@ -79,7 +79,7 @@ func TestQueryCLIE2E(t *testing.T) {
 	}
 
 	// Shell queries count toward the savings report, like MCP calls do, so
-	// 'prowl-agent status' keeps growing on the CLI-first path.
+	// 'prowl status' keeps growing on the CLI-first path.
 	if out := run("status", "--json"); !strings.Contains(out, `"savings"`) || strings.Contains(out, `"queries":0`) {
 		t.Fatalf("expected status savings to count CLI queries: %s", out)
 	}

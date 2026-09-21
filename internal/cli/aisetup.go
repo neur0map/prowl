@@ -10,9 +10,9 @@ import (
 
 	"charm.land/huh/v2"
 
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/embed"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/embed"
 )
 
 // selectTier asks the user to choose an AI model tier.

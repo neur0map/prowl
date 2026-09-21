@@ -7,18 +7,18 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/capability"
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/skills"
+	"github.com/neur0map/prowl/internal/capability"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/skills"
 )
 
-// The command tree is the only source of truth for what prowl-agent can run, so
+// The command tree is the only source of truth for what prowl can run, so
 // every command Prowl teaches an agent to run must resolve against it. Drift is
 // silent otherwise: a renamed command or dropped flag ships while the capability
 // manifests, the installed skills, and the injected project map keep advertising
 // an invocation that now exits non-zero, and the agent pays for it.
 func TestAgentFacingCommandsResolveAgainstTheCommandTree(t *testing.T) {
-	root := &cobra.Command{Use: "prowl-agent"}
+	root := &cobra.Command{Use: "prowl"}
 	Register(root, "test", "")
 	commands := commandPaths(root)
 	if len(commands) == 0 {
@@ -29,7 +29,7 @@ func TestAgentFacingCommandsResolveAgainstTheCommandTree(t *testing.T) {
 		for _, invocation := range extractInvocations(source.text) {
 			path, remainder, ok := resolveInvocation(commands, invocation)
 			if !ok {
-				t.Errorf("%s advertises %q, but %q is not a prowl-agent command",
+				t.Errorf("%s advertises %q, but %q is not a prowl command",
 					source.name, invocation, strings.Fields(invocation)[0])
 				continue
 			}
@@ -46,7 +46,7 @@ func TestAgentFacingCommandsResolveAgainstTheCommandTree(t *testing.T) {
 }
 
 func TestAgentFacingCommandsIncludeNativeReviewOnly(t *testing.T) {
-	root := &cobra.Command{Use: "prowl-agent"}
+	root := &cobra.Command{Use: "prowl"}
 	Register(root, "test", "")
 	commands := commandPaths(root)
 	for path, flags := range map[string][]string{
@@ -74,7 +74,7 @@ func TestAgentFacingCommandsIncludeNativeReviewOnly(t *testing.T) {
 // help), while `_search-advisory` -- a Claude hook helper, never invoked by a
 // human -- is registered but hidden.
 func TestAgentFacingCommandTreeIncludesSkills(t *testing.T) {
-	root := &cobra.Command{Use: "prowl-agent"}
+	root := &cobra.Command{Use: "prowl"}
 	Register(root, "test", "")
 	commands := commandPaths(root)
 
@@ -119,7 +119,7 @@ type agentFacingSource struct {
 }
 
 // agentFacingCommandSources returns every shipped surface that tells an agent
-// which prowl-agent command to run.
+// which prowl command to run.
 func agentFacingCommandSources(t *testing.T) []agentFacingSource {
 	t.Helper()
 	catalog, err := capability.BuiltinCatalog()
@@ -152,10 +152,10 @@ var (
 	flagToken    = regexp.MustCompile(`^--[a-z][a-z0-9-]*`)
 )
 
-// extractInvocations pulls `prowl-agent ...` invocations out of code spans and
-// fenced blocks only. Prose is deliberately ignored: a sentence like "reach for
-// prowl-agent before grepping" names no command, and treating it as one would
-// bury the real signal in noise.
+// extractInvocations pulls `prowl ...` invocations out of code spans and fenced
+// blocks only. Prose is deliberately ignored: a sentence like "reach for Prowl
+// before grepping" names no command, and treating it as one would bury the real
+// signal in noise.
 func extractInvocations(text string) []string {
 	var candidates []string
 	for _, match := range fencedBlock.FindAllStringSubmatch(text, -1) {
@@ -167,7 +167,7 @@ func extractInvocations(text string) []string {
 	var invocations []string
 	for _, candidate := range candidates {
 		candidate = strings.TrimPrefix(strings.TrimSpace(candidate), "$ ")
-		rest, found := strings.CutPrefix(strings.TrimSpace(candidate), "prowl-agent ")
+		rest, found := strings.CutPrefix(strings.TrimSpace(candidate), "prowl ")
 		if !found {
 			continue
 		}

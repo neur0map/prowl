@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 type fakeBlaster struct{ summary query.BlastSummary }

@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse"
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/parse"
+	"github.com/neur0map/prowl/internal/parse/extract"
 )
 
 // HunkMappingKind describes how an indivisible unified hunk mapped to symbols.

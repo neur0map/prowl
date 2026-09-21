@@ -12,20 +12,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/skills"
+	"github.com/neur0map/prowl/skills"
 )
 
 // This file owns Prowl's user-level agent-asset installer: the ownership-safe
-// domain that lands the release-matched Claude and OMP bundles under the user's
-// own configuration roots. It is deliberately concrete -- explicit options,
-// plan, action, conflict, and manifest values -- rather than a generic provider
-// framework, and it reuses the project installer's os.Root confinement, safe
-// relative-path validation, atomic writes, and content digest.
+// domain that lands release-matched native assets plus portable skills under
+// the user's own configuration roots. It is deliberately concrete -- explicit
+// options, plan, action, conflict, and manifest values -- rather than a generic
+// provider framework, and it reuses the project installer's os.Root
+// confinement, safe relative-path validation, atomic writes, and content digest.
 //
 // Roots:
-//   - Claude: ~/.claude/skills/prowl/  (native plugin tree + canonical skills)
-//   - OMP:    ~/.omp/agent/            (canonical skills, native agent, extension)
-//
+//   - Claude:  ~/.claude/skills/prowl/ (native plugin tree + portable skills)
+//   - OMP:     ~/.omp/agent/           (portable skills, native agent, extension)
+//   - Pi:      ~/.pi/agent/            (portable skills at skills/<name>)
+//   - Hermes:  ~/.hermes/skills/prowl/ (grouped portable skills + Claude assets)
+//   - OpenClaw: ~/.openclaw/skills/prowl/ (grouped portable skills)
 // The ownership manifest lives in the platform user-state directory,
 // $XDG_STATE_HOME/prowl-agent/agent-assets.json (falling back to
 // ~/.local/state/prowl-agent/agent-assets.json), records only metadata -- never
@@ -254,7 +256,7 @@ func normalizeUserClients(clients []string) []string {
 	var out []string
 	for _, client := range clients {
 		switch client {
-		case IntegrationClaude, IntegrationOMP, IntegrationHermes:
+		case IntegrationClaude, IntegrationOMP, IntegrationHermes, IntegrationProwl, IntegrationPi, IntegrationOpenClaw:
 			if !seen[client] {
 				seen[client] = true
 				out = append(out, client)
@@ -263,6 +265,27 @@ func normalizeUserClients(clients []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// UserOnlyInitClients returns the user-level-only harnesses among an init
+// integration selection: Pi, Hermes, OpenClaw, and the retired Prowl Legacy
+// harness. These are exactly the clients actionsFor emits no project-level
+// action for, so `init` reported them "configured" while writing nothing --
+// init instead installs (and, on --remove-integrations, removes) their "when to
+// reach for prowl" skills through the user-skill transaction. omp and claude
+// are excluded: they carry project-level skill actions, and their user-level
+// skills stay behind the explicit `prowl skills` command. The selection is
+// honored directly -- an explicit or interactively kept `pi` is targeted even
+// with no pre-existing ~/.pi root -- and the result is deduped and sorted.
+func UserOnlyInitClients(integrations []string) []string {
+	var out []string
+	for _, name := range integrations {
+		switch name {
+		case IntegrationPi, IntegrationHermes, IntegrationOpenClaw, IntegrationProwl:
+			out = append(out, name)
+		}
+	}
+	return normalizeUserClients(out)
 }
 
 // userClientRoot is the home-relative root each client's assets install under.
@@ -274,6 +297,12 @@ func userClientRoot(client string) string {
 		return ".omp/agent"
 	case IntegrationHermes:
 		return ".hermes/skills/prowl"
+	case IntegrationProwl:
+		return ".config/prowl/skills/prowl"
+	case IntegrationPi:
+		return ".pi/agent"
+	case IntegrationOpenClaw:
+		return ".openclaw/skills/prowl"
 	}
 	return ""
 }
@@ -281,10 +310,15 @@ func userClientRoot(client string) string {
 // nativeAssetClient maps a user client to the client whose embedded native
 // assets it installs. Hermes has no native asset tree of its own: it reads
 // user-level skills, so it mirrors Claude's plugin, agent, command, and hook
-// files under its own root. Every other client uses its own assets.
+// files under its own root. The retired prowl-legacy harness keeps installing the
+// embedded "prowl" native routing skill (the only key skills.Native exposes for
+// it) into its ~/.config/prowl root. Every other client uses its own assets.
 func nativeAssetClient(client string) string {
-	if client == IntegrationHermes {
+	switch client {
+	case IntegrationHermes:
 		return IntegrationClaude
+	case IntegrationProwl:
+		return "prowl"
 	}
 	return client
 }
@@ -550,6 +584,31 @@ func recordIndex(m userManifest) map[string]userManifestEntry {
 	return records
 }
 
+// legacyProwlClientID is the client id an earlier release wrote for the Prowl
+// harness, before the current product took the `prowl` name and the harness was
+// retargeted to the explicit `prowl-legacy` id (IntegrationProwl).
+const legacyProwlClientID = "prowl"
+
+// migrateRetiredClients rewrites ownership records left by an earlier release
+// that keyed the retired Prowl harness as "prowl" onto its explicit id
+// "prowl-legacy", so a prior install's ownership is not stranded when the client
+// id changes. Only the client tag and the AssetID's client prefix change; the
+// recorded destination (the retained ~/.config/prowl root) and checksum are kept,
+// so the migrated record still authorizes the exact bytes Prowl installed. The
+// rewrite is idempotent: an already-migrated "prowl-legacy" entry is untouched.
+func migrateRetiredClients(m userManifest) userManifest {
+	for i := range m.Assets {
+		entry := m.Assets[i]
+		if entry.Client != legacyProwlClientID {
+			continue
+		}
+		entry.Client = IntegrationProwl
+		entry.AssetID = IntegrationProwl + strings.TrimPrefix(entry.AssetID, legacyProwlClientID)
+		m.Assets[i] = entry
+	}
+	return m
+}
+
 // PlanUserSkills computes a deterministic, filesystem-only preview.
 func PlanUserSkills(opts UserInstallOptions) (UserPlan, error) {
 	if opts.Home == "" {
@@ -605,6 +664,101 @@ func userPlanDigest(plan UserPlan) string {
 	}{plan.Version, plan.Actions, plan.Conflicts}
 	data, _ := json.Marshal(canonical)
 	return digest(data)
+}
+
+// PlanUserSkillsRemoval computes a deterministic, filesystem-only preview of
+// removing every Prowl-owned user asset for opts.Clients. Ownership is read
+// from the persisted manifest, so an asset installed by any earlier Prowl
+// version is still recognized as owned and removable -- upgrading Prowl never
+// makes a legitimately owned older asset look foreign. It is the symmetric
+// counterpart to PlanUserSkills, reused by `init --remove-integrations` so a
+// user-only harness's skills are removed as honestly as they are installed.
+func PlanUserSkillsRemoval(opts UserInstallOptions) (UserPlan, error) {
+	if opts.Home == "" {
+		return UserPlan{}, errUserHomeRequired
+	}
+	stored, err := loadUserManifest(opts)
+	if err != nil {
+		return UserPlan{}, err
+	}
+	return removalPlanFromRecords(opts, stored)
+}
+
+// removalPlanFromRecords classifies every owned record for the target clients
+// against the filesystem. The preview and the apply's stale recheck both read
+// the same persisted ownership, so the two can never disagree. Records are
+// stored sorted by destination, so the plan is deterministic.
+func removalPlanFromRecords(opts UserInstallOptions, stored userManifest) (UserPlan, error) {
+	if opts.Home == "" {
+		return UserPlan{}, errUserHomeRequired
+	}
+	root, err := os.OpenRoot(opts.Home)
+	if err != nil {
+		return UserPlan{}, err
+	}
+	defer root.Close()
+
+	targets := make(map[string]bool)
+	for _, client := range normalizeUserClients(opts.Clients) {
+		targets[client] = true
+	}
+
+	var actions []UserAction
+	var conflicts []UserConflict
+	for _, entry := range stored.Assets {
+		if !targets[entry.Client] {
+			continue
+		}
+		decision, err := classifyUserRemoval(root, entry)
+		if err != nil {
+			return UserPlan{}, err
+		}
+		switch {
+		case decision.conflict != nil:
+			conflicts = append(conflicts, *decision.conflict)
+		case decision.kind != "":
+			actions = append(actions, UserAction{
+				Kind: decision.kind, Client: entry.Client, AssetID: entry.AssetID,
+				Destination: entry.Destination, Checksum: entry.Checksum,
+			})
+		}
+	}
+	plan := UserPlan{Version: opts.Version, Actions: actions, Conflicts: conflicts}
+	plan.Digest = userPlanDigest(plan)
+	return plan, nil
+}
+
+// classifyUserRemoval decides whether one owned record can be removed.
+// Authorization is the persisted checksum, never a reconstruction of the
+// current release's bytes: a destination whose current bytes hash to the
+// recorded checksum is removed; a file that is already gone is a stale record
+// dropped without a filesystem change; a symlink, a non-regular file, or bytes
+// that no longer match are conflicts left untouched. Because it never rebuilds
+// the current-version bytes, an asset installed by an older Prowl is still
+// recognized as owned rather than looking foreign after an upgrade.
+func classifyUserRemoval(root *os.Root, entry userManifestEntry) (userDecision, error) {
+	data, kind, err := readUserDest(root, entry.Destination)
+	if err != nil {
+		return userDecision{}, err
+	}
+	conflict := func(reason string) userDecision {
+		c := UserConflict{Client: entry.Client, AssetID: entry.AssetID, Destination: entry.Destination, Reason: reason}
+		return userDecision{conflict: &c}
+	}
+	switch kind {
+	case destMissing:
+		// The file is already gone; the removal only drops the stale record.
+		return userDecision{kind: UserActionRemove}, nil
+	case destSymlink:
+		return conflict("destination is a symbolic link; left in place"), nil
+	case destIrregular:
+		return conflict("destination is not a regular file; left in place"), nil
+	default:
+		if digest(data) == entry.Checksum {
+			return userDecision{kind: UserActionRemove}, nil
+		}
+		return conflict("locally modified since Prowl installed it; left in place"), nil
+	}
 }
 
 // ApplyUserSkills applies an approved, reviewed plan transactionally.
@@ -768,6 +922,126 @@ func applyUserSkillsLocked(opts UserInstallOptions, plan UserPlan, approved bool
 	return UserApplyResult{Version: opts.Version, Actions: fresh.Actions}, nil
 }
 
+// ApplyUserSkillsRemoval applies an approved, reviewed removal plan, reusing the
+// installer's state lock, os.Root confinement, in-memory rollback, and atomic
+// manifest write. It is the remove half of the same transaction, not a second
+// installer: it removes only destinations the persisted manifest still
+// authorizes and drops their ownership records, leaving every other client's
+// assets and every conflict untouched.
+func ApplyUserSkillsRemoval(opts UserInstallOptions, plan UserPlan, approved bool) (UserApplyResult, error) {
+	return applyUserRemovalLocked(opts, plan, approved, setupLockTimeout)
+}
+
+func applyUserRemovalLocked(opts UserInstallOptions, plan UserPlan, approved bool, lockTimeout time.Duration) (UserApplyResult, error) {
+	if !approved {
+		return UserApplyResult{}, ErrApprovalRequired
+	}
+	if plan.Digest == "" || plan.Digest != userPlanDigest(plan) {
+		return UserApplyResult{}, ErrUserPlanStale
+	}
+
+	unlock, err := acquireUserStateLock(opts, lockTimeout)
+	if err != nil {
+		return UserApplyResult{}, err
+	}
+	defer unlock()
+
+	anchor, manifestRel, err := stateManifestLocation(opts)
+	if err != nil {
+		return UserApplyResult{}, err
+	}
+	root, err := os.OpenRoot(opts.Home)
+	if err != nil {
+		return UserApplyResult{}, err
+	}
+	defer root.Close()
+	stateRoot, err := os.OpenRoot(anchor)
+	if err != nil {
+		return UserApplyResult{}, err
+	}
+	defer stateRoot.Close()
+
+	// One locked manifest read feeds the merge base, the fresh removal plan, and
+	// the pre-commit snapshot, exactly as the install path does.
+	manifestSnapshot, prior, err := loadUserStateUnderLock(stateRoot, manifestRel)
+	if err != nil {
+		return UserApplyResult{}, err
+	}
+	fresh, err := removalPlanFromRecords(opts, prior)
+	if err != nil {
+		return UserApplyResult{}, err
+	}
+	if fresh.Digest != plan.Digest {
+		return UserApplyResult{}, ErrUserPlanStale
+	}
+	if len(fresh.Actions) == 0 {
+		// Nothing the manifest still authorizes for removal (all gone or all
+		// conflicts); leave the manifest and files untouched.
+		return UserApplyResult{Version: opts.Version}, nil
+	}
+	records := recordIndex(prior)
+
+	txn := &userTxn{}
+	if err := ensureUserDirs(stateRoot, manifestRel, txn); err != nil {
+		return rollbackUser(txn, err)
+	}
+
+	for _, action := range fresh.Actions {
+		record, ok := records[action.AssetID]
+		if !ok {
+			return rollbackUser(txn, fmt.Errorf("destination %s changed since planning", action.Destination))
+		}
+		if err := recheckUserRemoval(root, record, action); err != nil {
+			return rollbackUser(txn, err)
+		}
+		snapshot, err := snapshotUserFile(root, action.Destination)
+		if err != nil {
+			return rollbackUser(txn, err)
+		}
+		txn.files = append(txn.files, snapshot)
+		clean, err := validateRootPath(root, action.Destination)
+		if err != nil {
+			return rollbackUser(txn, err)
+		}
+		// A stale record whose file is already gone drops without a filesystem
+		// change, so tolerate ENOENT here.
+		if err := root.Remove(clean); err != nil && !os.IsNotExist(err) {
+			return rollbackUser(txn, err)
+		}
+	}
+
+	if unchanged, err := manifestMatchesSnapshot(stateRoot, manifestRel, manifestSnapshot); err != nil {
+		return rollbackUser(txn, err)
+	} else if !unchanged {
+		return rollbackUser(txn, errUserManifestChanged)
+	}
+
+	txn.files = append(txn.files, manifestSnapshot)
+	data, err := marshalUserManifest(mergeUserManifest(prior, opts, fresh))
+	if err != nil {
+		return rollbackUser(txn, err)
+	}
+	if err := writeAtomicInRoot(stateRoot, manifestRel, data, 0o644); err != nil {
+		return rollbackUser(txn, err)
+	}
+	return UserApplyResult{Version: opts.Version, Actions: fresh.Actions}, nil
+}
+
+// recheckUserRemoval re-derives a removal action's classification at the
+// mutation point and fails if the destination changed since planning, so a file
+// edited or replaced between plan and apply aborts and rolls back instead of
+// being deleted.
+func recheckUserRemoval(root *os.Root, record userManifestEntry, planned UserAction) error {
+	decision, err := classifyUserRemoval(root, record)
+	if err != nil {
+		return err
+	}
+	if decision.conflict != nil || decision.kind != planned.Kind {
+		return fmt.Errorf("destination %s changed since planning", planned.Destination)
+	}
+	return nil
+}
+
 // manifestMatchesSnapshot rereads the ownership manifest through the safely
 // rooted state directory and reports whether it still matches the pre-apply
 // snapshot exactly -- same existence, a regular file (not a symlink or
@@ -888,6 +1162,11 @@ func loadUserStateUnderLock(stateRoot *os.Root, rel string) (userFileSnapshot, u
 	if err := json.Unmarshal(data, &prior); err != nil {
 		return userFileSnapshot{}, userManifest{}, err
 	}
+	// Retarget any stranded pre-rename "prowl" ownership onto the explicit
+	// prowl-legacy id in memory; the byte snapshot keeps the original manifest, so
+	// the pre-commit comparison still sees no external change and the migrated ids
+	// are persisted only when this apply writes the manifest back.
+	prior = migrateRetiredClients(prior)
 	return userFileSnapshot{root: stateRoot, rel: clean, existed: true, data: data, mode: info.Mode().Perm()}, prior, nil
 }
 
@@ -977,7 +1256,16 @@ func verifyUserIntegrations(opts UserInstallOptions, probe userCLIProbe) (UserIn
 		}
 		flags[asset.Client] = f
 	}
-	for _, client := range []string{IntegrationClaude, IntegrationOMP} {
+	// Report the always-present base clients plus every additional supported
+	// harness that is detected now or recorded in the manifest, so Pi, Hermes,
+	// and OpenClaw appear with truthful state whenever they apply.
+	// normalizeUserClients filters to supported names, dedups, and sorts for a
+	// deterministic order.
+	clientNames := append([]string{IntegrationClaude, IntegrationOMP, IntegrationProwl}, opts.Clients...)
+	for client := range recorded {
+		clientNames = append(clientNames, client)
+	}
+	for _, client := range normalizeUserClients(clientNames) {
 		health := UserClientHealth{Client: client}
 		if !detected[client] {
 			health.Status = UserIntegrationAbsent
@@ -1030,7 +1318,7 @@ func (out *userCLIOutput) Write(p []byte) (int, error) {
 }
 
 func probeUserCLI() (string, bool) {
-	path, err := exec.LookPath("prowl-agent")
+	path, err := exec.LookPath("prowl")
 	if err != nil {
 		return "", false
 	}
@@ -1042,11 +1330,23 @@ func probeUserCLI() (string, bool) {
 	if err := command.Run(); err != nil || output.overflow {
 		return "", false
 	}
+	// Accept the official `--version` output in both shapes: a local build prints
+	// `prowl version <ver>` (3 fields) and a release build appends the stamped
+	// source commit -- `prowl version <ver> (commit <sha>)` (5 fields). The
+	// semantic version is always the third field; the optional suffix must not
+	// make a legitimate release build read as an absent CLI.
 	fields := strings.Fields(string(output.data))
-	if len(fields) != 3 || fields[0] != "prowl-agent" || fields[1] != "version" {
+	if len(fields) < 3 || fields[0] != "prowl" || fields[1] != "version" {
 		return "", false
 	}
-	return fields[2], true
+	switch {
+	case len(fields) == 3:
+		return fields[2], true
+	case len(fields) == 5 && fields[3] == "(commit" && strings.HasSuffix(fields[4], ")"):
+		return fields[2], true
+	default:
+		return "", false
+	}
 }
 
 // userFileSnapshot is one file's pre-apply state for in-memory rollback.

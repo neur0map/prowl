@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // overviewOf indexes a literal file tree and returns its overview, so an

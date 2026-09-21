@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/graph"
-	"github.com/prowl-agent/prowl-agent/internal/redact"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/graph"
+	"github.com/neur0map/prowl/internal/redact"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestDoctor(t *testing.T) {

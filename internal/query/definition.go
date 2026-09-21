@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // Definition is a symbol's cited source: its location, signature, and body,
@@ -63,7 +63,7 @@ func (q *Querier) Definition(root, target string) (Definition, error) {
 			return Definition{}, err
 		}
 		if len(hits) == 0 {
-			return Definition{}, fmt.Errorf("no symbol named %q (try prowl-agent find)", target)
+			return Definition{}, fmt.Errorf("no symbol named %q (try prowl find)", target)
 		}
 		hit = hits[0]
 	}

@@ -4,7 +4,7 @@ One number, bumped automatically, carried into every published binary.
 
 ## The version
 
-`var version` in `cmd/prowl-agent/main.go` is the single source of truth. Nothing
+`var version` in `cmd/prowl/main.go` is the single source of truth. Nothing
 else stores a version, and no human edits it.
 
 ```
@@ -40,7 +40,7 @@ a bump.
 Both channels publish the same five targets: `linux-amd64`, `linux-arm64`,
 `darwin-arm64`, `darwin-amd64`, `windows-amd64`, each with a `.sha256`.
 
-- **Stable** is what `prowl-agent update` downloads. Each release is permanent
+- **Stable** is what `prowl update` downloads. Each release is permanent
   under its own `vX.Y.Z` tag, and the rolling `stable` tag always points at the
   newest. Only reviewed work reaches it, because it only moves when `main` moves.
 - **Preview** carries every `unstable` commit as it lands, unreviewed. Opt in per
@@ -48,7 +48,7 @@ Both channels publish the same five targets: `linux-amd64`, `linux-arm64`,
 
   ```sh
   export PROWL_UPDATE_CHANNEL=preview
-  prowl-agent update
+  prowl update
   ```
 
   Unset the variable and update again to return to stable.
@@ -59,7 +59,7 @@ those installs have rolled forward. Do not point anything new at it.
 
 ## What the updater compares
 
-`prowl-agent update` does not compare version strings. It compares the running
+`prowl update` does not compare version strings. It compares the running
 binary's embedded VCS revision against the head commit of its channel's branch
 (`main` for stable, `unstable` for preview), then downloads the channel's asset
 and verifies its SHA-256 before replacing the executable in place. The version
@@ -83,7 +83,7 @@ pull request     ──► resolve         ──► build ×5 ──► publish
 ```
 
 Every build injects the resolved version with
-`-ldflags "-X main.version=vX.Y.Z"`, and then asserts that `prowl-agent --version`
+`-ldflags "-X main.version=vX.Y.Z"`, and then asserts that `prowl --version`
 actually reports it. Before this was enforced, releases were built with
 `git describe` and shipped reporting a commit SHA, so the bumped version never
 reached a single user.

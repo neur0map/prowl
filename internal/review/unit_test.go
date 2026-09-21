@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 func serviceUnitArtifacts(kind ScopeKind) PlanArtifacts {
@@ -70,8 +70,8 @@ func serviceUnitArtifacts(kind ScopeKind) PlanArtifacts {
 		Schema: PlanSchemaV1, ReviewID: reviewID, PlanDigest: hex.EncodeToString(full[:]), Mode: ModeDirect,
 		Scope: scope, ChangedPaths: []PlanPath{{PathID: pathID.Public, OldPath: "a.go", NewPath: "a.go", Status: "M", ReviewClass: string(ReviewClassFull), Coverage: string(PathCoverageFull), Roles: []string{RoleImplementation}}}, PrimaryUnits: []Unit{unit},
 		NextCommands: []NextCommand{
-			{Label: "review unit " + unitID.Public, Command: "prowl-agent review unit " + reviewID + "/" + unitID.Public},
-			{Label: "check review", Command: "prowl-agent review check --review " + reviewID + " --report review-results.json"},
+			{Label: "review unit " + unitID.Public, Command: "prowl review unit " + reviewID + "/" + unitID.Public},
+			{Label: "check review", Command: "prowl review check --review " + reviewID + " --report review-results.json"},
 		},
 	}
 	return PlanArtifacts{

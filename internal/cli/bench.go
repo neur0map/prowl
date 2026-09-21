@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
+	contextpacket "github.com/neur0map/prowl/internal/context"
 )
 
 // defaultBenchQuestions are generic "how/where does X work" questions that most

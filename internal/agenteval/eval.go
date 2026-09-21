@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
+	"github.com/neur0map/prowl/internal/agenttrial"
 )
 
 type Case struct {
@@ -346,7 +346,7 @@ func firstField(v map[string]any, keys ...string) any {
 	return map[string]any{}
 }
 
-var prowlCommand = regexp.MustCompile(`(?:^|[|;&]\s*)(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*(?:"[^"]*(?i:prowl-agent(?:\.exe)?)"|'[^']*(?i:prowl-agent(?:\.exe)?)'|(?:\S*[\\/])?(?i:prowl-agent(?:\.exe)?))(?:\s|$)`)
+var prowlCommand = regexp.MustCompile(`(?:^|[|;&]\s*)(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*(?:"[^"]*(?i:prowl(?:\.exe)?)"|'[^']*(?i:prowl(?:\.exe)?)'|(?:\S*[\\/])?(?i:prowl(?:\.exe)?))(?:\s|$)`)
 var citedPath = regexp.MustCompile(`[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+(?::\d+(?:-\d+)?)?`)
 
 func classifyTool(call *ToolCall) {
@@ -609,7 +609,7 @@ func Run(ctx context.Context, cfg Config, manifest Manifest) (Report, error) {
 		cfg.Timeout = 3 * time.Minute
 	}
 	if cfg.ProwlBinary == "" {
-		cfg.ProwlBinary = "prowl-agent"
+		cfg.ProwlBinary = "prowl"
 	}
 	if cfg.ClaudeBinary == "" {
 		cfg.ClaudeBinary = "claude"
@@ -642,7 +642,7 @@ func Run(ctx context.Context, cfg Config, manifest Manifest) (Report, error) {
 		}
 	}
 	fixture := resolveFixture(cfg.Fixture, fixtureName)
-	temp, err := os.MkdirTemp("", "prowl-agent-adoption-")
+	temp, err := os.MkdirTemp("", "prowl-adoption-")
 	if err != nil {
 		return Report{}, err
 	}

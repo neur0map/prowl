@@ -1,0 +1,1414 @@
+[
+ {
+  "id": "nvidia-nim",
+  "name": "NVIDIA NIM",
+  "base_url": "https://integrate.api.nvidia.com/v1",
+  "api_key_url": "https://build.nvidia.com/settings/api-keys",
+  "env": "NVIDIA_NIM_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Phone verification",
+  "free_models": 130,
+  "max_context": 1000000,
+  "modalities": [
+   "audio",
+   "embedding",
+   "image",
+   "pdf",
+   "reasoning",
+   "rerank",
+   "text",
+   "video",
+   "vision"
+  ],
+  "models": [
+   {
+    "id": "z-ai/glm-5.2",
+    "name": "z-ai/glm-5.2",
+    "context": 1000000,
+    "limits": "Up to 40 RPM"
+   },
+   {
+    "id": "z-ai/glm-5.1",
+    "name": "z-ai/glm-5.1",
+    "context": 202000,
+    "limits": "Up to 40 RPM"
+   },
+   {
+    "id": "poolside/laguna-xs-2.1",
+    "name": "poolside/laguna-xs-2.1",
+    "context": 262000,
+    "limits": "Up to 40 RPM"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "phone"
+ },
+ {
+  "id": "modelscope",
+  "name": "ModelScope",
+  "base_url": "https://api-inference.modelscope.cn/v1",
+  "api_key_url": "https://modelscope.cn/my/myaccesstoken",
+  "env": "MODELSCOPE_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 59,
+  "max_context": 1000000,
+  "modalities": [
+   "audio",
+   "image",
+   "reasoning",
+   "text",
+   "video",
+   "vision"
+  ],
+  "models": [
+   {
+    "id": "MiniMax/MiniMax-M2.5",
+    "name": "MiniMax-M2.5-highspeed",
+    "context": 204000,
+    "limits": "See provider"
+   },
+   {
+    "id": "qwen-qwen3-5-35b-a3b",
+    "name": "Qwen/Qwen3.5-35B-A3B",
+    "context": 256000,
+    "limits": "2,000 RPD total; <=500 .."
+   },
+   {
+    "id": "qwen-qwen3-5-27b",
+    "name": "Qwen/Qwen3.5-27B",
+    "context": 256000,
+    "limits": "2,000 RPD total; <=500 .."
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "cloudflare-workers-ai",
+  "name": "Cloudflare Workers AI",
+  "base_url": "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run",
+  "api_key_url": "https://dash.cloudflare.com/profile/api-tokens",
+  "env": "CLOUDFLARE_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 40,
+  "max_context": 262000,
+  "modalities": [
+   "code",
+   "image",
+   "reasoning",
+   "text",
+   "video"
+  ],
+  "models": [
+   {
+    "id": "@cf/mistral/mistral-7b-instruct-v0.1",
+    "name": "Mistral 7B",
+    "context": 32000,
+    "limits": "See provider"
+   },
+   {
+    "id": "@cf/qwen/qwen1.5-7b-chat",
+    "name": "Qwen 1.5 7B",
+    "context": 32000,
+    "limits": "See provider"
+   },
+   {
+    "id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "name": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    "context": 24000,
+    "limits": "10K neurons/day (shared)"
+   }
+  ],
+  "source": "freellm",
+  "compat": "cloudflare",
+  "requires_vars": [
+   "account_id"
+  ],
+  "friction": "none"
+ },
+ {
+  "id": "google-gemini",
+  "name": "Google Gemini",
+  "base_url": "https://generativelanguage.googleapis.com/v1beta",
+  "api_key_url": "https://aistudio.google.com/app/apikey",
+  "env": "GEMINI_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 19,
+  "max_context": 1000000,
+  "modalities": [
+   "audio",
+   "image",
+   "pdf",
+   "reasoning",
+   "text",
+   "video",
+   "vision"
+  ],
+  "models": [
+   {
+    "id": "gemini-3.7-flash",
+    "name": "Gemini 3.7 Flash",
+    "context": 1000000,
+    "limits": "-"
+   },
+   {
+    "id": "gemini-3.6-flash",
+    "name": "Gemini 3.6 Flash",
+    "context": 1000000,
+    "limits": "15 RPM, 1,500 RPD"
+   },
+   {
+    "id": "gemini-3.5-flash",
+    "name": "Gemini 3.5 Flash",
+    "context": 1000000,
+    "limits": "15 RPM, 1,500 RPD"
+   }
+  ],
+  "source": "freellm",
+  "compat": "gemini",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "llm7-io",
+  "name": "LLM7.io",
+  "base_url": "https://api.llm7.io/v1",
+  "api_key_url": "https://token.llm7.io",
+  "env": "LLM7_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 19,
+  "max_context": 1000000,
+  "modalities": [
+   "audio",
+   "code",
+   "image",
+   "pdf",
+   "reasoning",
+   "text",
+   "video",
+   "vision"
+  ],
+  "models": [
+   {
+    "id": "gpt-oss-20b",
+    "name": "gpt-oss:20b",
+    "context": 128000,
+    "limits": "10 RPM, 60 req/hr (anon.."
+   },
+   {
+    "id": "mistral-Nemo-Instruct-2407",
+    "name": "mistral-Nemo-Instruct-2407",
+    "context": 128000,
+    "limits": "10 RPM, 60 req/hr (anon.."
+   },
+   {
+    "id": "minimax-m2.7",
+    "name": "minimax-m2.7",
+    "context": 180000,
+    "limits": "10 RPM, 60 req/hr (anon.."
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "ollama-cloud",
+  "name": "Ollama Cloud",
+  "base_url": "https://ollama.com/v1",
+  "api_key_url": "https://ollama.com/settings/keys",
+  "env": "OLLAMA_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 17,
+  "max_context": 1000000,
+  "modalities": [
+   "code",
+   "image",
+   "reasoning",
+   "text",
+   "video",
+   "vision"
+  ],
+  "models": [
+   {
+    "id": "gpt-oss:20b",
+    "name": "gpt-oss 20B",
+    "context": 128000,
+    "limits": "Session/weekly limits"
+   },
+   {
+    "id": "deepseek-v4.1-flash",
+    "name": "DeepSeek V4.1 Flash",
+    "context": 1000000,
+    "limits": "Session/weekly limits"
+   },
+   {
+    "id": "glm-5.3-flash",
+    "name": "GLM 5.3 Flash",
+    "context": 200000,
+    "limits": "Session/weekly limits"
+   },
+   {
+    "id": "deepseek-v4-pro:0813",
+    "name": "DeepSeek V4 Pro",
+    "context": 1000000,
+    "limits": "Session/weekly limits"
+   },
+   {
+    "id": "kimi-k3",
+    "name": "Kimi K3",
+    "context": 256000,
+    "limits": "Session/weekly limits"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "github-models",
+  "name": "GitHub Models",
+ "base_url": "https://models.github.ai/inference",
+ "api_key_url": "https://docs.github.com/en/github-models",
+ "env": "",
+ "tier": "permanent-free",
+ "signup": "Unavailable",
+ "free_models": 0,
+ "max_context": 0,
+ "modalities": [],
+ "models": [],
+  "source": "freellm",
+ "compat": "other",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "kilo-code",
+  "name": "Kilo Code",
+  "base_url": "https://api.kilo.ai/api/gateway",
+  "api_key_url": "https://app.kilo.ai/profile",
+  "env": "KILO_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 15,
+  "max_context": 1000000,
+  "modalities": [
+   "audio",
+   "code",
+   "image",
+   "reasoning",
+   "text",
+   "video"
+  ],
+  "models": [
+   {
+    "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "name": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "context": 1000000,
+    "limits": "200 req/hr"
+   },
+   {
+    "id": "stepfun/step-3.7-flash:free",
+    "name": "stepfun/step-3.7-flash:free",
+    "context": 262000,
+    "limits": "200 req/hr"
+   },
+   {
+    "id": "nvidia/nemotron-3-super-120b-a12b:free",
+    "name": "nvidia/nemotron-3-super-120b-a12b:free",
+    "context": 262000,
+    "limits": "200 req/hr"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "mistral-ai",
+  "name": "Mistral AI",
+  "base_url": "https://api.mistral.ai/v1",
+  "api_key_url": "https://console.mistral.ai/api-keys",
+  "env": "MISTRAL_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 15,
+  "max_context": 256000,
+  "modalities": [
+   "code",
+   "image",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "open-mistral-7b",
+    "name": "Mistral 7B",
+    "context": 32000,
+    "limits": "See provider"
+   },
+   {
+    "id": "open-mixtral-8x7b",
+    "name": "Mixtral 8x7B",
+    "context": 32000,
+    "limits": "See provider"
+   },
+   {
+    "id": "mistral-medium-3-5-128b",
+    "name": "Mistral Medium 3.5 (128B)",
+    "context": 256000,
+    "limits": "~1 RPS, 500K TPM"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "ovhcloud-ai-endpoints",
+  "name": "OVHcloud AI Endpoints",
+  "base_url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+  "api_key_url": "https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/",
+  "env": "OVH_AI_ENDPOINTS_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 14,
+  "max_context": 262000,
+  "modalities": [
+   "audio",
+   "code",
+   "image",
+   "reasoning",
+   "text",
+   "video"
+  ],
+  "models": [
+   {
+    "id": "qwen3.5-397b-a17b",
+    "name": "Qwen3.5-397B-A17B",
+    "context": 131000,
+    "limits": "2 RPM (anonymous)"
+   },
+   {
+    "id": "meta-llama-3_3-70b-instruct",
+    "name": "Meta-Llama-3_3-70B-Instruct",
+    "context": 131000,
+    "limits": "2 RPM (anonymous)"
+   },
+   {
+    "id": "qwen3.6-27b",
+    "name": "Qwen3.6-27B",
+    "context": 131000,
+    "limits": "2 RPM (anonymous)"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "opencode-zen",
+  "name": "OpenCode Zen",
+  "base_url": "https://opencode.ai/zen/v1",
+  "api_key_url": "https://opencode.ai/auth",
+  "env": "OPENCODE_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 13,
+  "max_context": 1000000,
+  "modalities": [
+   "audio",
+   "reasoning",
+   "vision"
+  ],
+  "models": [
+   {
+    "id": "big-pickle",
+    "name": "big-pickle",
+    "context": 0,
+    "limits": ""
+   },
+   {
+    "id": "deepseek-v4-flash-free",
+    "name": "DeepSeek V4 Flash",
+    "context": 1000000,
+    "limits": ""
+   },
+   {
+    "id": "mimo-v2.5-free",
+    "name": "MiMo-V2.5",
+    "context": 1000000,
+    "limits": ""
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "cohere",
+  "name": "Cohere",
+  "base_url": "https://api.cohere.com/v2",
+  "api_key_url": "https://dashboard.cohere.com/api-keys",
+  "env": "COHERE_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 12,
+  "max_context": 256000,
+  "modalities": [
+   "image",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "command-a-218b",
+    "name": "Command A+ (218B)",
+    "context": 128000,
+    "limits": "20 RPM"
+   },
+   {
+    "id": "command-a-111b",
+    "name": "Command A (111B)",
+    "context": 256000,
+    "limits": "20 RPM"
+   },
+   {
+    "id": "command-r",
+    "name": "Command R+",
+    "context": 128000,
+    "limits": "20 RPM"
+   }
+  ],
+  "source": "freellm",
+  "compat": "cohere",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "groq",
+  "name": "Groq",
+  "base_url": "https://api.groq.com/openai/v1",
+  "api_key_url": "https://console.groq.com/keys",
+  "env": "GROQ_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 12,
+  "max_context": 262000,
+  "modalities": [
+   "image",
+   "reasoning",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "moonshotai/kimi-k2-instruct",
+    "name": "Moonshot Kimi K2",
+    "context": 131000,
+    "limits": "See provider"
+   },
+   {
+    "id": "moonshotai/kimi-k2-instruct-0905",
+    "name": "Moonshot Kimi K2 0905",
+    "context": 131000,
+    "limits": "See provider"
+   },
+   {
+    "id": "groq/compound",
+    "name": "groq/compound",
+    "context": 131000,
+    "limits": "30 RPM, 250 RPD"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "aion-labs",
+  "name": "Aion Labs",
+  "base_url": "https://api.aionlabs.ai/v1",
+  "api_key_url": "https://www.aionlabs.ai/app/api-keys/",
+  "env": "AION_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 11,
+  "max_context": 131000,
+  "modalities": [
+   "text"
+  ],
+  "models": [
+   {
+    "id": "aion-labs-aion-2-0",
+    "name": "aion-labs/aion-2.0",
+    "context": 128000,
+    "limits": "15 RPM, 20K TPD"
+   },
+   {
+    "id": "aion-labs-aion-rp-llama-3-1-8b",
+    "name": "aion-labs/aion-rp-llama-3.1-8b",
+    "context": 32000,
+    "limits": "15 RPM, 20K TPD"
+   },
+   {
+    "id": "aion-labs-aion-3-0",
+    "name": "aion-labs/aion-3.0",
+    "context": 128000,
+    "limits": "15 RPM, 20K TPD"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "hugging-face",
+  "name": "Hugging Face",
+  "base_url": "https://router.huggingface.co/v1",
+  "api_key_url": "https://huggingface.co/settings/tokens",
+  "env": "HF_TOKEN",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 8,
+  "max_context": 131000,
+  "modalities": [
+   "code",
+   "image",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "meta-llama-3-1-8b-instruct",
+    "name": "Meta-Llama-3.1-8B-Instruct",
+    "context": 128000,
+    "limits": "Credit-metered"
+   },
+   {
+    "id": "google/gemma-3-4b-it",
+    "name": "gemma-3-4b-it",
+    "context": 131000,
+    "limits": "Credit-metered"
+   },
+   {
+    "id": "qwen2-5-coder-7b-instruct",
+    "name": "Qwen2.5-Coder-7B-Instruct",
+    "context": 131000,
+    "limits": "Credit-metered"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "z-ai-zhipu-ai",
+  "name": "Z AI (Zhipu AI)",
+  "base_url": "https://open.bigmodel.cn/api/paas/v4",
+  "api_key_url": "https://open.bigmodel.cn/usercenter/apikeys",
+  "env": "ZAI_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 8,
+  "max_context": 200000,
+  "modalities": [
+   "image",
+   "reasoning",
+   "text",
+   "video"
+  ],
+  "models": [
+   {
+    "id": "glm-4.7-flash",
+    "name": "GLM-4.7-Flash",
+    "context": 200000,
+    "limits": "1 concurrent request"
+   },
+   {
+    "id": "glm-4-5-flash-retirement-announced",
+    "name": "GLM-4.5-Flash (retirement announced)",
+    "context": 128000,
+    "limits": "1 concurrent request"
+   },
+   {
+    "id": "glm-4-6v-flash",
+    "name": "GLM-4.6V-Flash",
+    "context": 128000,
+    "limits": "1 concurrent request"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "cerebras",
+  "name": "Cerebras",
+  "base_url": "https://api.cerebras.ai/v1",
+  "api_key_url": "https://cloud.cerebras.ai/",
+  "env": "CEREBRAS_API_KEY",
+  "tier": "permanent-free",
+  "signup": "No",
+  "free_models": 6,
+  "max_context": 131000,
+  "modalities": [
+   "reasoning",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "llama3.1-70b",
+    "name": "Llama 3.1 70B",
+    "context": 131000,
+    "limits": "See provider"
+   },
+   {
+    "id": "zai-glm-4-7-deprecated-aug-2026",
+    "name": "zai-glm-4.7 (deprecated Aug 2026)",
+    "context": 131000,
+    "limits": "5 RPM, 30K TPM, 1M TPD"
+   },
+   {
+    "id": "zai-glm-4.7",
+    "name": "zai-glm-4.7",
+    "context": 128000,
+    "limits": "10 RPM, 100 RPD, 1M TPD"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "none"
+ },
+ {
+  "id": "agnes-ai",
+  "name": "Agnes AI",
+  "base_url": "https://apihub.agnes-ai.com/v1",
+  "api_key_url": "https://platform.agnes-ai.com/settings/apiKeys",
+  "env": "AGNES_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 5,
+  "max_context": 256000,
+  "modalities": [
+   "image",
+   "reasoning",
+   "text",
+   "video",
+   "vision"
+  ],
+  "models": [
+   {
+    "id": "agnes-1.5-flash",
+    "name": "agnes-1.5-flash",
+    "context": 256000,
+    "limits": "30 RPM"
+   },
+   {
+    "id": "agnes-2.0-flash",
+    "name": "agnes-2.0-flash",
+    "context": 256000,
+    "limits": "30 RPM"
+   },
+   {
+    "id": "agnes-image-2.0-flash",
+    "name": "agnes-image-2.0-flash",
+    "context": 4000,
+    "limits": "30 RPM (1K)"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "alibaba-cloud-model-studio",
+  "name": "Alibaba Cloud Model Studio",
+  "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+  "api_key_url": "https://bailian.console.alibabacloud.com/?apiKey=1",
+  "env": "DASHSCOPE_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 5,
+  "max_context": 1000000,
+  "modalities": [
+   "code",
+   "image",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "qwen3-max",
+    "name": "Qwen3-Max",
+    "context": 128000,
+    "limits": "Tiered by region"
+   },
+   {
+    "id": "qwen3-plus",
+    "name": "Qwen3-Plus",
+    "context": 1000000,
+    "limits": "Tiered by region"
+   },
+   {
+    "id": "qwen3-vl-plus",
+    "name": "Qwen3-VL-Plus",
+    "context": 128000,
+    "limits": "Tiered by region"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "sambanova",
+  "name": "SambaNova",
+  "base_url": "https://api.sambanova.ai/v1",
+  "api_key_url": "https://cloud.sambanova.ai/apis",
+  "env": "SAMBANOVA_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 4,
+  "max_context": 128000,
+  "modalities": [
+   "image",
+   "reasoning",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "deepseek-v3-1",
+    "name": "DeepSeek-V3.1",
+    "context": 128000,
+    "limits": "20 RPM, 20 RPD, 200K TPD"
+   },
+   {
+    "id": "deepseek-v3-2-preview",
+    "name": "DeepSeek-V3.2 (Preview)",
+    "context": 128000,
+    "limits": "20 RPM, 20 RPD, 200K TPD"
+   },
+   {
+    "id": "minimax-m2-7",
+    "name": "MiniMax-M2.7",
+    "context": 128000,
+    "limits": "20 RPM, 20 RPD, 200K TPD"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "siliconflow",
+  "name": "SiliconFlow",
+  "base_url": "https://api.siliconflow.cn/v1",
+  "api_key_url": "https://cloud.siliconflow.cn/account/ak",
+  "env": "SILICONFLOW_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 3,
+  "max_context": 131000,
+  "modalities": [
+   "text"
+  ],
+  "models": [
+   {
+    "id": "abbreviation",
+    "name": "Abbreviation",
+    "context": 131000,
+    "limits": "See provider"
+   },
+   {
+    "id": "deepseek-ai-deepseek-r1-distill-qwen-7b",
+    "name": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+    "context": 131000,
+    "limits": "30 RPM, 60K TPM"
+   },
+   {
+    "id": "deepseek-ai-deepseek-ocr",
+    "name": "deepseek-ai/DeepSeek-OCR",
+    "context": 131000,
+    "limits": "30 RPM, 60K TPM"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "xai",
+  "name": "xAI",
+  "base_url": "https://api.x.ai/v1",
+  "api_key_url": "https://console.x.ai",
+  "env": "XAI_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 3,
+  "max_context": 2000000,
+  "modalities": [
+   "text"
+  ],
+  "models": [
+   {
+    "id": "grok-4-3",
+    "name": "grok-4.3",
+    "context": 1000000,
+    "limits": "Credit-based"
+   },
+   {
+    "id": "grok-4-1-fast",
+    "name": "grok-4.1-fast",
+    "context": 2000000,
+    "limits": "Credit-based"
+   },
+   {
+    "id": "grok-3-mini",
+    "name": "grok-3-mini",
+    "context": 131000,
+    "limits": "Credit-based"
+   },
+   {
+    "id": "grok-2",
+    "name": "Grok-2",
+    "context": 131000,
+    "limits": "$25/month free credits,.."
+   },
+   {
+    "id": "grok-2-mini",
+    "name": "Grok-2 Mini",
+    "context": 131000,
+    "limits": "$25/month free credits,.."
+   }
+  ],
+  "source": "freellm",
+  "aliases": [
+   "grok-xai"
+  ],
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "ai21-labs",
+  "name": "AI21 Labs",
+  "base_url": "https://api.ai21.com/studio/v1",
+  "api_key_url": "https://studio.ai21.com/account/api-key",
+  "env": "AI21_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 2,
+  "max_context": 256000,
+  "modalities": [
+   "text"
+  ],
+  "models": [
+   {
+    "id": "jamba-large-1-7",
+    "name": "Jamba Large 1.7",
+    "context": 256000,
+    "limits": "200 RPM, 10 RPS"
+   },
+   {
+    "id": "jamba-mini-2",
+    "name": "Jamba Mini 2",
+    "context": 256000,
+    "limits": "200 RPM, 10 RPS"
+   }
+  ],
+  "source": "freellm",
+  "compat": "ai21",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "chutes-ai",
+  "name": "Chutes.ai",
+ "base_url": "https://llm.chutes.ai/v1",
+  "api_key_url": "https://chutes.ai/",
+  "env": "CHUTES_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 2,
+  "max_context": 131000,
+  "modalities": [
+   "reasoning",
+   "text"
+  ],
+  "models": [
+   {
+    "id": "deepseek-ai/DeepSeek-R1",
+    "name": "DeepSeek-R1",
+    "context": 131000,
+    "limits": "Community-powered, no h.."
+   },
+   {
+    "id": "meta-llama/Meta-Llama-3.1-70B-Instruct",
+    "name": "Llama 3.1 70B",
+    "context": 131000,
+    "limits": "Community-powered, no h.."
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "base_url": "https://api.deepseek.com/v1",
+  "api_key_url": "https://platform.deepseek.com/api_keys",
+  "env": "DEEPSEEK_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 2,
+  "max_context": 128000,
+  "modalities": [
+   "text"
+  ],
+  "models": [
+   {
+    "id": "deepseek-chat-v3-2",
+    "name": "deepseek-chat (V3.2)",
+    "context": 128000,
+    "limits": "Dynamic"
+   },
+   {
+    "id": "deepseek-reasoner-r1",
+    "name": "deepseek-reasoner (R1)",
+    "context": 128000,
+    "limits": "Dynamic"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "glhf-chat",
+  "name": "Glhf.chat",
+  "base_url": "https://glhf.chat/api/openai/v1",
+  "api_key_url": "https://glhf.chat/",
+  "env": "GLHF_API_KEY",
+ "tier": "permanent-free",
+ "signup": "Unavailable",
+ "free_models": 0,
+ "max_context": 0,
+ "modalities": [],
+ "models": [],
+  "source": "freellm",
+ "compat": "other",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "nscale",
+  "name": "Nscale",
+  "base_url": "https://inference.api.nscale.com/v1",
+  "api_key_url": "https://console.nscale.com/",
+  "env": "NSCALE_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 2,
+  "max_context": 128000,
+  "modalities": [
+   "text"
+  ],
+  "models": [
+   {
+    "id": "llama-3-3-70b-instruct",
+    "name": "Llama-3.3-70B-Instruct",
+    "context": 128000,
+    "limits": "Fair-use"
+   },
+   {
+    "id": "deepseek-r1-distill-llama-70b",
+    "name": "DeepSeek-R1-Distill-Llama-70B",
+    "context": 128000,
+    "limits": "Fair-use"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "nebius",
+  "name": "Nebius",
+  "base_url": "https://api.studio.nebius.com/v1",
+  "api_key_url": "https://studio.nebius.com/settings/api-keys",
+  "env": "NEBIUS_API_KEY",
+  "tier": "permanent-free",
+  "signup": "Registration",
+  "free_models": 1,
+  "max_context": 128000,
+  "modalities": [
+   "text"
+  ],
+  "models": [
+   {
+    "id": "qwen3-235b-a22b",
+    "name": "Qwen3-235B-A22B",
+    "context": 128000,
+    "limits": "Tier-based"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "openrouter",
+  "name": "OpenRouter",
+  "base_url": "https://openrouter.ai/api/v1",
+  "api_key_url": "https://openrouter.ai/workspaces/default/keys",
+  "env": "OPENROUTER_API_KEY",
+  "tier": "renewable-credits",
+  "signup": "Registration",
+  "free_models": 32,
+  "max_context": 1000000,
+  "modalities": [
+   "audio",
+   "code",
+   "embeddings",
+   "image",
+   "reasoning",
+   "rerank",
+   "speech",
+   "text",
+   "video"
+  ],
+  "models": [
+   {
+    "id": "liquid/lfm-2.5-2.6b:free",
+    "name": "Liquid LFM 2.5 2.6B",
+    "context": 65536,
+    "limits": "See provider"
+   },
+   {
+    "id": "nex-agi/nex-n2.5-mini:free",
+    "name": "Nex N2.5 Mini",
+    "context": 262144,
+    "limits": "See provider"
+   },
+   {
+    "id": "nvidia/nemotron-3.5-lightning:free",
+    "name": "Nemotron 3.5 Lightning",
+    "context": 1000000,
+    "limits": "See provider"
+   },
+   {
+    "id": "nex-agi/nex-n2.5-pro:free",
+    "name": "Nex N2.5 Pro",
+    "context": 262144,
+    "limits": "See provider"
+   },
+   {
+    "id": "dots-studio/dots-3-note-preview:free",
+    "name": "Dots 3 Note Preview",
+    "context": 512000,
+    "limits": "See provider"
+   }
+  ],
+  "source": "freellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "anyscale",
+  "name": "Anyscale",
+  "base_url": "https://api.endpoints.anyscale.com/v1",
+ "api_key_url": "https://docs.anyscale.com/services",
+ "env": "",
+ "tier": "paid-or-credits",
+ "signup": "Custom service URL required",
+ "free_models": 0,
+ "max_context": 0,
+ "modalities": [],
+ "models": [],
+ "source": "litellm",
+ "compat": "other",
+ "requires_vars": [],
+ "friction": "registration"
+ },
+ {
+  "id": "baseten",
+  "name": "Baseten",
+  "base_url": "https://inference.baseten.co/v1",
+  "api_key_url": "",
+  "env": "BASETEN_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "codestral",
+  "name": "Codestral",
+  "base_url": "https://codestral.mistral.ai/v1",
+  "api_key_url": "",
+  "env": "CODESTRAL_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "empower",
+  "name": "Empower",
+  "base_url": "https://app.empower.dev/api/v1",
+  "api_key_url": "",
+  "env": "EMPOWER_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+ "compat": "other",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "friendliai",
+  "name": "Friendliai",
+  "base_url": "https://api.friendli.ai/serverless/v1",
+  "api_key_url": "",
+  "env": "FRIENDLIAI_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "galadriel",
+  "name": "Galadriel",
+  "base_url": "https://api.galadriel.com/v1",
+  "api_key_url": "",
+  "env": "GALADRIEL_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+ "compat": "other",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "gigachat",
+  "name": "Gigachat",
+  "base_url": "https://gigachat.devices.sberbank.ru/api/v1",
+  "api_key_url": "",
+  "env": "GIGACHAT_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+ "compat": "other",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "github",
+  "name": "Github",
+  "base_url": "https://models.inference.ai.azure.com",
+ "api_key_url": "https://docs.github.com/en/github-models",
+ "env": "",
+ "tier": "paid-or-credits",
+ "signup": "Unavailable",
+ "free_models": 0,
+ "max_context": 0,
+ "modalities": [],
+ "models": [],
+ "source": "litellm",
+ "compat": "other",
+ "requires_vars": [],
+ "friction": "registration"
+ },
+ {
+  "id": "manus",
+  "name": "Manus",
+  "base_url": "https://api.manus.im",
+ "api_key_url": "https://open.manus.im/docs/openai-compatibility",
+ "env": "",
+ "tier": "paid-or-credits",
+ "signup": "Unsupported API shape",
+ "free_models": 0,
+ "max_context": 0,
+ "modalities": [],
+ "models": [],
+ "source": "litellm",
+ "compat": "other",
+ "requires_vars": [],
+ "friction": "registration"
+ },
+ {
+  "id": "meta-llama",
+  "name": "Meta Llama",
+  "base_url": "https://api.llama.com/compat/v1",
+  "api_key_url": "",
+  "env": "LLAMA_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "novita",
+  "name": "Novita",
+  "base_url": "https://api.novita.ai/v3/openai",
+  "api_key_url": "",
+  "env": "NOVITA_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "soniox",
+  "name": "Soniox",
+  "base_url": "https://api.soniox.com",
+  "api_key_url": "",
+  "env": "SONIOX_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "other",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "tencent",
+  "name": "Tencent",
+  "base_url": "https://tokenhub-intl.tencentcloudmaas.com/v1",
+  "api_key_url": "",
+  "env": "TENCENT_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "together-ai",
+  "name": "Together Ai",
+  "base_url": "https://api.together.ai/v1",
+  "api_key_url": "",
+  "env": "TOGETHER_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "volcengine",
+  "name": "Volcengine",
+  "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+  "api_key_url": "",
+  "env": "VOLCENGINE_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ },
+ {
+  "id": "wandb",
+  "name": "Wandb",
+  "base_url": "https://api.inference.wandb.ai/v1",
+  "api_key_url": "",
+  "env": "WANDB_API_KEY",
+  "tier": "paid-or-credits",
+  "signup": "Registration",
+  "free_models": 0,
+  "max_context": 0,
+  "modalities": [],
+  "models": [],
+  "source": "litellm",
+  "compat": "openai",
+  "requires_vars": [],
+  "friction": "registration"
+ }
+]

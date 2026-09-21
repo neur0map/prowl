@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/skills"
+	"github.com/neur0map/prowl/skills"
 )
 
 // wantAsset is an independent test oracle for one installed user asset. Its
@@ -35,11 +35,11 @@ func sha256Hex(data string) string {
 // wantUserAssets rebuilds the expected destination set independently from the
 // embedded skill/native bundles, so the tests do not merely echo the installer.
 func wantUserAssets(version string, clients []string) []wantAsset {
-	roots := map[string]string{"claude": ".claude/skills/prowl", "omp": ".omp/agent"}
+	roots := map[string]string{"claude": ".claude/skills/prowl", "omp": ".omp/agent", "prowl-legacy": ".config/prowl/skills/prowl"}
 	var out []wantAsset
 	for _, client := range clients {
 		root := roots[client]
-		for _, asset := range skills.Native(client) {
+		for _, asset := range skills.Native(nativeAssetClient(client)) {
 			content := strings.ReplaceAll(asset.Content, "{{VERSION}}", version)
 			out = append(out, wantAsset{
 				AssetID:  client + ":" + asset.Path,
@@ -89,6 +89,24 @@ func actionByAssetID(plan UserPlan, id string) (UserAction, bool) {
 func conflictByAssetID(plan UserPlan, id string) (UserConflict, bool) {
 	for _, conflict := range plan.Conflicts {
 		if conflict.AssetID == id {
+			return conflict, true
+		}
+	}
+	return UserConflict{}, false
+}
+
+func actionByDest(plan UserPlan, dest string) (UserAction, bool) {
+	for _, action := range plan.Actions {
+		if action.Destination == dest {
+			return action, true
+		}
+	}
+	return UserAction{}, false
+}
+
+func conflictByDest(plan UserPlan, dest string) (UserConflict, bool) {
+	for _, conflict := range plan.Conflicts {
+		if conflict.Destination == dest {
 			return conflict, true
 		}
 	}
@@ -1380,24 +1398,27 @@ func TestUserIntegrationHealthProductionCLIProbe(t *testing.T) {
 import ("fmt"; "os"; "strings"; "time")
 func main() {
 	switch os.Getenv("PROWL_TEST_PROBE") {
-	case "valid": fmt.Println("prowl-agent version v9.9.9")
-	case "malformed": fmt.Println("prowl-agent v9.9.9")
+	case "valid": fmt.Println("prowl version v9.9.9")
+	case "stamped": fmt.Println("prowl version v9.9.9 (commit 0123456789abcdef0123456789abcdef01234567)")
+	case "stamped-open": fmt.Println("prowl version v9.9.9 (commit 0123abc")
+	case "trailing": fmt.Println("prowl version v9.9.9 extra words here")
+	case "malformed": fmt.Println("prowl v9.9.9")
 	case "overflow": fmt.Print(strings.Repeat("x", 5000))
 	case "nonzero": os.Exit(3)
-	case "slow": time.Sleep(3*time.Second); fmt.Println("prowl-agent version v9.9.9")
+	case "slow": time.Sleep(3*time.Second); fmt.Println("prowl version v9.9.9")
 	}
 }`
 	if err := os.WriteFile(source, []byte(program), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	name := "prowl-agent"
+	name := "prowl"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
 	binary := filepath.Join(dir, name)
 	build := exec.Command(goBin, "build", "-o", binary, source)
 	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build fake prowl-agent: %v\n%s", err, output)
+		t.Fatalf("build fake prowl: %v\n%s", err, output)
 	}
 	t.Setenv("PATH", dir)
 
@@ -1407,6 +1428,9 @@ func main() {
 		found   bool
 	}{
 		{"valid", "v9.9.9", true},
+		{"stamped", "v9.9.9", true},
+		{"stamped-open", "", false},
+		{"trailing", "", false},
 		{"malformed", "", false},
 		{"overflow", "", false},
 		{"nonzero", "", false},
@@ -1494,5 +1518,283 @@ func TestUserSkillHermesMirrorsClaude(t *testing.T) {
 	probe := filepath.Join(opts.Home, ".hermes", "skills", "prowl", ".claude-plugin", "plugin.json")
 	if _, err := os.Stat(probe); err != nil {
 		t.Errorf("hermes apply did not install %s: %v", probe, err)
+	}
+}
+
+// TestNormalizeUserClientsIncludesProwlLegacy proves the retired prowl-legacy
+// harness is a first-class user client: normalization keeps it alongside claude,
+// omp, and hermes, drops the current product's `prowl` id and other unknown
+// names, deduplicates, and sorts; its assets root at its retained
+// ~/.config/prowl/skills/prowl; and it resolves the embedded "prowl" native asset
+// tree rather than a tree keyed by its own id.
+func TestNormalizeUserClientsIncludesProwlLegacy(t *testing.T) {
+	got := normalizeUserClients([]string{"omp", "prowl-legacy", "claude", "prowl-legacy", "hermes", "prowl", "bogus", ""})
+	want := []string{"claude", "hermes", "omp", "prowl-legacy"}
+	if len(got) != len(want) {
+		t.Fatalf("normalizeUserClients = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("normalizeUserClients = %v, want %v", got, want)
+		}
+	}
+	if root := userClientRoot(IntegrationProwl); root != ".config/prowl/skills/prowl" {
+		t.Fatalf("userClientRoot(prowl-legacy) = %q, want .config/prowl/skills/prowl", root)
+	}
+	if src := nativeAssetClient(IntegrationProwl); src != "prowl" {
+		t.Fatalf("nativeAssetClient(prowl-legacy) = %q, want prowl", src)
+	}
+}
+
+// TestUserSkillProwlLegacyShipsOwnRoutingSkill proves the retired prowl-legacy
+// client installs the embedded prowl native routing skill plus the canonical
+// portable skills, all confined to the retained ~/.config/prowl/skills/prowl
+// root, and that the routing SKILL.md is discovered at the skill-name level
+// (.config/prowl/skills/prowl/SKILL.md).
+func TestUserSkillProwlLegacyShipsOwnRoutingSkill(t *testing.T) {
+	opts := UserInstallOptions{
+		Home:     t.TempDir(),
+		StateDir: t.TempDir(),
+		Version:  "9.9.9",
+		Clients:  []string{IntegrationProwl},
+	}
+	plan := mustPlan(t, opts)
+	if len(plan.Actions) == 0 {
+		t.Fatal("prowl plan produced no actions")
+	}
+	wantByDest := map[string]wantAsset{}
+	for _, a := range wantUserAssets("9.9.9", []string{IntegrationProwl}) {
+		wantByDest[a.Dest] = a
+	}
+	for _, action := range plan.Actions {
+		if !strings.HasPrefix(action.Destination, ".config/prowl/skills/prowl/") {
+			t.Errorf("prowl action escaped its root: %q", action.Destination)
+		}
+		want, ok := wantByDest[action.Destination]
+		if !ok {
+			t.Errorf("prowl action has no expected counterpart: %q", action.Destination)
+			continue
+		}
+		if action.Checksum != want.Checksum {
+			t.Errorf("prowl %q checksum %q, want %q", action.Destination, action.Checksum, want.Checksum)
+		}
+	}
+	if len(plan.Actions) != len(wantByDest) {
+		t.Errorf("prowl installed %d assets, expected %d", len(plan.Actions), len(wantByDest))
+	}
+	// Applying lands prowl's own routing skill at the discovered skill path.
+	mustApply(t, opts)
+	probe := filepath.Join(opts.Home, ".config", "prowl", "skills", "prowl", "SKILL.md")
+	if _, err := os.Stat(probe); err != nil {
+		t.Errorf("prowl apply did not install %s: %v", probe, err)
+	}
+}
+
+func TestUserSkillPlanPiUsesDirectDiscoverableSkills(t *testing.T) {
+	opts := UserInstallOptions{
+		Home: t.TempDir(), StateDir: t.TempDir(), Version: "9.9.9",
+		Clients: []string{IntegrationPi},
+	}
+	plan := mustPlan(t, opts)
+	if len(plan.Actions) != len(skills.All()) {
+		t.Fatalf("pi planned %d skill assets, want %d", len(plan.Actions), len(skills.All()))
+	}
+	for _, action := range plan.Actions {
+		const prefix = ".pi/agent/skills/"
+		if !strings.HasPrefix(action.Destination, prefix) {
+			t.Fatalf("pi skill escaped its discovery root: %q", action.Destination)
+		}
+		relative := strings.TrimPrefix(action.Destination, prefix)
+		if strings.Count(relative, "/") != 1 || !strings.HasSuffix(relative, "/SKILL.md") {
+			t.Fatalf("pi skill must be one directory below skills/: %q", action.Destination)
+		}
+	}
+}
+
+func TestUserSkillPlanOpenClawUsesRecursiveSkillsRoot(t *testing.T) {
+	opts := UserInstallOptions{
+		Home: t.TempDir(), StateDir: t.TempDir(), Version: "9.9.9",
+		Clients: []string{IntegrationOpenClaw},
+	}
+	plan := mustPlan(t, opts)
+	if len(plan.Actions) != len(skills.All()) {
+		t.Fatalf("openclaw planned %d skill assets, want %d", len(plan.Actions), len(skills.All()))
+	}
+	for _, action := range plan.Actions {
+		if !strings.HasPrefix(action.Destination, ".openclaw/skills/prowl/skills/") ||
+			!strings.HasSuffix(action.Destination, "/SKILL.md") {
+			t.Fatalf("openclaw skill escaped its recursive discovery root: %q", action.Destination)
+		}
+	}
+}
+
+// TestMigrateRetiredClientsRetargetsProwl proves the in-memory manifest
+// migration rewrites a pre-rename "prowl" ownership record onto the explicit
+// "prowl-legacy" id (client tag and AssetID prefix), retains destination and
+// checksum, leaves other clients alone, and is idempotent.
+func TestMigrateRetiredClientsRetargetsProwl(t *testing.T) {
+	m := userManifest{
+		Schema: userManifestSchema,
+		Assets: []userManifestEntry{
+			{AssetID: "prowl:skills/code-search/SKILL.md", Client: "prowl", Destination: ".config/prowl/skills/prowl/skills/code-search/SKILL.md", Checksum: "abc"},
+			{AssetID: "claude:skills/code-search/SKILL.md", Client: "claude", Destination: ".claude/skills/prowl/skills/code-search/SKILL.md", Checksum: "def"},
+			{AssetID: "prowl-legacy:x", Client: "prowl-legacy", Destination: ".config/prowl/skills/prowl/x", Checksum: "ghi"},
+		},
+	}
+	got := migrateRetiredClients(m)
+	if got.Assets[0].Client != IntegrationProwl {
+		t.Errorf("prior prowl client = %q, want %q", got.Assets[0].Client, IntegrationProwl)
+	}
+	if got.Assets[0].AssetID != "prowl-legacy:skills/code-search/SKILL.md" {
+		t.Errorf("prior prowl AssetID = %q, want prowl-legacy prefix", got.Assets[0].AssetID)
+	}
+	if got.Assets[0].Destination != ".config/prowl/skills/prowl/skills/code-search/SKILL.md" || got.Assets[0].Checksum != "abc" {
+		t.Errorf("migration altered destination/checksum: %+v", got.Assets[0])
+	}
+	if got.Assets[1] != m.Assets[1] {
+		t.Errorf("claude record changed: %+v", got.Assets[1])
+	}
+	if got.Assets[2].Client != IntegrationProwl || got.Assets[2].AssetID != "prowl-legacy:x" {
+		t.Errorf("already-migrated record changed (not idempotent): %+v", got.Assets[2])
+	}
+}
+
+// TestProwlLegacyMigratesPriorProwlOwnership proves a prior release's ledger
+// entries keyed "prowl" still authorize the on-disk files after the retarget:
+// planning recognizes them as owned (unchanged) rather than stranding them as
+// conflicts.
+func TestProwlLegacyMigratesPriorProwlOwnership(t *testing.T) {
+	opts := UserInstallOptions{
+		Home:     t.TempDir(),
+		StateDir: t.TempDir(),
+		Version:  "9.9.9",
+		Clients:  []string{IntegrationProwl},
+	}
+	mustApply(t, opts)
+	// Rewrite the manifest to the pre-rename "prowl" ids an earlier release wrote.
+	path := manifestPath(opts)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := strings.ReplaceAll(string(data), `"prowl-legacy:`, `"prowl:`)
+	legacy = strings.ReplaceAll(legacy, `"client": "prowl-legacy"`, `"client": "prowl"`)
+	if legacy == string(data) {
+		t.Fatal("manifest rewrite changed nothing; test setup is wrong")
+	}
+	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plan := mustPlan(t, opts)
+	if len(plan.Conflicts) != 0 {
+		t.Fatalf("prior prowl ownership stranded as conflicts: %+v", plan.Conflicts)
+	}
+	if len(plan.Actions) == 0 {
+		t.Fatal("re-plan produced no actions")
+	}
+	for _, action := range plan.Actions {
+		if action.Kind != UserActionUnchanged {
+			t.Fatalf("prior-owned asset %s classified %q, want unchanged", action.Destination, action.Kind)
+		}
+	}
+}
+
+// TestUserOnlyInitClientsSelectsUserLevelHarnesses proves init narrows an
+// integration selection to exactly the user-level-only harnesses -- Pi, Hermes,
+// OpenClaw, and the retired Prowl Legacy -- the clients with no project-level
+// action. omp and claude (which carry project-level skill actions) and every
+// non-harness integration are excluded, and the selection is honored directly so
+// an explicitly chosen harness survives regardless of detection.
+func TestUserOnlyInitClientsSelectsUserLevelHarnesses(t *testing.T) {
+	got := UserOnlyInitClients([]string{
+		IntegrationAgents, IntegrationGeneric, IntegrationCursor, IntegrationOMP,
+		IntegrationClaude, IntegrationPi, IntegrationHermes, IntegrationOpenClaw, IntegrationProwl,
+	})
+	if joined := strings.Join(got, ","); joined != "hermes,openclaw,pi,prowl-legacy" {
+		t.Fatalf("UserOnlyInitClients = %q, want hermes,openclaw,pi,prowl-legacy", joined)
+	}
+	if len(UserOnlyInitClients([]string{IntegrationOMP, IntegrationClaude})) != 0 {
+		t.Fatal("omp/claude wrongly treated as user-only harnesses")
+	}
+	if got := UserOnlyInitClients([]string{IntegrationPi}); len(got) != 1 || got[0] != IntegrationPi {
+		t.Fatalf("explicit pi not honored without detection: %v", got)
+	}
+}
+
+// TestUserSkillRemovalOwnershipSafetyAndVersionAgnostic proves the removal side
+// of the transaction (init --remove-integrations): it removes a Prowl-owned
+// asset by its persisted checksum, so a version bump never makes a legitimately
+// owned older asset look foreign; it leaves a locally modified asset in place as
+// a conflict; and it drops the stale record of an asset the user already
+// deleted. The version-stamped Claude plugin manifest is the probe -- if removal
+// reconstructed current-version bytes it would misread the plugin as foreign.
+func TestUserSkillRemovalOwnershipSafetyAndVersionAgnostic(t *testing.T) {
+	opts := newUserOpts(t)
+	opts.Clients = []string{"claude"}
+	opts.Version = "1.0.0"
+	mustApply(t, opts)
+
+	pluginDest := ".claude/skills/prowl/.claude-plugin/plugin.json"
+	if body, err := os.ReadFile(filepath.Join(opts.Home, filepath.FromSlash(pluginDest))); err != nil || !strings.Contains(string(body), "1.0.0") {
+		t.Fatalf("plugin manifest missing stamped version: %q (err %v)", body, err)
+	}
+
+	before, err := PlanUserSkillsRemoval(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before.Conflicts) != 0 {
+		t.Fatalf("clean install produced removal conflicts: %+v", before.Conflicts)
+	}
+	var skillDests []string
+	for _, d := range planDests(before) {
+		if strings.Contains(d, "/skills/") && strings.HasSuffix(d, "/SKILL.md") {
+			skillDests = append(skillDests, d)
+		}
+	}
+	if len(skillDests) < 2 {
+		t.Fatalf("need >=2 skill assets to modify and delete, got %d", len(skillDests))
+	}
+	modified, deleted := skillDests[0], skillDests[1]
+	if err := os.WriteFile(filepath.Join(opts.Home, filepath.FromSlash(modified)), []byte("hand edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(opts.Home, filepath.FromSlash(deleted))); err != nil {
+		t.Fatal(err)
+	}
+
+	// Upgrade Prowl before removing: ownership must still hold.
+	opts.Version = "2.0.0"
+	plan, err := PlanUserSkillsRemoval(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The version-stamped plugin, installed at 1.0.0, is still owned and removable.
+	if _, ok := actionByDest(plan, pluginDest); !ok {
+		t.Fatalf("version-stamped plugin looked foreign after version bump: %+v", plan)
+	}
+	if _, ok := conflictByDest(plan, modified); !ok {
+		t.Fatalf("locally modified asset not left as a conflict: %+v", plan)
+	}
+	if _, ok := actionByDest(plan, deleted); !ok {
+		t.Fatalf("deleted asset's stale record not scheduled to drop: %+v", plan)
+	}
+
+	if _, err := ApplyUserSkillsRemoval(opts, plan, true); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, _ := os.ReadFile(filepath.Join(opts.Home, filepath.FromSlash(modified))); string(got) != "hand edited\n" {
+		t.Errorf("removal overwrote or deleted a modified asset: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(opts.Home, filepath.FromSlash(pluginDest))); !os.IsNotExist(err) {
+		t.Errorf("owned plugin manifest survived removal: %v", err)
+	}
+	stored, err := loadUserManifest(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Assets) != 1 || stored.Assets[0].Destination != modified {
+		t.Fatalf("manifest after removal = %+v, want only the conflicted %s", stored.Assets, modified)
 	}
 }

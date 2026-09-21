@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/config"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 func TestOpenQuerierReturnsMalformedConfigError(t *testing.T) {

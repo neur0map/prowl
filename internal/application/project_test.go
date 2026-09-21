@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/review"
-	"github.com/prowl-agent/prowl-agent/internal/store"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/config"
+	contextpacket "github.com/neur0map/prowl/internal/context"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/review"
+	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 func TestOpenProjectResolvesWorkspaceFromParentDirectory(t *testing.T) {

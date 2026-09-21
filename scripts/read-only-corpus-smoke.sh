@@ -26,14 +26,14 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-binary="$tmp/prowl-agent"
+binary="$tmp/prowl"
 upper="$tmp/upper"
 work="$tmp/work"
 mkdir -p "$upper" "$work"
 
 (
     cd "$repo"
-    CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$binary" ./cmd/prowl-agent
+    CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$binary" ./cmd/prowl
 )
 
 # shellcheck disable=SC2016
@@ -42,7 +42,7 @@ bwrap \
     --unshare-net \
     --ro-bind / / \
     --tmpfs /tmp \
-    --ro-bind "$binary" /tmp/prowl-agent \
+    --ro-bind "$binary" /tmp/prowl \
     --dir /tmp/project \
     --overlay-src "$project" \
     --overlay "$upper" "$work" /tmp/project \
@@ -61,6 +61,6 @@ bwrap \
         python3 -m json.tool /tmp/init-second.json >/dev/null
         "$1" overview --format json | python3 -m json.tool >/dev/null
         "$1" status --json | python3 -m json.tool >/dev/null
-    ' sh /tmp/prowl-agent
+    ' sh /tmp/prowl
 
 echo "read-only corpus smoke test passed: $project"

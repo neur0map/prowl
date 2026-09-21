@@ -4,11 +4,11 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-bin="$tmp/prowl-agent"
+bin="$tmp/prowl"
 project="$tmp/project"
 
 cd "$repo"
-CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$bin" ./cmd/prowl-agent
+CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$bin" ./cmd/prowl
 
 mkdir -p "$project/.cursor"
 printf 'package demo\n\nfunc Hello() string { return "hello" }\n' > "$project/main.go"
@@ -47,8 +47,10 @@ test -f AGENTS.md
 test ! -e AGENTS.md
 python3 - <<'PY'
 import json, pathlib
-cfg = json.loads(pathlib.Path('.cursor/mcp.json').read_text())
-assert 'prowl-agent' not in cfg.get('mcpServers', {})
+servers = json.loads(pathlib.Path('.cursor/mcp.json').read_text()).get('mcpServers', {})
+# Removal must drop the active renamed key; the retired legacy name stays gone too.
+assert 'prowl' not in servers, servers
+assert 'prowl-agent' not in servers, servers
 PY
 
 echo 'onboarding smoke test passed'

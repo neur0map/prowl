@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 // ChangedResult maps a working set of git changes to the indexed files each one

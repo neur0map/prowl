@@ -224,13 +224,30 @@ func TestResolveContextHonorsCancellation(t *testing.T) {
 
 func TestRegistry(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	if err := Register("/x/y", true); err != nil {
+	indexedRoot := func() string {
+		t.Helper()
+		root := t.TempDir()
+		ws, err := Create(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(ws.DB, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+	rootA := indexedRoot()
+	rootB := indexedRoot()
+	if err := Register(rootB, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := Register("/x/y", false); err != nil { // upsert, not duplicate
+	if err := Register(rootB, false); err != nil { // upsert, not duplicate
 		t.Fatal(err)
 	}
-	if err := Register("/a/b", true); err != nil {
+	if err := Register(rootA, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := Register(t.TempDir(), true); err != nil { // no index: stale
 		t.Fatal(err)
 	}
 	list, err := List()
@@ -238,10 +255,10 @@ func TestRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(list) != 2 {
-		t.Fatalf("entries = %d, want 2", len(list))
+		t.Fatalf("entries = %d, want only the 2 live indexes", len(list))
 	}
-	for _, e := range list {
-		if e.Root == "/x/y" && e.AI {
+	for _, entry := range list {
+		if entry.Root == rootB && entry.AI {
 			t.Fatal("ai flag should have been updated to false")
 		}
 	}

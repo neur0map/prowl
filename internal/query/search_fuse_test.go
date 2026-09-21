@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // The regression this whole phase exists for: prose that answers the query lives

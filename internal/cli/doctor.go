@@ -11,10 +11,10 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
-	"github.com/prowl-agent/prowl-agent/internal/setup"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/doctor"
+	"github.com/neur0map/prowl/internal/setup"
 )
 
 // cRedHex is the error accent (Catppuccin red); the shared palette in

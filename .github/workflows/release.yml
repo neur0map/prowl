@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # version owns the single source of truth: var version in cmd/prowl-agent/main.go.
+  # version owns the single source of truth: var version in cmd/prowl/main.go.
   # unstable advances it and pushes the bump; main publishes whatever unstable
   # already produced, so a merge never renumbers itself.
   version:
@@ -59,7 +59,7 @@ jobs:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
-          file=cmd/prowl-agent/main.go
+          file=cmd/prowl/main.go
           current=$(grep -oP 'var version = "v\K[0-9]+\.[0-9]+\.[0-9]+' "$file")
           if [ -z "$current" ]; then
             echo "could not read the current version from $file" >&2
@@ -101,13 +101,13 @@ jobs:
         run: |
           set -euo pipefail
           want="${{ steps.resolve.outputs.version }}"
-          sed -i "s/var version = \"v[0-9]\+\.[0-9]\+\.[0-9]\+\"/var version = \"${want}\"/" cmd/prowl-agent/main.go
+          sed -i "s/var version = \"v[0-9]\+\.[0-9]\+\.[0-9]\+\"/var version = \"${want}\"/" cmd/prowl/main.go
           if git diff --quiet; then
             echo "version already ${want}"
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add cmd/prowl-agent/main.go
+            git add cmd/prowl/main.go
             git commit -m "chore: bump version to ${want} (automated)"
             git push origin HEAD:unstable
           fi
@@ -123,19 +123,19 @@ jobs:
         include:
           - runner: ubuntu-latest
             target: linux-amd64
-            output: prowl-agent-linux-amd64
+            output: prowl-linux-amd64
           - runner: ubuntu-24.04-arm
             target: linux-arm64
-            output: prowl-agent-linux-arm64
+            output: prowl-linux-arm64
           - runner: macos-14
             target: darwin-arm64
-            output: prowl-agent-darwin-arm64
+            output: prowl-darwin-arm64
           # darwin-amd64 has no Intel macOS runner that reliably schedules, so
           # it is cross-built on the arm64 runner (the macOS SDK is universal)
           # and not executed here.
           - runner: macos-14
             target: darwin-amd64
-            output: prowl-agent-darwin-amd64
+            output: prowl-darwin-amd64
             goarch: amd64
             cross: "true"
     steps:
@@ -157,15 +157,28 @@ jobs:
         run: |
           arch="${{ matrix.goarch }}"
           [ -n "$arch" ] && export GOARCH="$arch"
+          commit=$(git rev-parse HEAD)
           go build -tags sqlite_fts5 -trimpath \
-            -ldflags "-s -w -X main.version=${VERSION}" \
-            -o "$OUTPUT" ./cmd/prowl-agent
+            -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${commit}" \
+            -o "$OUTPUT" ./cmd/prowl
           shasum -a 256 "$OUTPUT" > "$OUTPUT.sha256"
+          # Compatibility asset: installs released under the old prowl-agent name
+          # self-update by a fixed filename. Publish a byte-identical copy (and its
+          # checksum) under that name so those installs keep resolving through the
+          # GitHub repo-rename redirect. The canonical prowl-* asset stays primary.
+          compat="prowl-agent-${OUTPUT#prowl-}"
+          cp "$OUTPUT" "$compat"
+          shasum -a 256 "$compat" > "$compat.sha256"
+          cmp -s "$OUTPUT" "$compat" || { echo "compat asset $compat drifted from $OUTPUT" >&2; exit 1; }
+          echo "COMPAT=$compat" >> "$GITHUB_ENV"
           if [ -z "${{ matrix.cross }}" ]; then
             "./$OUTPUT" --version
             # The published binary must report the semantic version, not a commit
             # description: the update channel and the changelog are keyed to it.
             "./$OUTPUT" --version | grep -q "${VERSION}"
+            # End to end: -X main.commit reaches internal/version.Commit and is
+            # surfaced by --version. A local build leaves it empty.
+            "./$OUTPUT" --version | grep -q "${commit}"
             scripts/release-smoke.sh "$OUTPUT" "$OUTPUT.sha256"
           fi
 
@@ -177,6 +190,8 @@ jobs:
           path: |
             ${{ matrix.output }}
             ${{ matrix.output }}.sha256
+            ${{ env.COMPAT }}
+            ${{ env.COMPAT }}.sha256
 
   build-windows:
     name: windows-amd64
@@ -204,16 +219,29 @@ jobs:
         shell: pwsh
         env:
           CGO_ENABLED: "1"
-          OUTPUT: prowl-agent-windows-amd64.exe
+          OUTPUT: prowl-windows-amd64.exe
           VERSION: ${{ needs.version.outputs.version }}
         run: |
+          $commit = (git rev-parse HEAD | Out-String).Trim()
           go build -tags sqlite_fts5 -trimpath `
-            -ldflags "-X main.version=$env:VERSION" `
-            -o $env:OUTPUT ./cmd/prowl-agent
-          & (Join-Path $PWD $env:OUTPUT) --version
+            -ldflags "-X main.version=$env:VERSION -X main.commit=$commit" `
+            -o $env:OUTPUT ./cmd/prowl
+          $vout = & (Join-Path $PWD $env:OUTPUT) --version | Out-String
+          if ($vout -notmatch [regex]::Escape($env:VERSION)) { Write-Error "version missing from --version output"; exit 1 }
+          # End to end: -X main.commit reaches internal/version.Commit and is surfaced by --version.
+          if ($vout -notmatch [regex]::Escape($commit)) { Write-Error "stamped commit missing from --version output"; exit 1 }
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $env:OUTPUT).Hash.ToLowerInvariant()
           "$hash  $($env:OUTPUT)" | Set-Content -LiteralPath "$($env:OUTPUT).sha256" -NoNewline -Encoding ascii
           & ./scripts/release-smoke.ps1 -Binary $env:OUTPUT -Checksum "$($env:OUTPUT).sha256"
+          # Compatibility asset under the old prowl-agent name: a byte-identical
+          # copy (and its checksum) so an install released under that filename
+          # keeps resolving through the GitHub repo-rename redirect.
+          $compat = "prowl-agent-" + ($env:OUTPUT -replace '^prowl-','')
+          Copy-Item -LiteralPath $env:OUTPUT -Destination $compat
+          $chash = (Get-FileHash -Algorithm SHA256 -LiteralPath $compat).Hash.ToLowerInvariant()
+          "$chash  $compat" | Set-Content -LiteralPath "$compat.sha256" -NoNewline -Encoding ascii
+          if ($chash -ne $hash) { Write-Error "compat asset $compat drifted from $($env:OUTPUT)"; exit 1 }
+          "COMPAT=$compat" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
@@ -221,8 +249,10 @@ jobs:
           name: release-windows-amd64
           if-no-files-found: error
           path: |
-            prowl-agent-windows-amd64.exe
-            prowl-agent-windows-amd64.exe.sha256
+            prowl-windows-amd64.exe
+            prowl-windows-amd64.exe.sha256
+            ${{ env.COMPAT }}
+            ${{ env.COMPAT }}.sha256
 
   # Preview: every unstable commit, as it lands. Opt in with
   # PROWL_UPDATE_CHANNEL=preview; nothing here reaches a default install.
@@ -242,7 +272,7 @@ jobs:
           make_latest: false
           files: release/**/*
           body: >
-            Preview build of prowl-agent ${{ needs.version.outputs.version }} from
+            Preview build of prowl ${{ needs.version.outputs.version }} from
             the latest unstable commit (${{ github.sha }}). Unreviewed: every
             commit is published here as it lands. Opt in with
             PROWL_UPDATE_CHANNEL=preview. Verify every binary with its included
@@ -251,7 +281,8 @@ jobs:
   # Stable: what a default install receives. vX.Y.Z is the permanent record,
   # `stable` is the rolling tag the updater downloads, and `nightly` is the
   # retired name kept fed so binaries released before the channel split keep
-  # updating.
+  # updating. Every tag also carries byte-identical prowl-agent-* copies so
+  # installs released under the old name still resolve on the rename redirect.
   publish-stable:
     needs: [version, build-unix, build-windows]
     if: needs.version.outputs.publish == 'true' && needs.version.outputs.channel == 'stable'
@@ -270,8 +301,11 @@ jobs:
           make_latest: true
           files: release/**/*
           body: >
-            Cross-platform build of prowl-agent ${{ needs.version.outputs.version }}.
-            Verify every binary with its included SHA-256 file.
+            Cross-platform build of prowl ${{ needs.version.outputs.version }}.
+            Assets under the old prowl-agent name are byte-identical
+            compatibility copies for installs that self-update by that filename;
+            new installs use the canonical prowl-* assets. Verify every binary
+            with its included SHA-256 file.
 
       - name: Refresh the rolling stable channel
         uses: softprops/action-gh-release@v2
@@ -282,8 +316,8 @@ jobs:
           make_latest: false
           files: release/**/*
           body: >
-            Rolling stable channel, currently prowl-agent
-            ${{ needs.version.outputs.version }}. This is what `prowl-agent update`
+            Rolling stable channel, currently prowl
+            ${{ needs.version.outputs.version }}. This is what `prowl update`
             downloads by default. Verify every binary with its included SHA-256 file.
 
       - name: Refresh the retired nightly alias

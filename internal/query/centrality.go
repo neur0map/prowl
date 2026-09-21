@@ -3,7 +3,7 @@ package query
 import (
 	"sort"
 
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // fileCentrality computes a PageRank-style importance score per file from

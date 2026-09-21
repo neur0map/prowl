@@ -51,8 +51,10 @@ try {
 
         & $Binary init --remove-integrations --no-input --json --integrations cursor,agents | Out-Null
         if (Test-Path -LiteralPath 'AGENTS.md') { throw 'agents integration was not removed' }
-        $cursor = Get-Content -LiteralPath '.cursor/mcp.json' -Raw | ConvertFrom-Json
-        if ($null -ne $cursor.mcpServers.'prowl-agent') { throw 'cursor integration was not removed' }
+        $servers = (Get-Content -LiteralPath '.cursor/mcp.json' -Raw | ConvertFrom-Json).mcpServers
+        # Removal must drop the active renamed key; the retired legacy name stays gone too.
+        if ($null -ne $servers.'prowl') { throw 'active prowl MCP server was not removed' }
+        if ($null -ne $servers.'prowl-agent') { throw 'legacy prowl-agent MCP server was not removed' }
     } finally {
         Pop-Location
     }

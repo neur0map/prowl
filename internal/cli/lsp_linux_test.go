@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	lspserver "github.com/prowl-agent/prowl-agent/internal/lsp"
+	"github.com/neur0map/prowl/internal/config"
+	lspserver "github.com/neur0map/prowl/internal/lsp"
 )
 
 func TestLSPRunCLIInterruptsInheritedStdin(t *testing.T) {

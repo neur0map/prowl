@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/parse"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/parse"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // Severity grades a finding.

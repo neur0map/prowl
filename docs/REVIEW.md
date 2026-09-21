@@ -38,7 +38,7 @@ bounded review territories, or validate review coverage.
 
 ## Goals
 
-- Make `prowl-agent review` the native entry point for reviewing a workspace,
+- Make `prowl review` the native entry point for reviewing a workspace,
   commit, or branch/PR range.
 - Require Prowl's structured protocol whenever raw text additions plus deletions
   exceed 300 lines.
@@ -188,19 +188,19 @@ The command group is:
 
 ```sh
 # Capture current staged, unstaged, and untracked work
-prowl-agent review plan
+prowl review plan
 
 # Capture PR-style branch changes
-prowl-agent review plan --base main --head HEAD
+prowl review plan --base main --head HEAD
 
 # Capture one non-merge commit
-prowl-agent review plan --commit abc123
+prowl review plan --commit abc123
 
 # Fetch one bounded territory from a persisted plan
-prowl-agent review unit <review-id>/<unit-id>
+prowl review unit <review-id>/<unit-id>
 
 # Validate the agent's canonical report
-prowl-agent review check --review <review-id> --report review-results.json
+prowl review check --review <review-id> --report review-results.json
 ```
 
 Every command supports the root persistent output formats. TOON is the default
@@ -876,9 +876,9 @@ reviewing another agent's work, and pre-merge review.
 
 Generated project context adds the compact rule:
 
-> Before reviewing a workspace, commit, or branch range, run `prowl-agent review
+> Before reviewing a workspace, commit, or branch range, run `prowl review
 > plan`. When raw additions plus deletions exceed 300, follow every returned unit
-> and required audit, then run `prowl-agent review check`; never approve an
+> and required audit, then run `prowl review check`; never approve an
 > incomplete or stale report.
 
 OMP's sticky rules carry the same contract so it survives long sessions. Native
@@ -1160,7 +1160,7 @@ untouched held-out set is selected before another release claim.
 7. Update README, architecture documentation, capability documentation,
    changelog, and version through the repository's normal release process.
 8. Run the specific Go tests, integration smoke, behavioral evaluation gates,
-   `prowl-agent changed`, and `prowl-agent doctor` before completion.
+   `prowl changed`, and `prowl doctor` before completion.
 
 Provider-native comment posting, optional built-in inference orchestration, and a
 visual Change Stack-like interface require separate approved designs after the

@@ -3,7 +3,7 @@ name: prowl review
 # Prowl reviews every pull request: it indexes the changed tree and runs doctor,
 # uploading SARIF so GitHub code scanning surfaces only the issues this PR
 # introduces, inline on the diff. This workflow dogfoods Prowl on its own repo;
-# copy it (and the composite action) into any project after `prowl-agent init`.
+# copy it (and the composite action) into any project after `prowl init`.
 
 on:
   pull_request:
@@ -20,9 +20,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build prowl-agent
-        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$HOME/.local/bin/prowl-agent" ./cmd/prowl-agent
-      - name: Add prowl-agent to PATH
+      - name: Build prowl
+        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$HOME/.local/bin/prowl" ./cmd/prowl
+      - name: Add prowl to PATH
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Prowl review
         id: prowl
@@ -34,4 +34,4 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ steps.prowl.outputs.sarif }}
-          category: prowl-agent
+          category: prowl

@@ -37,7 +37,7 @@ const graphHTMLTemplate = `<!doctype html>
 <div id="legend"></div>
 <input id="search" placeholder="highlight files...">
 <div id="tip"></div>
-<div id="foot">prowl-agent graph</div>
+<div id="foot">prowl graph</div>
 <canvas id="c"></canvas>
 <script>
 const TITLE = /*PROWL_TITLE*/;

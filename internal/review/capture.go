@@ -15,7 +15,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/neur0map/prowl/internal/boundedio"
 )
 
 // captureGitOutputLimit bounds every capture Git subprocess whose stdout is not

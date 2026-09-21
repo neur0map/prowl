@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
+	"github.com/neur0map/prowl/internal/application"
 )
 
 // newRestartCmd rebuilds the index from scratch and stops any running servers so
@@ -52,10 +52,10 @@ func newRestartCmd(string) *cobra.Command {
 }
 
 // matchProwlServer reports whether a process (args from /proc cmdline, cwd) is a
-// prowl-agent serve/lsp worth stopping. scope=="" matches regardless of cwd;
+// prowl serve/lsp worth stopping. scope=="" matches regardless of cwd;
 // otherwise only processes whose cwd is at or under scope match.
 func matchProwlServer(args []string, cwd, scope string) bool {
-	if len(args) < 2 || filepath.Base(args[0]) != "prowl-agent" {
+	if len(args) < 2 || filepath.Base(args[0]) != "prowl" {
 		return false
 	}
 	if args[1] != "serve" && args[1] != "lsp" {

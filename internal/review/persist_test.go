@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
+	contextpacket "github.com/neur0map/prowl/internal/context"
 )
 
 func sha256Digest(b []byte) Digest { return sha256.Sum256(b) }
@@ -87,7 +87,7 @@ func withPublishedSignature(a PlanArtifacts, sig string) PlanArtifacts {
 	a.PlanIdentity.HeadIndexSignature = []byte(sig)
 	a.PlanIdentityBytes, a.Plan.ReviewID, a.Plan.PlanDigest = identityFrom(a.PlanIdentity)
 	for i := range a.Plan.NextCommands {
-		a.Plan.NextCommands[i].Command = "prowl-agent review unit " + a.Plan.ReviewID
+		a.Plan.NextCommands[i].Command = "prowl review unit " + a.Plan.ReviewID
 	}
 	for i := range a.Plan.PrimaryUnits {
 		a.Plan.PrimaryUnits[i].ReviewID = a.Plan.ReviewID
@@ -119,7 +119,7 @@ func makeArtifactsWith(name string, digest func([]byte) Digest) PlanArtifacts {
 		Scope:        Scope{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20},
 		Stats:        PlanStats{ChangedPaths: 1},
 		ChangedPaths: []PlanPath{{PathID: id.Public, OldPath: "a.go", NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
-		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
+		NextCommands: []NextCommand{{Label: "unit", Command: "prowl review unit " + reviewID}},
 	}
 	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, PlanIdentity: pi, IDRecords: []IDRecord{record}}
 }
@@ -226,7 +226,7 @@ func makeStructuredArtifacts(name string) PlanArtifacts {
 			{AuditID: AuditTestMatrixV1},
 			{AuditID: AuditIntegrationGapV1},
 		},
-		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
+		NextCommands: []NextCommand{{Label: "unit", Command: "prowl review unit " + reviewID}},
 	}
 	citations := map[string]CitationProof{
 		hunkID.Public: {ID: hunkID.Public, Side: SideHead, Path: "svc.go", ContentHash: hex.EncodeToString(make([]byte, 32)), Start: 1, End: 3},
@@ -259,7 +259,7 @@ func makeDirectPartitionedArtifacts(name string) PlanArtifacts {
 		unitID := a.Plan.PrimaryUnits[i].UnitID
 		a.MandatoryUnits[unitID] = mustCanonicalUnit(a.Plan.PrimaryUnits[i])
 	}
-	a.Plan.NextCommands[0].Command = "prowl-agent review unit " + a.Plan.ReviewID
+	a.Plan.NextCommands[0].Command = "prowl review unit " + a.Plan.ReviewID
 	return a
 }
 
@@ -285,7 +285,7 @@ func makeWorkspaceArtifacts(name string) PlanArtifacts {
 	a.PlanIdentity.ScopeDigest = scope
 	a.PlanIdentity.Paths[0].PathID = id
 	a.PlanIdentityBytes, a.Plan.ReviewID, a.Plan.PlanDigest = identityFrom(a.PlanIdentity)
-	a.Plan.NextCommands[0].Command = "prowl-agent review unit " + a.Plan.ReviewID
+	a.Plan.NextCommands[0].Command = "prowl review unit " + a.Plan.ReviewID
 	a.IDRecords[0] = record
 	a.WorkspaceFingerprint = hex.EncodeToString(headValue)
 	a.WorkspaceCaptureFingerprint = strings.Repeat("5a", sha256.Size)
@@ -323,7 +323,7 @@ func collidingArtifacts(name string) PlanArtifacts {
 		Scope:        Scope{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20},
 		Stats:        PlanStats{ChangedPaths: 1},
 		ChangedPaths: []PlanPath{{PathID: id.Public, OldPath: path, NewPath: path, Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
-		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
+		NextCommands: []NextCommand{{Label: "unit", Command: "prowl review unit " + reviewID}},
 	}
 	return PlanArtifacts{Plan: plan, PlanIdentityBytes: idBytes, PlanIdentity: pi, IDRecords: []IDRecord{record}}
 }
@@ -595,7 +595,7 @@ func TestPlanStoreForcedCollisionDuringLoad(t *testing.T) {
 		Scope:        Scope{Kind: ScopeCommit, ObjectFormat: "sha1", Base: oid20, Head: oid20},
 		Stats:        PlanStats{ChangedPaths: 1},
 		ChangedPaths: []PlanPath{{PathID: public, NewPath: "a.go", Status: "M", ReviewClass: "full", Coverage: "full", Roles: []string{"implementation"}}},
-		NextCommands: []NextCommand{{Label: "unit", Command: "prowl-agent review unit " + reviewID}},
+		NextCommands: []NextCommand{{Label: "unit", Command: "prowl review unit " + reviewID}},
 	}
 	m := planManifest{
 		Schema: planStoreSchemaV1, ReviewID: reviewID, PlanDigest: planDigest, ScopeKind: ScopeCommit,
@@ -1501,7 +1501,7 @@ func TestPlanStoreBindsIdentityToPlanContent(t *testing.T) {
 		a.PlanIdentityBytes = idBytes
 		a.Plan.ReviewID = reviewID
 		a.Plan.PlanDigest = planDigest
-		a.Plan.NextCommands[0].Command = "prowl-agent review unit " + reviewID
+		a.Plan.NextCommands[0].Command = "prowl review unit " + reviewID
 		if _, err := store.Save(ctx, a, nil); !errors.Is(err, ErrPlanIdentityMismatch) {
 			t.Fatalf("identity dropping a referenced id err=%v, want ErrPlanIdentityMismatch", err)
 		}

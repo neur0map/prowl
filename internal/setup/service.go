@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/skills"
+	"github.com/neur0map/prowl/skills"
 )
 
 const (
@@ -39,6 +39,15 @@ const (
 	// skills, so it needs no project integration). Its user assets mirror
 	// Claude's, installed under ~/.hermes/skills/prowl.
 	IntegrationHermes = "hermes"
+	// IntegrationProwl is the retired Prowl agent harness, preserved as the
+	// `prowl-legacy` binary after the current product took the `prowl` name. It is
+	// a user-level-only client that reads user-level skills, so it needs no
+	// project integration. It ships its own native skill tree (resolved from the
+	// embedded "prowl" native assets via nativeAssetClient) installed under its
+	// existing ~/.config/prowl/skills/prowl root. The id is explicit
+	// (`prowl-legacy`, not `prowl`) so the current `prowl` binary is never
+	// mistaken for a skill harness that would install to a root nothing reads.
+	IntegrationProwl = "prowl-legacy"
 
 	// integrationSkill marks an Action that installs one embedded agent skill.
 	integrationSkill = "skill"
@@ -73,6 +82,26 @@ var allIntegrations = []string{
 // AllIntegrations returns the canonical integration names in deterministic order.
 func AllIntegrations() []string {
 	return append([]string(nil), allIntegrations...)
+}
+
+// KnownIntegrations returns the complete integration registry: every project-
+// level integration plus the user-level-only harnesses (Hermes, Prowl Legacy,
+// Pi, OpenClaw) init folds in from DetectInstalledHarnesses. It is the single
+// source of truth for "which names are valid", so the interactive init picker
+// can offer and preserve a detected user-only harness instead of dropping it.
+func KnownIntegrations() []string {
+	return knownIntegrations()
+}
+
+// knownIntegrations is every name NormalizeIntegrations may receive: the
+// project-level integrations plus user-level-only harnesses that init folds in
+// from DetectInstalledHarnesses. Hermes, Prowl, Pi, and OpenClaw have no
+// project-level action (their assets are user-level, installed by `prowl
+// skills`), but they must survive normalization so a detected ~/.hermes,
+// ~/.config/prowl, ~/.pi, or ~/.openclaw does not fail `init`.
+func knownIntegrations() []string {
+	return append(append([]string(nil), allIntegrations...),
+		IntegrationHermes, IntegrationProwl, IntegrationPi, IntegrationOpenClaw)
 }
 
 var (
@@ -387,8 +416,29 @@ func (service *Service) verifyInRoot(root *os.Root, ctx context.Context, plan Pl
 			}
 		}
 		data, err := readRootFile(root, action.Path)
-		if err != nil || (!strings.Contains(string(data), "prowl-agent") && !strings.Contains(string(data), "prowl_agent")) {
+		if err != nil {
 			return errors.New("setup verification failed")
+		}
+		switch action.Integration {
+		case IntegrationNeovim:
+			// Prowl owns nvim.lua and rewrites it on every apply, so it must be
+			// the current body. A legacy prowl-agent body (which still contains
+			// the "prowl" substring) means the rewrite silently did not land.
+			if string(data) != nvimConfig {
+				return errors.New("setup verification failed")
+			}
+		case IntegrationHelix:
+			// Apply either wrote/migrated the current body or intentionally left
+			// a foreign config in place. A body still equal to the retired
+			// prowl-agent generated body means the migration did not run -- the
+			// broad "contains prowl" check passed it falsely.
+			if string(data) == helixConfigLegacy() {
+				return errors.New("setup verification failed")
+			}
+		default:
+			if !strings.Contains(string(data), "prowl") {
+				return errors.New("setup verification failed")
+			}
 		}
 	}
 	return nil
@@ -1135,8 +1185,9 @@ func ParseIntegrationSelection(value string, detected []string) ([]string, error
 }
 
 func NormalizeIntegrations(values []string) ([]string, error) {
-	known := make(map[string]bool, len(allIntegrations))
-	for _, name := range allIntegrations {
+	names := knownIntegrations()
+	known := make(map[string]bool, len(names))
+	for _, name := range names {
 		known[name] = true
 	}
 	set := map[string]bool{}
@@ -1186,9 +1237,9 @@ func (service *Service) removeIntegrations(integrations []string) error {
 		case IntegrationOpenCode:
 			err = removeOpenCode(root, action.Path)
 		case IntegrationNeovim:
-			err = removeOwnedFile(root, action.Path, nvimConfig)
+			err = removeOwnedFile(root, action.Path, nvimConfig, nvimConfigLegacy)
 		case IntegrationHelix:
-			err = removeOwnedFile(root, action.Path, helixConfig())
+			err = removeOwnedFile(root, action.Path, helixConfig(), helixConfigLegacy())
 		case integrationSkill:
 			err = removeSkill(root, action.Path)
 		case integrationRules:
@@ -1255,22 +1306,22 @@ const agentsBlock = agentsMarker + `
 
 This repo has a Prowl index of its files, symbols, and how they connect. For any
 semantic or structural question -- where code is, what it does, who calls it, or
-what a change touches -- **run the read-only prowl-agent CLI first**; do not grep
-or read whole files just to locate things. Prowl reindexes what changed before
-each query, so answers stay current and are cited to file:line, returned in one
-call instead of a grep hit list you then open files to disambiguate.
+what a change touches -- **run the read-only prowl CLI first**; do not grep or
+read whole files just to locate things. Prowl reindexes what changed before each
+query, so answers stay current and are cited to file:line, returned in one call
+instead of a grep hit list you then open files to disambiguate.
 
 | Question | First command |
 |---|---|
-| Map the repository | ` + "`prowl-agent overview`" + ` |
-| Locate a feature or concept | ` + "`prowl-agent search \"<question>\"`" + ` |
-| Locate a named symbol | ` + "`prowl-agent find <name>`" + ` |
-| Read one symbol's source | ` + "`prowl-agent def <name-or-id>`" + ` |
-| Inspect a file's structure | ` + "`prowl-agent outline <path>`" + ` |
-| Trace who uses a symbol | ` + "`prowl-agent references <name-or-id>`" + ` |
-| Size a change's blast radius | ` + "`prowl-agent impact <path>`" + ` |
-| Inspect uncommitted work | ` + "`prowl-agent wip`" + ` / ` + "`prowl-agent changed`" + ` |
-| Read a located line range | ` + "`prowl-agent peek <file:start-end>`" + ` |
+| Map the repository | ` + "`prowl overview`" + ` |
+| Locate a feature or concept | ` + "`prowl search \"<question>\"`" + ` |
+| Locate a named symbol | ` + "`prowl find <name>`" + ` |
+| Read one symbol's source | ` + "`prowl def <name-or-id>`" + ` |
+| Inspect a file's structure | ` + "`prowl outline <path>`" + ` |
+| Trace who uses a symbol | ` + "`prowl references <name-or-id>`" + ` |
+| Size a change's blast radius | ` + "`prowl impact <path>`" + ` |
+| Inspect uncommitted work | ` + "`prowl wip`" + ` / ` + "`prowl changed`" + ` |
+| Read a located line range | ` + "`prowl peek <file:start-end>`" + ` |
 
 Keep grep for exact literal or regex text and glob for filename patterns. CLI
 output is token-lean TOON by default; add --format human|toon|json|markdown. If
@@ -1286,11 +1337,12 @@ there; the CLI needs no server and is the first choice.
 const rulesBlock = agentsMarker + `
 Prowl indexes this repo. For any semantic or structural question -- where a
 symbol, setting, or component is defined, who calls or imports it, how a feature
-works, or a change's blast radius -- run the read-only prowl-agent CLI first:
-overview, find <name>, def <name-or-id>, outline <path>, references <name-or-id>,
-impact <path>, search "<question>", peek <file:start-end>. It answers from a
-cited index (reindexed before each query) in one call. Use grep only for exact
-literal or regex text and glob only for filename patterns.
+works, or a change's blast radius -- run the read-only Prowl CLI first:
+` + "`prowl overview`" + `, ` + "`prowl find <name>`" + `, ` + "`prowl def <name-or-id>`" + `,
+` + "`prowl outline <path>`" + `, ` + "`prowl references <name-or-id>`" + `, ` + "`prowl impact <path>`" + `,
+` + "`prowl search \"<question>\"`" + `, or ` + "`prowl peek <file:start-end>`" + `. It answers
+from a cited index (reindexed before each query) in one call. Use grep only for
+exact literal or regex text and glob only for filename patterns.
 ` + agentsEndMarker
 
 type mcpServer struct {
@@ -1312,7 +1364,8 @@ func mergeMCPConfig(root *os.Root, rel, key string) error {
 	if servers == nil {
 		servers = map[string]any{}
 	}
-	servers["prowl-agent"] = mcpServer{Type: "stdio", Command: "prowl-agent", Args: []string{"serve", "--mcp-surface", "core"}}
+	delete(servers, "prowl-agent")
+	servers["prowl"] = mcpServer{Type: "stdio", Command: "prowl", Args: []string{"serve", "--mcp-surface", "core"}}
 	doc[key] = servers
 	return writeJSON(root, rel, doc)
 }
@@ -1333,7 +1386,8 @@ func mergeOpenCode(root *os.Root, rel string) error {
 	if mcp == nil {
 		mcp = map[string]any{}
 	}
-	mcp["prowl-agent"] = map[string]any{"type": "local", "command": []string{"prowl-agent", "serve", "--mcp-surface", "core"}, "enabled": true}
+	delete(mcp, "prowl-agent")
+	mcp["prowl"] = map[string]any{"type": "local", "command": []string{"prowl", "serve", "--mcp-surface", "core"}, "enabled": true}
 	doc["mcp"] = mcp
 	return writeJSON(root, rel, doc)
 }
@@ -1407,9 +1461,12 @@ func removeMCPConfig(root *os.Root, rel, key string) error {
 	if servers == nil {
 		return nil
 	}
-	if _, ok := servers["prowl-agent"]; !ok {
-		return nil
+	if _, current := servers["prowl"]; !current {
+		if _, legacy := servers["prowl-agent"]; !legacy {
+			return nil
+		}
 	}
+	delete(servers, "prowl")
 	delete(servers, "prowl-agent")
 	doc[key] = servers
 	return writeJSON(root, rel, doc)
@@ -1431,6 +1488,7 @@ func removeOpenCode(root *os.Root, rel string) error {
 	if mcp == nil {
 		return nil
 	}
+	delete(mcp, "prowl")
 	delete(mcp, "prowl-agent")
 	doc["mcp"] = mcp
 	return writeJSON(root, rel, doc)
@@ -1498,7 +1556,12 @@ func stripMarkedRegion(content, start, end string) string {
 	}
 }
 
-func removeOwnedFile(root *os.Root, rel, expected string) error {
+// removeOwnedFile deletes a setup destination only when its bytes exactly match
+// one of the Prowl-owned bodies passed in -- the current body plus any retired
+// generated body from an earlier release. Matching an explicit, bounded set
+// (never a substring or a loose "contains prowl" test) means removal recognizes
+// a legacy generated config without ever accepting an arbitrary user file.
+func removeOwnedFile(root *os.Root, rel string, expected ...string) error {
 	data, err := readRootFile(root, rel)
 	if os.IsNotExist(err) {
 		return nil
@@ -1506,7 +1569,14 @@ func removeOwnedFile(root *os.Root, rel, expected string) error {
 	if err != nil {
 		return err
 	}
-	if string(data) != expected {
+	owned := false
+	for _, want := range expected {
+		if string(data) == want {
+			owned = true
+			break
+		}
+	}
+	if !owned {
 		return errors.New("refusing to remove modified setup file")
 	}
 	clean, err := validateRootPath(root, rel)
@@ -1516,7 +1586,24 @@ func removeOwnedFile(root *os.Root, rel, expected string) error {
 	return root.Remove(clean)
 }
 
-const nvimConfig = `-- prowl-agent language server (Neovim 0.11+).
+const nvimConfig = `-- Prowl language server (Neovim 0.11+).
+-- Source this file from your config: dofile(vim.fn.getcwd() .. "/.prowl/editor/nvim.lua")
+-- or copy the block into your own config.
+vim.lsp.config("prowl", {
+  cmd = { "prowl", "lsp" },
+  filetypes = {
+    "conf", "config", "dosini", "toml", "yaml", "json", "jsonc",
+    "css", "scss", "lua", "python", "sh", "bash", "fish", "qml", "hyprlang",
+  },
+  root_markers = { ".prowl", ".git" },
+})
+vim.lsp.enable("prowl")
+`
+
+// nvimConfigLegacy is the exact Neovim body earlier releases generated under the
+// retired prowl-agent product name. It is a frozen artifact kept only so re-setup
+// can migrate it to nvimConfig and removal can recognize it as Prowl-owned.
+const nvimConfigLegacy = `-- prowl-agent language server (Neovim 0.11+).
 -- Source this file from your config: dofile(vim.fn.getcwd() .. "/.prowl/editor/nvim.lua")
 -- or copy the block into your own config.
 vim.lsp.config("prowl_agent", {
@@ -1533,27 +1620,56 @@ vim.lsp.enable("prowl_agent")
 func helixConfig() string {
 	langs := []string{"hyprlang", "toml", "ini", "css", "scss", "json", "yaml", "qml"}
 	var b strings.Builder
+	b.WriteString("[language-server.prowl]\ncommand = \"prowl\"\nargs = [\"lsp\"]\n\n# Helix replaces the per-language server list, so add your existing servers\n# back to any language below if you rely on them.\n")
+	for _, lang := range langs {
+		fmt.Fprintf(&b, "\n[[language]]\nname = \"%s\"\nlanguage-servers = [\"prowl\"]\n", lang)
+	}
+	return b.String()
+}
+
+// helixConfigLegacy is the exact Helix body earlier releases generated under the
+// retired prowl-agent product name (its language-server id and command were both
+// prowl-agent). Kept only so re-setup can migrate it to helixConfig and removal
+// can recognize it as Prowl-owned.
+func helixConfigLegacy() string {
+	langs := []string{"hyprlang", "toml", "ini", "css", "scss", "json", "yaml", "qml"}
+	var b strings.Builder
 	b.WriteString("[language-server.prowl-agent]\ncommand = \"prowl-agent\"\nargs = [\"lsp\"]\n\n# Helix replaces the per-language server list, so add your existing servers\n# back to any language below if you rely on them.\n")
 	for _, lang := range langs {
 		fmt.Fprintf(&b, "\n[[language]]\nname = \"%s\"\nlanguage-servers = [\"prowl-agent\"]\n", lang)
 	}
 	return b.String()
 }
+
+// injectNeovim owns .prowl/editor/nvim.lua outright (it lives inside Prowl's own
+// workspace dir), so it rewrites the current body unconditionally -- that both
+// installs it and migrates any legacy prowl-agent body to the prowl invocation.
 func injectNeovim(root *os.Root, rel string) error {
 	return writeRootFile(root, rel, []byte(nvimConfig), 0o644)
 }
 
+// injectHelix writes .helix/languages.toml, a file shared with the user's own
+// Helix config. It creates the current body when absent and migrates a
+// Prowl-generated legacy body (still invoking the retired prowl-agent binary) to
+// the current prowl invocation, but never overwrites a foreign config -- so a
+// stale generated config is not left silently invoking a binary that no longer
+// exists, and a hand-written config is left untouched.
 func injectHelix(root *os.Root, rel string) error {
-	clean, err := validateRootPath(root, rel)
-	if err != nil {
+	data, err := readRootFile(root, rel)
+	switch {
+	case os.IsNotExist(err):
+		return writeRootFile(root, rel, []byte(helixConfig()), 0o644)
+	case err != nil:
 		return err
 	}
-	if _, err := root.Stat(clean); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
+	switch string(data) {
+	case helixConfig():
+		return nil // already the current body
+	case helixConfigLegacy():
+		return writeRootFile(root, rel, []byte(helixConfig()), 0o644)
+	default:
+		return nil // a foreign Helix config: never overwrite the user's own file
 	}
-	return writeRootFile(root, clean, []byte(helixConfig()), 0o644)
 }
 
 func safeRelativePath(value string) bool {

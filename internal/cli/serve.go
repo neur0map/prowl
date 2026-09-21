@@ -10,12 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
-	"github.com/prowl-agent/prowl-agent/internal/embed"
-	mcpserver "github.com/prowl-agent/prowl-agent/internal/mcp"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/doctor"
+	"github.com/neur0map/prowl/internal/embed"
+	mcpserver "github.com/neur0map/prowl/internal/mcp"
 )
 
 // loadEmbedder loads the in-process, binary-bundled static embedder. It is a
@@ -69,10 +69,10 @@ func maybeInferencer(ctx context.Context, cfg config.Config) assist.Inferencer {
 		return assist.Composite{Emb: m, Assist: helper}
 	}
 	if helper != nil {
-		fmt.Fprintf(os.Stderr, "prowl-agent: built-in embedder unavailable (%v); using rerank without embeddings\n", err)
+		fmt.Fprintf(os.Stderr, "prowl: built-in embedder unavailable (%v); using rerank without embeddings\n", err)
 		return helper
 	}
-	fmt.Fprintf(os.Stderr, "prowl-agent: built-in embedder unavailable (%v); structural search only\n", err)
+	fmt.Fprintf(os.Stderr, "prowl: built-in embedder unavailable (%v); structural search only\n", err)
 	return nil
 }
 

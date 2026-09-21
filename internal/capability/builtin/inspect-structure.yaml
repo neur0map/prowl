@@ -11,10 +11,10 @@ prompts: [review-change, prepare-implementation]
 resources: [prowl://workspace/current/overview, prowl://workspace/current/changes]
 tools: [analyze_change]
 commands:
-  - prowl-agent find <name>
-  - prowl-agent outline <path>
-  - prowl-agent impact <path>
-  - prowl-agent callers <path>
-  - prowl-agent references <name>
-  - prowl-agent tests <path>
-  - prowl-agent clusters
+  - prowl find <name>
+  - prowl outline <path>
+  - prowl impact <path>
+  - prowl callers <path>
+  - prowl references <name>
+  - prowl tests <path>
+  - prowl clusters

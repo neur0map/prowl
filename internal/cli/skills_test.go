@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/prowl-agent/prowl-agent/internal/setup"
+	"github.com/neur0map/prowl/internal/setup"
 )
 
 // skillsOpts builds a user-install target confined to temporary directories so a
@@ -41,7 +41,7 @@ func manifestPresent(opts setup.UserInstallOptions) bool {
 
 // TestSkillsNonInteractivePreviewWritesNothing proves a non-interactive run is a
 // pure preview: it renders the plan and commits nothing, so an agent shelling
-// out to `prowl-agent skills` in a pipe can never mutate the user's config.
+// out to `prowl skills` in a pipe can never mutate the user's config.
 func TestSkillsNonInteractivePreviewWritesNothing(t *testing.T) {
 	opts := skillsOpts(t)
 	var out bytes.Buffer
@@ -136,6 +136,48 @@ func TestSkillsConflictsPreservedAndPrinted(t *testing.T) {
 	}
 }
 
+// TestSkillsConflictOnlyPlanReportsUnresolved proves a plan with no writable
+// actions but unresolved conflicts is never reported as "up to date": when every
+// destination is a foreign, unowned file nothing installs, and the presenter
+// tells the user conflicts remain to resolve instead of falsely claiming a
+// clean, current install.
+func TestSkillsConflictOnlyPlanReportsUnresolved(t *testing.T) {
+	opts := skillsOpts(t)
+	// Plant a foreign, unowned file at every destination the install would
+	// target, so each candidate is a conflict and the plan has zero writes.
+	plan, err := setup.PlanUserSkills(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Actions) == 0 {
+		t.Fatal("baseline plan had no install actions to convert to conflicts")
+	}
+	for _, action := range plan.Actions {
+		dest := filepath.Join(opts.Home, filepath.FromSlash(action.Destination))
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, []byte("foreign file, not prowl-owned\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var out bytes.Buffer
+	if err := runSkills(opts, strings.NewReader(""), &out, false, false); err != nil {
+		t.Fatalf("runSkills: %v", err)
+	}
+	got := out.String()
+	if strings.Contains(strings.ToLower(got), "up to date") {
+		t.Errorf("conflict-only plan falsely reported up to date:\n%s", got)
+	}
+	if !strings.Contains(strings.ToLower(got), "unresolved conflict") {
+		t.Errorf("conflict-only plan did not report unresolved conflicts:\n%s", got)
+	}
+	if manifestPresent(opts) {
+		t.Error("conflict-only preview committed the ownership manifest")
+	}
+}
+
 // TestSkillsOutputNamesRestartReload proves a successful install tells the user to
 // reload each detected client, so the freshly installed skills actually take
 // effect.
@@ -147,6 +189,23 @@ func TestSkillsOutputNamesRestartReload(t *testing.T) {
 	}
 	lower := strings.ToLower(out.String())
 	for _, want := range []string{"restart", "claude", "reload", "omp"} {
+		if !strings.Contains(lower, want) {
+			t.Errorf("apply output did not name the %q step:\n%s", want, out.String())
+		}
+	}
+}
+
+// TestSkillsOutputNamesProwlLegacyReload proves a successful prowl-legacy install
+// tells the user to reload Prowl Legacy so the freshly installed prowl agent
+// skills take effect.
+func TestSkillsOutputNamesProwlLegacyReload(t *testing.T) {
+	opts := skillsOpts(t, setup.IntegrationProwl)
+	var out bytes.Buffer
+	if err := runSkills(opts, strings.NewReader("y\n"), &out, true, false); err != nil {
+		t.Fatalf("runSkills: %v", err)
+	}
+	lower := strings.ToLower(out.String())
+	for _, want := range []string{"reload prowl legacy"} {
 		if !strings.Contains(lower, want) {
 			t.Errorf("apply output did not name the %q step:\n%s", want, out.String())
 		}
@@ -186,7 +245,7 @@ func TestSkillsCommandArgsAndFlags(t *testing.T) {
 
 // TestSearchAdvisoryClassification pins the conservative advisory classifier: only
 // repository-wide native searches and shell rg/grep/find earn an advisory, while
-// bounded, named, prowl-agent, unknown, and malformed inputs stay silent. False
+// bounded, named, prowl, unknown, and malformed inputs stay silent. False
 // negatives are acceptable; the hook is advisory, never policy.
 func TestSearchAdvisoryClassification(t *testing.T) {
 	cases := []struct {
@@ -203,7 +262,7 @@ func TestSearchAdvisoryClassification(t *testing.T) {
 		{"shell grep in pipeline", `{"tool_name":"Bash","tool_input":{"command":"cat notes | grep TODO"}}`, true},
 		{"bounded grep", `{"tool_name":"Grep","tool_input":{"pattern":"TODO","path":"internal/cli"}}`, false},
 		{"bounded glob", `{"tool_name":"Glob","tool_input":{"pattern":"*.go","path":"internal/cli"}}`, false},
-		{"prowl-agent bash", `{"tool_name":"Bash","tool_input":{"command":"prowl-agent search TODO"}}`, false},
+		{"prowl bash", `{"tool_name":"Bash","tool_input":{"command":"prowl search TODO"}}`, false},
 		{"named read", `{"tool_name":"Read","tool_input":{"file_path":"/repo/main.go"}}`, false},
 		{"unknown tool", `{"tool_name":"Edit","tool_input":{"file_path":"/repo/main.go"}}`, false},
 		{"non-search bash", `{"tool_name":"Bash","tool_input":{"command":"go test ./..."}}`, false},
@@ -383,8 +442,8 @@ func mustPlanForSkills(t *testing.T, opts setup.UserInstallOptions) setup.UserPl
 // TestSearchAdvisoryConservativeShellClassification pins the quote-aware,
 // bounds-checked shell classifier: quoted separators are inert, a file- or
 // directory-bounded search is silent, only the command word (never the search
-// text) is treated as prowl-agent, and a broad search is not suppressed by an
-// adjacent Prowl invocation.
+// text) is treated as prowl, and a broad search is not suppressed by an adjacent
+// Prowl invocation.
 func TestSearchAdvisoryConservativeShellClassification(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -394,9 +453,9 @@ func TestSearchAdvisoryConservativeShellClassification(t *testing.T) {
 		{"quoted separator is inert", "printf 'x | grep TODO'", false},
 		{"file-bounded grep", "grep TODO internal/cli/skills.go", false},
 		{"dir-bounded find", "find internal/cli", false},
-		{"prowl-agent as search text still advises", "rg prowl-agent .", true},
-		{"broad search after prowl-agent invocation", "prowl-agent status && grep -r TODO .", true},
-		{"prowl-agent invocation alone stays silent", "prowl-agent search TODO", false},
+		{"prowl as search text still advises", "rg prowl .", true},
+		{"broad search after prowl invocation", "prowl status && grep -r TODO .", true},
+		{"prowl invocation alone stays silent", "prowl search TODO", false},
 		{"repo-wide grep still advises", "grep -rn TODO .", true},
 		{"pipeline grep still advises", "cat notes | grep TODO", true},
 	}
@@ -554,6 +613,31 @@ func TestSplitClients(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("splitClients = %v, want %v", got, want)
+		}
+	}
+}
+
+// TestRenderRestartNamesEveryUserClient proves the reload/restart guidance covers
+// every supported skill client -- Claude, OMP, Pi, Hermes, OpenClaw, and the
+// retired Prowl Legacy harness -- so a detected client is never left without an
+// actionable next step (Pi and OpenClaw previously produced no line at all).
+func TestRenderRestartNamesEveryUserClient(t *testing.T) {
+	var out bytes.Buffer
+	renderRestart(&out, []string{
+		setup.IntegrationClaude, setup.IntegrationOMP, setup.IntegrationPi,
+		setup.IntegrationHermes, setup.IntegrationOpenClaw, setup.IntegrationProwl,
+	})
+	got := out.String()
+	for client, want := range map[string]string{
+		setup.IntegrationClaude:   "Restart Claude Code",
+		setup.IntegrationOMP:      "Reload OMP",
+		setup.IntegrationPi:       "Reload Pi",
+		setup.IntegrationHermes:   "Reload Hermes",
+		setup.IntegrationOpenClaw: "Reload OpenClaw",
+		setup.IntegrationProwl:    "Reload Prowl Legacy",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("renderRestart omitted guidance for %s (want %q):\n%s", client, want, got)
 		}
 	}
 }

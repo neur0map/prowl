@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // LangCount pairs a language with how many scoped files use it.

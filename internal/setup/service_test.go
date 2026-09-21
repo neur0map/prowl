@@ -15,7 +15,7 @@ import (
 
 	"github.com/gofrs/flock"
 
-	"github.com/prowl-agent/prowl-agent/skills"
+	"github.com/neur0map/prowl/skills"
 )
 
 func TestSetupDetectAndPlanDoNotWrite(t *testing.T) {
@@ -556,7 +556,7 @@ func TestSetupApplyInstallsAndRemovesEmbeddedSkills(t *testing.T) {
 		t.Fatalf("read .omp/RULES.md: %v", err)
 	}
 	if !strings.Contains(string(rules), "<!-- prowl-agent -->") ||
-		!strings.Contains(string(rules), "prowl-agent") ||
+		!strings.Contains(string(rules), "prowl overview") ||
 		strings.Contains(string(rules), "search_context") {
 		t.Fatalf(".omp/RULES.md is not the CLI-first sticky rule: %q", rules)
 	}
@@ -701,7 +701,7 @@ func TestSetupMigratesLegacyExplorationSkill(t *testing.T) {
 
 // Every generated routing surface -- the AGENTS.md block, the sticky .omp
 // RULES.md, and the project scout override -- must lead with the read-only
-// prowl-agent CLI and must not advertise MCP tools as the way to search. The
+// prowl CLI and must not advertise MCP tools as the way to search. The
 // scout additionally keeps its read-only, @smol contract while dropping MCP tool
 // names for bash-run CLI commands.
 func TestSetupGeneratedRoutingIsCLIFirst(t *testing.T) {
@@ -712,8 +712,8 @@ func TestSetupGeneratedRoutingIsCLIFirst(t *testing.T) {
 	}
 	for name, body := range surfaces {
 		core := strings.ReplaceAll(strings.ReplaceAll(body, agentsMarker, ""), agentsEndMarker, "")
-		if !strings.Contains(core, "prowl-agent") {
-			t.Errorf("%s names no prowl-agent CLI command outside its markers", name)
+		if !strings.Contains(core, "prowl ") {
+			t.Errorf("%s names no prowl CLI command outside its markers", name)
 		}
 		lower := strings.ToLower(core)
 		for _, banned := range []string{"search_context", "read_symbol", "mcp__"} {
@@ -728,7 +728,7 @@ func TestSetupGeneratedRoutingIsCLIFirst(t *testing.T) {
 		t.Error("scout override still references MCP")
 	}
 	if !strings.Contains(ompScoutAgent, "bash") {
-		t.Error("scout override no longer runs prowl-agent through bash")
+		t.Error("scout override no longer runs prowl through bash")
 	}
 	if !strings.Contains(ompScoutAgent, `model: "@smol"`) {
 		t.Error("scout override lost its @smol model contract")
@@ -897,5 +897,155 @@ func TestSetupAgentSkillsInstallsToStandardLocation(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("skill file still present after removal: %v", err)
+	}
+}
+
+func applyEditorSetup(t *testing.T, root, key string) {
+	t.Helper()
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := service.Plan(context.Background(), []string{IntegrationNeovim, IntegrationHelix})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Apply(context.Background(), ApplyRequest{
+		Integrations: plan.Integrations, PlanHash: plan.Hash,
+		ExpectedProjectConfigVersion: plan.ProjectConfigVersion, Approved: true, IdempotencyKey: key,
+	}); err != nil {
+		t.Fatalf("apply editor setup: %v", err)
+	}
+}
+
+// TestInjectHelixMigratesLegacyGeneratedBody: a re-setup over a .helix config an
+// earlier release generated (still invoking the retired prowl-agent binary) must
+// migrate it to the current prowl invocation, not early-return and leave it
+// silently pointing at a binary that no longer exists.
+func TestInjectHelixMigratesLegacyGeneratedBody(t *testing.T) {
+	root := t.TempDir()
+	helixPath := filepath.Join(root, ".helix", "languages.toml")
+	if err := os.MkdirAll(filepath.Dir(helixPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(helixPath, []byte(helixConfigLegacy()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	applyEditorSetup(t, root, "helix-migrate")
+	got, err := os.ReadFile(helixPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != helixConfig() {
+		t.Fatalf("legacy Helix body not migrated to the current prowl invocation:\n%s", got)
+	}
+	if strings.Contains(string(got), "prowl-agent") {
+		t.Fatalf("migrated Helix config still invokes the retired prowl-agent binary:\n%s", got)
+	}
+}
+
+// TestInjectHelixLeavesForeignConfig: a hand-written .helix config is never
+// overwritten, and apply still verifies clean (the old broad "contains prowl"
+// check would have failed a foreign file that has no "prowl" token).
+func TestInjectHelixLeavesForeignConfig(t *testing.T) {
+	root := t.TempDir()
+	helixPath := filepath.Join(root, ".helix", "languages.toml")
+	if err := os.MkdirAll(filepath.Dir(helixPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	foreign := "[language-server.myls]\ncommand = \"myls\"\n"
+	if err := os.WriteFile(helixPath, []byte(foreign), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	applyEditorSetup(t, root, "helix-foreign")
+	got, err := os.ReadFile(helixPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != foreign {
+		t.Fatalf("foreign Helix config was overwritten:\n%s", got)
+	}
+}
+
+// TestVerifyRejectsLegacyEditorBody: a stale prowl-agent generated Helix body
+// still contains the "prowl" substring, so the old broad check passed it as
+// success. Verification must now reject it and accept only the current body.
+func TestVerifyRejectsLegacyEditorBody(t *testing.T) {
+	root := t.TempDir()
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := service.Plan(context.Background(), []string{IntegrationHelix})
+	if err != nil {
+		t.Fatal(err)
+	}
+	helixPath := filepath.Join(root, ".helix", "languages.toml")
+	if err := os.MkdirAll(filepath.Dir(helixPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(helixPath, []byte(helixConfigLegacy()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Verify(context.Background(), plan); err == nil {
+		t.Fatal("verify accepted a stale prowl-agent Helix body (false green)")
+	}
+	if err := os.WriteFile(helixPath, []byte(helixConfig()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Verify(context.Background(), plan); err != nil {
+		t.Fatalf("verify rejected the current Helix body: %v", err)
+	}
+}
+
+// TestRemoveIntegrationsRecognizesLegacyEditorBodies: removal must clean up a
+// generated config from an earlier release (Neovim and Helix) by recognizing its
+// exact legacy body, not only the current one.
+func TestRemoveIntegrationsRecognizesLegacyEditorBodies(t *testing.T) {
+	root := t.TempDir()
+	helixPath := filepath.Join(root, ".helix", "languages.toml")
+	nvimPath := filepath.Join(root, ".prowl", "editor", "nvim.lua")
+	for _, p := range []string{helixPath, nvimPath} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(helixPath, []byte(helixConfigLegacy()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(nvimPath, []byte(nvimConfigLegacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveIntegrations(root, []string{IntegrationNeovim, IntegrationHelix}); err != nil {
+		t.Fatalf("remove legacy editor bodies: %v", err)
+	}
+	for _, p := range []string{helixPath, nvimPath} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("legacy generated file not removed: %s", p)
+		}
+	}
+}
+
+// TestRemoveIntegrationsRefusesForeignEditorFile: removal must never delete an
+// arbitrary file that is neither the current nor a known legacy body.
+func TestRemoveIntegrationsRefusesForeignEditorFile(t *testing.T) {
+	root := t.TempDir()
+	helixPath := filepath.Join(root, ".helix", "languages.toml")
+	if err := os.MkdirAll(filepath.Dir(helixPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	foreign := "[language-server.myls]\ncommand = \"myls\"\n"
+	if err := os.WriteFile(helixPath, []byte(foreign), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveIntegrations(root, []string{IntegrationHelix}); err == nil {
+		t.Fatal("remove accepted an arbitrary Helix file")
+	}
+	got, err := os.ReadFile(helixPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != foreign {
+		t.Fatalf("foreign Helix file was modified during a refused removal:\n%s", got)
 	}
 }

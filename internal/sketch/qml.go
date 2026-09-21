@@ -7,7 +7,7 @@ import (
 
 	sitter "github.com/alexaandru/go-tree-sitter-bare"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse"
+	"github.com/neur0map/prowl/internal/parse"
 )
 
 // extractQML parses a QML file into its structured visual sketch.

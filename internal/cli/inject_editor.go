@@ -1,6 +1,6 @@
 package cli
 
-import "github.com/prowl-agent/prowl-agent/internal/setup"
+import "github.com/neur0map/prowl/internal/setup"
 
 // InjectEditor writes editor integration through the setup domain.
 func InjectEditor(root string) error {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
-	"github.com/prowl-agent/prowl-agent/internal/redact"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/redact"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // A credential committed in source must not reach the index. Output filtering is

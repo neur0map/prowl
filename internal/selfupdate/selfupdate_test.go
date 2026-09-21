@@ -29,7 +29,7 @@ func TestSameCommit(t *testing.T) {
 }
 
 func TestParseChecksum(t *testing.T) {
-	h, err := parseChecksum([]byte("abcdef0123456789abcdef0123456789  prowl-agent-linux-amd64\n"))
+	h, err := parseChecksum([]byte("abcdef0123456789abcdef0123456789  prowl-linux-amd64\n"))
 	if err != nil || h != "abcdef0123456789abcdef0123456789" {
 		t.Fatalf("parse = %q err=%v", h, err)
 	}

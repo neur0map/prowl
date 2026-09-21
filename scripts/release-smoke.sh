@@ -60,7 +60,7 @@ test -f AGENTS.md
 review_skill=.cursor/skills/prowl-pr-review/SKILL.md
 test -f "$review_skill" || { echo "standard integration install omitted prowl-pr-review" >&2; exit 1; }
 grep -q '^name: prowl-pr-review$' "$review_skill" || { echo "installed review skill has invalid frontmatter" >&2; exit 1; }
-grep -q 'prowl-agent review check --review <id> --report <regular-file|->' "$review_skill" || {
+grep -q 'prowl review check --review <id> --report <regular-file|->' "$review_skill" || {
   echo "installed review skill omitted the native coverage check contract" >&2
   exit 1
 }
@@ -83,8 +83,10 @@ test ! -e "$XDG_STATE_HOME/prowl-agent/agent-assets.json" || { echo "skills comm
 test ! -e AGENTS.md
 python3 - <<'PY'
 import json, pathlib
-cfg = json.loads(pathlib.Path('.cursor/mcp.json').read_text())
-assert 'prowl-agent' not in cfg.get('mcpServers', {})
+servers = json.loads(pathlib.Path('.cursor/mcp.json').read_text()).get('mcpServers', {})
+# Removal must drop the active renamed key; the retired legacy name stays gone too.
+assert 'prowl' not in servers, servers
+assert 'prowl-agent' not in servers, servers
 PY
 
 echo "release smoke test passed"

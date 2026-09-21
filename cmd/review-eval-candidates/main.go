@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/prowl-agent/prowl-agent/internal/revieweval"
+	"github.com/neur0map/prowl/internal/revieweval"
 )
 
 func main() {

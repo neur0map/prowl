@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	lspserver "github.com/prowl-agent/prowl-agent/internal/lsp"
+	"github.com/neur0map/prowl/internal/application"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/index"
+	lspserver "github.com/neur0map/prowl/internal/lsp"
 )
 
 func openLSPProject(ctx context.Context) (*application.Project, error) {
@@ -41,7 +41,7 @@ func newLSPCmd(version string) *cobra.Command {
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
-				fmt.Fprintln(os.Stderr, "prowl-agent lsp is a language server; your editor launches it over stdin/stdout.")
+				fmt.Fprintln(os.Stderr, "prowl lsp is a language server; your editor launches it over stdin/stdout.")
 				fmt.Fprintln(os.Stderr, "You do not run it by hand. See .prowl/editor/SETUP.md for editor setup.")
 				return nil
 			}

@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/application"
+	"github.com/neur0map/prowl/internal/application"
 )
 
 func TestMatchProwlServer(t *testing.T) {
-	bin := "/home/u/.local/bin/prowl-agent"
+	bin := "/home/u/.local/bin/prowl"
 	cases := []struct {
 		name  string
 		args  []string

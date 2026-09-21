@@ -15,7 +15,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/neur0map/prowl/internal/boundedio"
 )
 
 // alwaysSkipDirs are never walked.

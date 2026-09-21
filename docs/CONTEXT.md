@@ -7,8 +7,8 @@ Prowl builds one context packet contract for the CLI, MCP clients, and future hu
 Use the CLI directly:
 
 ```bash
-prowl-agent context search "how are authentication tokens validated?" --mode compact --budget-tokens 1800 --json
-prowl-agent context get concept:authentication --mode standard --budget-tokens 1800 --json
+prowl context search "how are authentication tokens validated?" --mode compact --budget-tokens 1800 --json
+prowl context get concept:authentication --mode standard --budget-tokens 1800 --json
 ```
 
 A packet includes:
@@ -37,12 +37,12 @@ Changed source anchors lower stale knowledge while preserving it with an explici
 
 ## MCP surfaces
 
-`prowl-agent serve` retains the historical surface by default:
+`prowl serve` retains the historical surface by default:
 
 ```bash
-prowl-agent serve --mcp-surface legacy  # default: 17 compatible tools
-prowl-agent serve --mcp-surface core    # six intent-oriented tools
-prowl-agent serve --mcp-surface all     # legacy plus core
+prowl serve --mcp-surface legacy  # default: 17 compatible tools
+prowl serve --mcp-surface core    # six intent-oriented tools
+prowl serve --mcp-surface all     # legacy plus core
 ```
 
 The core tools are:
@@ -88,15 +88,15 @@ They instruct clients to begin with overview/index or compact context, then fetc
 
 `search_context` accepts `synthesize: true`. If the client advertises MCP sampling, Prowl requests a summary of a bounded compact projection with a 160-token response limit. Sampling can replace only the packet summary; it cannot alter selected evidence, citations, ranking, budgets, or traces. Unsupported capability, errors, non-text output, and empty output all fall back to the deterministic summary.
 
-For proposal creation, an elicitation-capable client is always asked for human confirmation. Decline, cancel, a missing confirmation field, or elicitation failure blocks the write. Clients without elicitation cannot create proposals through MCP; a human must use `prowl-agent knowledge propose` locally. Ordinary tool arguments are never treated as proof of human approval. Neither path accepts the proposal. Acceptance verifies the proposal's base hash and snapshots the canonical document, index, and log before mutation. A later failure triggers rooted restoration of every snapshot; any restoration failure is joined into the returned error rather than hidden.
+For proposal creation, an elicitation-capable client is always asked for human confirmation. Decline, cancel, a missing confirmation field, or elicitation failure blocks the write. Clients without elicitation cannot create proposals through MCP; a human must use `prowl knowledge propose` locally. Ordinary tool arguments are never treated as proof of human approval. Neither path accepts the proposal. Acceptance verifies the proposal's base hash and snapshots the canonical document, index, and log before mutation. A later failure triggers rooted restoration of every snapshot; any restoration failure is joined into the returned error rather than hidden.
 
 ## Capability discovery
 
 Built-in manifests expose metadata before workflow details:
 
 ```bash
-prowl-agent capabilities search context
-prowl-agent capabilities get retrieve-context
+prowl capabilities search context
+prowl capabilities get retrieve-context
 ```
 
 Search is deterministic weighted lexical matching over names, titles, descriptions, and triggers. Manifests declare tools, resources, outputs, privacy, read/write behavior, and version.
@@ -116,8 +116,8 @@ Question text, snippets, source bodies, sampled replies, provider payloads, and 
 Inspect the safe projection with:
 
 ```bash
-prowl-agent context traces --limit 20
-prowl-agent context traces --limit 20 --json
+prowl context traces --limit 20
+prowl context traces --limit 20 --json
 ```
 
 ## Deterministic retrieval evaluation

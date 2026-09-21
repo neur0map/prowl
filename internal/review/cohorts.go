@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 // GraphQueries is the complete graph surface used by planning. Keeping it this

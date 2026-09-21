@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/embed"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/embed"
 )
 
 // In non-interactive mode setupAI reports the chosen tier and never runs an

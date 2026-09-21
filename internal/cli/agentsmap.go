@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/setup"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/setup"
 )
 
 // The Prowl map lives in its own marked region inside AGENTS.md, separate from
@@ -64,7 +64,7 @@ func projectMapBlock(ov query.Overview) string {
 	if len(ov.Docs) > 0 {
 		fmt.Fprintf(&b, "- read these guides first: %s\n", strings.Join(ov.Docs, " · "))
 	}
-	b.WriteString("\nDepth on demand: `prowl-agent find|def|outline|references <name>`, `search <text>`, `context search \"<question>\"`, `sketch <ui>`.\n")
+	b.WriteString("\nDepth on demand: `prowl find|def|outline|references <name>`, `search <text>`, `context search \"<question>\"`, `sketch <ui>`.\n")
 	b.WriteString(agentsMapEndMarker)
 	return b.String()
 }

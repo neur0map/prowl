@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // docChunks returns doc-comment chunk matches for the recall pass, swallowing any

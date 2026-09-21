@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // OutlineSymbol is one entry in a file's structural skeleton: a symbol's kind,

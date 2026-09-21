@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/prowl-agent/prowl-agent/internal/doctor"
+	"github.com/neur0map/prowl/internal/doctor"
 )
 
 // sarifLevel maps a Prowl severity to a SARIF result level.
@@ -88,7 +88,7 @@ func renderDoctorSARIF(rep doctor.Report) (string, error) {
 		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
 		Version: "2.1.0",
 		Runs: []run{{
-			Tool:    tool{Driver: driver{Name: "prowl-agent", InformationURI: "https://github.com/neur0map/prowl-agent", Rules: rules}},
+			Tool:    tool{Driver: driver{Name: "prowl", InformationURI: "https://github.com/neur0map/prowl", Rules: rules}},
 			Results: results,
 		}},
 	}

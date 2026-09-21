@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/neur0map/prowl/internal/boundedio"
 )
 
 func TestConfigRoundTrip(t *testing.T) {

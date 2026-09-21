@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/prowl-agent/prowl-agent/internal/graph"
-	"github.com/prowl-agent/prowl-agent/internal/parse"
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
-	"github.com/prowl-agent/prowl-agent/internal/redact"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/graph"
+	"github.com/neur0map/prowl/internal/parse"
+	"github.com/neur0map/prowl/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/redact"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // ErrSourcesChanged marks a transient source-tree read inconsistency. Project

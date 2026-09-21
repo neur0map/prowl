@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/knowledge"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 // Service compiles the same packet for every transport without a model.

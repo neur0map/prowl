@@ -10,14 +10,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/neur0map/prowl/internal/boundedio"
 )
 
 // Dir is the per-project workspace directory name.
 const Dir = ".prowl"
 
 // ErrNotFound is returned when no .prowl workspace is found.
-var ErrNotFound = errors.New("no .prowl workspace found (run 'prowl-agent init')")
+var ErrNotFound = errors.New("no .prowl workspace found (run 'prowl init')")
 
 // Workspace locates a project's shared canonical state and per-worktree
 // derived state.

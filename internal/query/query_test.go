@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/embed"
-	"github.com/prowl-agent/prowl-agent/internal/graph"
-	"github.com/prowl-agent/prowl-agent/internal/index"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/embed"
+	"github.com/neur0map/prowl/internal/graph"
+	"github.com/neur0map/prowl/internal/index"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestPublishedGenerationGuard(t *testing.T) {

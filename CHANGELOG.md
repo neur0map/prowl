@@ -7,7 +7,66 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
-- Added an experimental native code-review subsystem (`prowl-agent review`:
+- The canonical source repository and Go module are now
+  `github.com/neur0map/prowl`; installer, release, badge, and plugin metadata use
+  the same product identity while existing `prowl-agent` state directories stay
+  unchanged for upgrade compatibility.
+- The product binary is now `prowl`; the earlier agent harness that owned that
+  name is preserved as `prowl-legacy`, and the transitional `prowl-agent`
+  command is retired. Running `prowl` with no arguments opens one nine-tab
+  terminal console for project status, indexed projects, providers,
+  credentials, subscription accounts, models and routing, activity, the code
+  toolkit, and setup. `prowl init` remains the direct indexing path. The console
+  leaves mouse capture disabled so native terminal selection and copy work
+  without a modifier. Home adds a **Keep running** switch that promotes the
+  session gateway to a tracked daemon on exit or safely stops an attached daemon
+  when switched off.
+- Smart routing now classifies only the latest user turn locally by domain and
+  effort before applying hard capability constraints, operator controls,
+  benchmark fit, live health, and an economy score from published input/output
+  prices. It does not spend a model call merely to choose a model. Research is
+  the explicit exception: an automatic research request can use low-cost
+  Perplexity Sonar to collect current cited findings, then hand bounded,
+  untrusted context to a non-Perplexity final route. Pinned requests never gain
+  the extra call, and preflight failure falls back to the normal chain. Route
+  class, effort, scoring reason, and research provider are exposed in response
+  headers and the durable activity trail. Artificial Analysis benchmark scores
+  retain their bounded refresh and last-known-good behavior.
+- Subscription sign-in now opens the authorization page automatically, keeps
+  the URL and device code copyable, and adds every discovered account model to
+  routing without a separate enrollment step. Connection, routing, and
+  allowance state are reported independently, including actionable re-sign-in
+  state instead of falsely marking scrubbed credential metadata unreadable.
+  Claude uses Anthropic's native Messages wire protocol with OAuth attestation
+  and Claude-compatible streaming/tool translation; ChatGPT/Codex keeps its
+  native subscription transport and complete dynamic model list.
+- Home now includes a compact 24-hour request graph with spend, token, and
+  request totals. Activity uses the full terminal canvas for request trends,
+  model-share bars, and recent calls. Exact, estimated (`~`), and unavailable
+  (`-`) token usage stay distinct. Provider-reported costs take precedence;
+  otherwise Prowl estimates spend from the live model catalogue's per-million
+  prices, and an unpublished price remains unavailable instead of becoming a
+  false `$0.00`.
+- The Overview still leads with combined estimated token savings across all
+  indexed projects. Models opens on a compact default/named-set list, groups
+  templates by task and access, starts editors with active providers, provides
+  a checkbox provider modal, searches the full catalogue with `/`, uses `Space`
+  consistently for membership/activation, and makes custom-set removal work
+  through both rendered actions and keyboard confirmation.
+- Added the gateway: a terminal-native provider and routing management plane.
+  Its engine provides smart strategy ordering, per-key failover, quota windows,
+  cooldown benching, an encrypted key vault, the provider/model directory, and
+  OpenAI-, Anthropic-, and Responses-compatible `/v1` routes, including chat,
+  embeddings, image generation, speech synthesis, and transcription. Durable
+  gateway state remains under `$XDG_DATA_HOME/prowl-agent/gateway` for upgrade
+  compatibility. The unified Prowl console manages providers, keys and custom
+  endpoints; Claude, ChatGPT, Copilot, and Charm Hyper subscription accounts;
+  named sets and strategies; activity; and routing-only injection into OMP, Pi,
+  Claude Code, Codex, OpenCode, Hermes, OpenClaw, and the preserved Prowl Legacy
+  harness. Injection is ledger-backed so removal restores displaced values,
+  protects credential files, and preserves later user edits. Scriptable
+  lifecycle commands remain available.
+- Added an experimental native code-review subsystem (`prowl review`:
   `plan`, `unit`, `check`). It captures exact review churn against a merge base,
   resolves immutable review scopes, persists bounded review units and
   dependency-ordered plans from a sandboxed local Git reader, and verifies
@@ -18,20 +77,22 @@ All notable changes are recorded here. The format follows
   GitHub issues" task through Prowl for investigation (search, find, def,
   references, impact) and `gh` for the issue API, then closes each issue with a
   short, human-toned note. Installed alongside the other skills via
-  `prowl-agent skills`.
-- `prowl-agent skills` gained a non-interactive apply path and client
+  `prowl skills`.
+- `prowl skills` gained a non-interactive apply path and explicit client
   selection. `--yes` applies the reviewed plan without a prompt, the only way a
-  piped or provisioning run writes (a plain non-interactive run stays a
-  preview); `--clients claude,omp,hermes` targets a subset of the detected
-  clients. Hermes is now a supported user client: it mirrors Claude's assets
-  under `~/.hermes/skills/prowl`, and `DetectInstalledHarnesses` recognizes it
-  by a `~/.hermes` directory or a `hermes` launcher on PATH.
+  piped or provisioning run writes; a plain non-interactive run remains a
+  preview. Pi installs each portable skill directly at
+  `~/.pi/agent/skills/<name>/SKILL.md`. Hermes uses the recursive
+  `~/.hermes/skills/prowl` tree, OpenClaw uses `~/.openclaw/skills/prowl`, and
+  Prowl Legacy retains `~/.config/prowl/skills/prowl`. Detection recognizes
+  their home directories or explicit launchers, including `prowl-legacy`
+  without mistaking the current `prowl` product for a harness.
 - Packaged builds no longer self-update. A build-time `main.managedBy` stamp
   (`-ldflags "-X main.managedBy=pacman"`), or a running executable whose install
-  directory the user cannot write, makes `prowl-agent update` print that the
+  directory the user cannot write, makes `prowl update` print that the
   binary is managed by the package manager (on Ryoku: `ryoku update`) and exit 0
   without downloading. `version` and `status` still report update availability.
-- Added a CLI-first adoption package for Claude and OMP. `prowl-agent skills`
+- Added a CLI-first adoption package for Claude and OMP. `prowl skills`
   previews release-matched user assets, defaults to No, never writes from a
   non-interactive session, refuses foreign-file conflicts, and tracks each owned
   file for safe updates and removals. The installed `code-search` skill,
@@ -108,7 +169,7 @@ All notable changes are recorded here. The format follows
   (`docs/VERSIONING.md`). `var version` in `cmd/prowl-agent/main.go` is the one
   source of truth: every push to `unstable` advances the patch, and the tenth bump
   rolls into the minor (`0.9.9` then `0.10.0`), with the major left manual.
-  **stable** is fed by `main` and is what `prowl-agent update` and the installers
+  **stable** is fed by `main` and is what `prowl update` and the installers
   use; each release is permanent under its own `vX.Y.Z` tag with a rolling
   `stable` tag pointing at the newest. **preview** is fed by `unstable`, carries
   every commit as it lands, and is opt-in with `PROWL_UPDATE_CHANNEL=preview`.
@@ -192,15 +253,15 @@ All notable changes are recorded here. The format follows
   `stale_anchor` rather than stalling a lint pass. A symbol anchor whose symbol
   was renamed but whose body is untouched is recovered the same way.
 - A guard keeps prowl's agent-facing text honest against its own command tree.
-  Every `prowl-agent ...` invocation in the capability manifests, the installed
+  Every `prowl ...` invocation in the capability manifests, the installed
   skills, and the injected project map is now resolved against the registered
   cobra commands, with cited flags checked too, and every capability `tools:` name
   against the registered MCP tools. The previous check only asserted a
-  `prowl-agent ` prefix, so a renamed command would ship while three surfaces kept
+  `prowl ` prefix, so a renamed command would ship while three surfaces kept
   telling agents to run something that exits non-zero. It walks the command tree
   in process rather than scraping `--help`, so hidden commands (`serve`, `lsp`)
   do not register as drift, and it reads only fenced blocks and code spans, so
-  prose such as "reach for prowl-agent before grepping" is not mistaken for a
+  prose such as "reach for prowl before grepping" is not mistaken for a
   command.
 
 ### Changed
@@ -232,7 +293,7 @@ All notable changes are recorded here. The format follows
   to shell out to an unfamiliar CLI; a registered MCP server puts Prowl's tools in
   the agent's own tool list, where they actually get called. The `AGENTS.md` block
   and the exploration skill now teach both interfaces -- the MCP tools (preferred)
-  and the `prowl-agent` CLI (the opt-in equivalent) -- and the interactive picker
+  and the `prowl` CLI (the opt-in equivalent) -- and the interactive picker
   pre-selects this whole baseline. For omp it also installs a sticky
   `.omp/RULES.md` (re-injected near every turn, unlike `AGENTS.md`, which drifts
   up a long transcript) holding the "reach for Prowl before grep" directive in
@@ -251,6 +312,27 @@ All notable changes are recorded here. The format follows
   installs a skill under a name nothing resolves.
 
 ### Fixed
+- The unified console no longer accumulates deleted test and temporary
+  workspaces as projects; registry reads now retain only resolvable indexes and
+  compact stale or duplicate entries atomically. Browser OAuth now outlives the
+  HTTP request that starts it, listens on both IPv4 and IPv6 localhost, and asks
+  OpenAI for the connector scopes Codex requires, restoring Claude and ChatGPT
+  sign-in. Gateway diagnostics are routed to `gateway.log` before either console
+  entry point paints, so a rejected refresh can no longer print raw upstream
+  JSON over the TUI or leave duplicate tab rows. OAuth exchange errors are
+  bounded, and the Hyper subscription is consistently branded Charm Hyper.
+- Project rows now show measured token savings, and `Enter` opens a scrollable
+  full status report. Claude OAuth requests an authorization code explicitly,
+  successful connection state remains visible with its enrollment next step,
+  and account details report Claude's five-hour and weekly windows. Charm Hyper
+  reports its live credit balance and the published 100-credit monthly grant
+  without inventing a daily limit or account-specific reset time the API does
+  not expose. Named routing sets now support create, edit, rename, confirmed
+  delete, reliable Escape navigation, and provider, access, and intelligence
+  filters across free, paid, and enrolled subscription models. The provider
+  directory now includes each production-wired platform exactly once, excludes
+  unsupported inference wires, and gives every row working detail, signup, and
+  credential actions.
 - `overview` entrypoints name code that starts the program. The rule was "has
   outgoing dependency edges and nothing depends on it", which also admits every
   manifest, config table, and test harness: a `package.json` carries one edge per
@@ -287,7 +369,7 @@ All notable changes are recorded here. The format follows
   The embedding backlog was then refilled only two seconds per command, so
   semantic search silently sat near-empty for hundreds of invocations after an
   update. The backlog is now drained during that same refresh, so the first
-  command after `prowl-agent update` returns with whole semantic coverage. The
+  command after `prowl update` returns with whole semantic coverage. The
   per-invocation ration is gone entirely: it only ever existed to survive remote
   embedding at ~47 chunks/second, and the bundled in-process embedder does ~650.
   Measured on an 8.5k-file repo without deleting the index: first command after an
@@ -398,7 +480,7 @@ All notable changes are recorded here. The format follows
   so the warning above has a one-line fix (`init --languages auto`) and indexing
   can be scoped at setup without hand-editing `.prowl/config.toml`.
 
-- External documentation can be ingested and searched. `prowl-agent docs add <url>`
+- External documentation can be ingested and searched. `prowl docs add <url>`
   crawls a documentation site (bounded depth, page cap, rate limit, robots.txt) and
   converts each page to clean Markdown; `docs add <dir> --local` ingests a local
   Markdown tree. Pages are stored in a shared per-machine corpus and indexed, then
@@ -463,7 +545,7 @@ All notable changes are recorded here. The format follows
   whose stale config indexed 0 of its 238 Go files while `doctor` reported a
   perfect 100/100.
 
-- `prowl-agent outline <path>` and the `outline` MCP tool return a file's
+- `prowl outline <path>` and the `outline` MCP tool return a file's
   structure -- every symbol with its kind, signature, nesting depth, and line
   range, but no bodies -- from the index alone (no file read). An agent grasps a
   file's shape from a handful of signature lines instead of reading the whole
@@ -503,7 +585,7 @@ All notable changes are recorded here. The format follows
   unresolved import edges. They fan out to per-file `pkg` edges for
   callers/impact, but the originating import edge stayed `resolved:false` -- so
   `callees` showed a file's own internal dependencies as unresolved (identical to
-  external stdlib), and the dangling-edge count was inflated. On prowl-agent's Go
+  external stdlib), and the dangling-edge count was inflated. On Prowl's Go
   tree this cut false danglings by 251 (1,334 -> 1,083) and `callees` now marks
   internal imports `resolved:true`; `callers`/impact counts are unchanged (the
   import is resolved to a non-file target, so it is not double-counted).
@@ -684,7 +766,7 @@ All notable changes are recorded here. The format follows
   the right tool.
 
 - Refocused Prowl into a single, agent-first token-saving context engine
-  delivered over the CLI and MCP. Removed the browser workbench (`prowl-agent
+  delivered over the CLI and MCP. Removed the browser workbench (`prowl
   open`, the embedded web UI, and the HTTP workbench server), the durable-jobs
   and event-streaming plane, and the Hermes-inspired agent-operations kernel
   (operations, agent, session, profile, toolruntime, entity) with its `session`
@@ -723,14 +805,14 @@ All notable changes are recorded here. The format follows
   has a timeout so a stuck runner fails in minutes, not a day.
 
 ### Added
-- `prowl-agent def <name-or-id>` and the MCP `read_symbol` tool return one
+- `prowl def <name-or-id>` and the MCP `read_symbol` tool return one
   symbol's source (signature and body), cited and bounded, resolved by name or
   by a find id. An agent reads a single function, type, or component instead of
   the whole file, which is prowl's core promise applied to the find-then-read
   step. A QML component returns its whole file; other symbols return their exact
   range, capped at 200 lines. `read_symbol` joins the core MCP surface, so
   MCP-only clients get symbol-level reads too.
-- `prowl-agent brief <path>` gives a cited orientation for a path or subsystem
+- `prowl brief <path>` gives a cited orientation for a path or subsystem
   in one call: file count, languages, the architecture guides to read, and the
   key files to read first (ranked by graph centrality). Use it to warm-start on
   a slice of the repo, or to hand a subagent scoped context, instead of

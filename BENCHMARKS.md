@@ -1,7 +1,7 @@
 # Benchmarks
 
 Prowl's core claim is token efficiency: an agent gets a small, cited answer
-instead of reading whole files. `prowl-agent bench` measures that claim the
+instead of reading whole files. `prowl bench` measures that claim the
 honest, reproducible way, with **zero external services** - no API keys, no
 cloud vector database, no embeddings.
 
@@ -23,9 +23,9 @@ embedding key, so they cannot run in this harness; the point of comparison is
 the token cost of an answer, which is framework-independent, plus the operational
 cost Prowl removes (keys, cloud, embedding spend).
 
-## Result (this repo, `prowl-agent`)
+## Result (this repo, `prowl`)
 
-Run on the Prowl codebase itself (363 files, ~383k tokens), `prowl-agent bench`:
+Run on the Prowl codebase itself (363 files, ~383k tokens), `prowl bench`:
 
 | question | prowl | read-files | reduction |
 | --- | ---: | ---: | ---: |
@@ -45,10 +45,10 @@ Numbers move with the repo and the index; the command reprints current figures.
 ## Reproduce
 
 ```bash
-prowl-agent bench                       # default question set, human table
-prowl-agent bench --json                # machine-readable report
-prowl-agent bench --questions q.txt     # one question per line
-prowl-agent bench "how does auth work"  # ad hoc questions
+prowl bench                       # default question set, human table
+prowl bench --json                # machine-readable report
+prowl bench --questions q.txt     # one question per line
+prowl bench "how does auth work"  # ad hoc questions
 ```
 
 Every run is local and deterministic (full-text ranking; local vectors are added

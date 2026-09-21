@@ -12,8 +12,8 @@
 // every Grep/Glob/Bash. It reads one PreToolUse JSON object, classifies only
 // repository-wide searches, and either stays silent or emits Claude's
 // additionalContext response nudging the agent toward Prowl's indexed search. It
-// fails open: malformed, unknown, bounded, or prowl-agent input produces no
-// output and exits 0. It never emits a permission decision and never echoes the
+// fails open: malformed, unknown, bounded, or prowl input produces no output
+// and exits 0. It never emits a permission decision and never echoes the
 // caller's tool input.
 package cli
 
@@ -30,28 +30,27 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/setup"
+	"github.com/neur0map/prowl/internal/setup"
 )
 
 // newSkillsCmd installs Prowl's agent-native skills under the user's own Claude,
-// OMP, and Hermes configuration roots. It takes no positional arguments and has
-// no subcommand. --clients selects which detected clients to target; --yes
-// applies the reviewed plan without a prompt, which is the only way a
-// non-interactive run (a pipe, a provisioning script) writes. version stamps the
+// OMP, Pi, Hermes, OpenClaw, and Prowl Legacy configuration roots. It takes no
+// positional arguments and has no subcommand. --clients selects which detected
+// clients to target; --yes applies the reviewed plan without a prompt, which is
+// the only way a non-interactive run writes. version stamps the
 // version-templated assets (only Claude's plugin manifest carries it).
 func newSkillsCmd(version string) *cobra.Command {
 	var assumeYes bool
 	var clientsFlag string
 	cmd := &cobra.Command{
 		Use:   "skills",
-		Short: "Install Prowl's agent-native skills into your Claude, OMP, and Hermes config",
+		Short: "Install Prowl's agent-native skills into supported coding harnesses",
 		Long: "Install Prowl's release-matched agent skills into your own Claude, OMP,\n" +
-			"and Hermes configuration roots (~/.claude/skills/prowl, ~/.omp/agent, and\n" +
-			"~/.hermes/skills/prowl). The command shows a full preview of every file it\n" +
-			"would write and every destination it refuses to touch, then asks once\n" +
-			"before changing anything. Pass --yes to apply without prompting (the only\n" +
-			"way a piped or non-interactive run writes) and --clients to target a\n" +
-			"specific subset of the detected clients.",
+			"Pi, Hermes, OpenClaw, and Prowl Legacy configuration roots. The command\n" +
+			"shows a full preview of every file it would write and every destination\n" +
+			"it refuses to touch, then asks once before changing anything. Pass --yes\n" +
+			"to apply without prompting (the only way a piped or non-interactive run\n" +
+			"writes) and --clients to target a specific subset of the detected clients.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			home, err := os.UserHomeDir()
@@ -72,7 +71,7 @@ func newSkillsCmd(version string) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&assumeYes, "yes", false, "apply the plan without prompting (also writes in a non-interactive run)")
-	cmd.Flags().StringVar(&clientsFlag, "clients", "", "comma-separated clients to target (claude,omp,hermes); default: detected")
+	cmd.Flags().StringVar(&clientsFlag, "clients", "", "comma-separated clients to target (claude,omp,pi,hermes,openclaw,prowl-legacy); default: detected")
 	return cmd
 }
 
@@ -108,7 +107,7 @@ func runSkills(opts setup.UserInstallOptions, in io.Reader, out io.Writer, inter
 // verifier and tests wire a failing one.
 func runSkillsWithVerifier(opts setup.UserInstallOptions, in io.Reader, out io.Writer, interactive, assumeYes bool, verify userVerifier) error {
 	if len(opts.Clients) == 0 {
-		fmt.Fprintln(out, "No supported agent detected (looked for Claude, OMP, and Hermes); nothing to install.")
+		fmt.Fprintln(out, "No supported agent detected (looked for Claude, OMP, Pi, Hermes, OpenClaw, and Prowl Legacy); nothing to install.")
 		return nil
 	}
 
@@ -119,6 +118,14 @@ func runSkillsWithVerifier(opts setup.UserInstallOptions, in io.Reader, out io.W
 	renderSkillsPlan(out, plan)
 
 	if !planHasWrites(plan) {
+		// A plan with no writes is only "up to date" when nothing was blocked.
+		// If every remaining item is a conflict Prowl refuses to touch, saying
+		// "up to date" would hide real work the user still has to resolve, so
+		// report the unresolved conflicts (already listed above) instead.
+		if len(plan.Conflicts) > 0 {
+			fmt.Fprintf(out, "\nNothing to apply: %d destination(s) have unresolved conflicts (listed above) and were left unchanged. Resolve them and re-run.\n", len(plan.Conflicts))
+			return nil
+		}
 		fmt.Fprintln(out, "\nEverything is already up to date; nothing to apply.")
 		return nil
 	}
@@ -188,8 +195,14 @@ func renderRestart(out io.Writer, clients []string) {
 			fmt.Fprintln(out, "  - Restart Claude Code so it loads the prowl skills plugin.")
 		case setup.IntegrationOMP:
 			fmt.Fprintln(out, "  - Reload OMP so it picks up the prowl agent skills.")
+		case setup.IntegrationPi:
+			fmt.Fprintln(out, "  - Reload Pi so it picks up the prowl agent skills.")
 		case setup.IntegrationHermes:
 			fmt.Fprintln(out, "  - Reload Hermes so it picks up the prowl agent skills.")
+		case setup.IntegrationOpenClaw:
+			fmt.Fprintln(out, "  - Reload OpenClaw so it picks up the prowl agent skills.")
+		case setup.IntegrationProwl:
+			fmt.Fprintln(out, "  - Reload Prowl Legacy so it picks up the prowl agent skills.")
 		}
 	}
 }
@@ -269,8 +282,8 @@ func fileIsTerminal(stream any) bool {
 // repository-wide search. It is fixed text: the hook never reflects the caller's
 // tool input, so it can neither leak nor echo attacker-controlled strings.
 const searchAdvisoryContext = "Prowl indexes this repository for token-lean, cited code search. " +
-	"Before a repository-wide scan, consider `prowl-agent search`, `prowl-agent find`, " +
-	"`prowl-agent def`, `prowl-agent references`, or `prowl-agent outline`: they return " +
+	"Before a repository-wide scan, consider `prowl search`, `prowl find`, " +
+	"`prowl def`, `prowl references`, or `prowl outline`: they return " +
 	"ranked, cited results without reading every file. This is advisory only."
 
 // maxAdvisoryInput bounds the PreToolUse payload the hook will read so a runaway
@@ -378,8 +391,8 @@ func grepGlobIsRepoWide(raw json.RawMessage) bool {
 // separator or search word inside quotes is inert) and inspects each pipeline
 // segment: a segment is flagged only when its command word is a search binary
 // and its operands do not bound the search to a named file or subdirectory. A
-// segment whose command word is prowl-agent is never flagged -- but only that
-// segment, and only when prowl-agent is the command, never the search text.
+// segment whose command word is prowl is never flagged -- but only that segment,
+// and only when prowl is the command, never the search text.
 func bashRunsBroadSearch(raw json.RawMessage) bool {
 	var in struct {
 		Command string `json:"command"`
@@ -397,8 +410,8 @@ func bashRunsBroadSearch(raw json.RawMessage) bool {
 
 // segmentIsBroadSearch classifies one pipeline segment by its command word,
 // skipping leading VAR=value assignments. Only rg/grep/find with unbounded
-// operands is a broad search; every other command word -- prowl-agent included
-// -- is not.
+// operands is a broad search; every other command word -- prowl included -- is
+// not.
 func segmentIsBroadSearch(tokens []string) bool {
 	i := 0
 	for i < len(tokens) && envAssignment.MatchString(tokens[i]) {

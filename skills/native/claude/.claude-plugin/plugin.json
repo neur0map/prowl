@@ -1,9 +1,9 @@
 {
   "name": "prowl",
   "version": "{{VERSION}}",
-  "description": "Route repository discovery through the read-only prowl-agent CLI and run graph-aware large-change review with bounded units, coverage audits, and a final verifier check.",
+  "description": "Route repository discovery through the read-only prowl CLI and run graph-aware large-change review with bounded units, coverage audits, and a final verifier check.",
   "author": {
-    "name": "Prowl Agent"
+    "name": "Prowl"
   },
-  "homepage": "https://github.com/prowl-agent/prowl-agent"
+  "homepage": "https://github.com/neur0map/prowl"
 }

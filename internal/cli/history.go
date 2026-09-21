@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
+	"github.com/neur0map/prowl/internal/query"
 )
 
 // newHistoryCmd reports the commits that touched a symbol -- the "why is this
@@ -42,7 +42,7 @@ func newHistoryCmd() *cobra.Command {
 				return err
 			}
 			if len(commits) == 0 {
-				fmt.Fprintf(cmd.ErrOrStderr(), "hint: no commit history for %q; the symbol may be unknown ('prowl-agent find %s'), its file untracked, this not a git repository, or the history walk timed out on a very large repository\n", a[0], a[0])
+				fmt.Fprintf(cmd.ErrOrStderr(), "hint: no commit history for %q; the symbol may be unknown ('prowl find %s'), its file untracked, this not a git repository, or the history walk timed out on a very large repository\n", a[0], a[0])
 			} else if files := distinctFiles(commits); len(files) > 1 {
 				fmt.Fprintf(cmd.ErrOrStderr(), "note: %q matches %d symbols (%v); history for each is shown, tagged by file\n", a[0], len(files), files)
 			}

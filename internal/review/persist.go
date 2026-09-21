@@ -42,8 +42,8 @@ import (
 
 	"github.com/gofrs/flock"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
-	contextpacket "github.com/prowl-agent/prowl-agent/internal/context"
+	"github.com/neur0map/prowl/internal/boundedio"
+	contextpacket "github.com/neur0map/prowl/internal/context"
 )
 
 const (

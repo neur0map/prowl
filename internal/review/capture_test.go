@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/boundedio"
+	"github.com/neur0map/prowl/internal/boundedio"
 )
 
 // TestCaptureThresholdIgnoresGitAttributes proves threshold churn is computed

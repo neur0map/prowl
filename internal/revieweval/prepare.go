@@ -24,7 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/review"
+	"github.com/neur0map/prowl/internal/review"
 )
 
 const (

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
-	"github.com/prowl-agent/prowl-agent/internal/knowledge/okfv01"
-	"github.com/prowl-agent/prowl-agent/internal/store"
+	"github.com/neur0map/prowl/internal/knowledge"
+	"github.com/neur0map/prowl/internal/knowledge/okfv01"
+	"github.com/neur0map/prowl/internal/store"
 )
 
 func TestKnowledgeMetadataRebuildsAfterDatabaseDeletion(t *testing.T) {

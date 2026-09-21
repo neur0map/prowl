@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/assist"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/assist"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 // ollamaKeepAlive is how long a warmed model stays resident between queries:
@@ -201,7 +201,7 @@ func writeOllamaUserUnit() error {
 		envBlock += l + "\n"
 	}
 	unit := "[Unit]\n" +
-		"Description=Ollama (managed by prowl-agent)\n\n" +
+		"Description=Ollama (managed by Prowl)\n\n" +
 		"[Service]\n" +
 		"ExecStart=" + bin + " serve\n" +
 		envBlock +

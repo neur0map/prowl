@@ -18,9 +18,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Build prowl-agent
-        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$HOME/.local/bin/prowl-agent" ./cmd/prowl-agent
-      - name: Add prowl-agent to PATH
+      - name: Build prowl
+        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -o "$HOME/.local/bin/prowl" ./cmd/prowl
+      - name: Add prowl to PATH
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Render GIF
         uses: charmbracelet/vhs-action@v2

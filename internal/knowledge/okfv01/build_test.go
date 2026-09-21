@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/knowledge"
+	"github.com/neur0map/prowl/internal/knowledge"
 )
 
 // TestBuildCandidateNestsProwlFields proves a structured candidate assembles

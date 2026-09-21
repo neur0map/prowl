@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/capability"
+	"github.com/neur0map/prowl/internal/capability"
 )
 
 // A skill's directory name is its installed identity: setup writes each skill to
@@ -92,7 +92,7 @@ func TestCodeSearchDescriptionNamesItsTriggers(t *testing.T) {
 	}
 }
 
-// The body routes structural work through the prowl-agent CLI and never presents
+// The body routes structural work through the prowl CLI and never presents
 // MCP as a transport choice: an agent should not have to pick between CLI and
 // MCP, and the retired MCP tool names must be gone.
 func TestCodeSearchBodyRoutesThroughTheCLINotMCP(t *testing.T) {
@@ -100,8 +100,8 @@ func TestCodeSearchBodyRoutesThroughTheCLINotMCP(t *testing.T) {
 	if !ok {
 		t.Fatal("code-search skill is not embedded")
 	}
-	if !strings.Contains(skill.Content, "prowl-agent ") {
-		t.Error("code-search body invokes no prowl-agent CLI command")
+	if !strings.Contains(skill.Content, "prowl ") {
+		t.Error("code-search body invokes no prowl CLI command")
 	}
 	lower := strings.ToLower(skill.Content)
 	compact := strings.Join(strings.Fields(lower), " ")
@@ -160,9 +160,9 @@ func TestReviewCapabilityManifest(t *testing.T) {
 		Resources:   []string{},
 		Tools:       []string{},
 		Commands: []string{
-			"prowl-agent review plan --base <base> --head <head>",
-			"prowl-agent review unit <review-id>/<unit-id>",
-			"prowl-agent review check --review <review-id> --report <report.json>",
+			"prowl review plan --base <base> --head <head>",
+			"prowl review unit <review-id>/<unit-id>",
+			"prowl review check --review <review-id> --report <report.json>",
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -216,9 +216,9 @@ func TestReviewSkillFrontmatterAndProtocol(t *testing.T) {
 		}
 	}
 	for _, command := range []string{
-		"`prowl-agent review plan [--base ref --head ref | --commit ref] [--structured]`",
-		"`prowl-agent review unit <review-id>/<unit-id> [--budget-tokens n --budget-bytes n]`",
-		"`prowl-agent review check --review <id> --report <regular-file|->`",
+		"`prowl review plan [--base ref --head ref | --commit ref] [--structured]`",
+		"`prowl review unit <review-id>/<unit-id> [--budget-tokens n --budget-bytes n]`",
+		"`prowl review check --review <id> --report <regular-file|->`",
 	} {
 		if !strings.Contains(compact, command) {
 			t.Errorf("review skill omits exact command contract %q", command)
@@ -244,13 +244,13 @@ func TestReviewClaudeCommandDelegatesToPortableSkill(t *testing.T) {
 		t.Error("review command does not delegate to the plugin-namespaced portable skill")
 	}
 	if got, want := frontmatterValue(command.Content, "allowed-tools:"),
-		"Bash(prowl-agent:*), Read, Grep, Glob"; got != want {
+		"Bash(prowl:*), Read, Grep, Glob"; got != want {
 		t.Errorf("review command allowed-tools = %q, want %q", got, want)
 	}
 	for _, duplicated := range []string{
-		"prowl-agent review plan",
-		"prowl-agent review unit",
-		"prowl-agent review check",
+		"prowl review plan",
+		"prowl review unit",
+		"prowl review check",
 	} {
 		if strings.Contains(lower, duplicated) {
 			t.Errorf("review command duplicates portable protocol command %q", duplicated)
@@ -320,12 +320,13 @@ func openingSection(content string) string {
 
 // Native assets are the harness-native integration files prowl installs beside
 // the portable skills: a Claude plugin (manifest, command, scout agent, and a
-// PreToolUse advisory hook) and omp's scout agent plus a routing extension.
-// Every consumer -- the installer and its tests -- reads the same files in the
-// same order, so Native(client) must return them sorted by relative path, with
-// unique paths, a stamped client, and non-empty content.
+// PreToolUse advisory hook), omp's scout agent plus a routing extension, and
+// prowl's own routing skill. Every consumer -- the installer and its tests --
+// reads the same files in the same order, so Native(client) must return them
+// sorted by relative path, with unique paths, a stamped client, and non-empty
+// content.
 func TestNativeAssetsAreOrderedAndUnique(t *testing.T) {
-	for _, client := range []string{"claude", "omp"} {
+	for _, client := range []string{"claude", "omp", "prowl"} {
 		assets := Native(client)
 		if len(assets) == 0 {
 			t.Fatalf("Native(%q) returned no assets", client)
@@ -403,8 +404,8 @@ func TestNativeClaudeManifestParsesAndIsVersioned(t *testing.T) {
 
 // Claude discovers the integration by its plugin layout: a slash command, a
 // scout subagent, and a hooks file whose PreToolUse rule fires the advisory on
-// the broad-search tools. The advisory must be exactly the prowl-agent binary
-// call, with no jq, Python, shell interpolation of tool input, or network hop.
+// broad-search tools. The advisory must be exactly the prowl binary call, with
+// no jq, Python, shell interpolation of tool input, or network hop.
 func TestNativeClaudeExposesCommandAgentAndHook(t *testing.T) {
 	nativeAsset(t, "claude", "commands/search.md")
 	nativeAsset(t, "claude", "agents/code-scout.md")
@@ -432,65 +433,32 @@ func TestNativeClaudeExposesCommandAgentAndHook(t *testing.T) {
 			continue
 		}
 		for _, h := range matcher.Hooks {
-			if h.Type == "command" && h.Command == "prowl-agent _search-advisory" {
+			if h.Type == "command" && h.Command == "prowl _search-advisory" {
 				found = true
 			}
 		}
 	}
 	if !found {
-		t.Error(`hooks.json lacks a PreToolUse "Grep|Glob|Bash" hook running "prowl-agent _search-advisory"`)
+		t.Error(`hooks.json lacks a PreToolUse "Grep|Glob|Bash" hook running "prowl _search-advisory"`)
 	}
 	lower := strings.ToLower(hooks.Content)
 	for _, banned := range []string{"jq", "python", "$(", "${", "curl", "http"} {
 		if strings.Contains(lower, banned) {
-			t.Errorf("hooks.json advisory depends on %q; it must call the prowl-agent binary directly", banned)
+			t.Errorf("hooks.json advisory depends on %q; it must call the prowl binary directly", banned)
 		}
-	}
-}
-
-// The explicit /search command must delegate, not restate a routing table that
-// can drift from the canonical one: it keeps the $ARGUMENTS placeholder,
-// instructs Claude to load and follow the bundled skill by its plugin-namespaced
-// name prowl:code-search (an unscoped "code-search" will not resolve to the
-// plugin's copy), holds the grep/glob boundary, and enumerates none of the
-// canonical CLI subcommands itself.
-func TestNativeSearchCommandDelegatesToCanonicalTable(t *testing.T) {
-	cmd := nativeAsset(t, "claude", "commands/search.md")
-	content := cmd.Content
-	lower := strings.ToLower(content)
-	if !strings.Contains(content, "$ARGUMENTS") {
-		t.Error("search command drops the $ARGUMENTS placeholder")
-	}
-	if !strings.Contains(lower, "prowl-agent") {
-		t.Error("search command does not route through the prowl-agent CLI")
-	}
-	if !strings.Contains(lower, "prowl:code-search") {
-		t.Error("search command does not name the plugin-namespaced skill prowl:code-search; an unscoped code-search may not load the plugin's copy")
-	}
-	if !strings.Contains(lower, "follow") && !strings.Contains(lower, "load") {
-		t.Error("search command does not instruct loading/following the code-search skill before choosing a command")
-	}
-	// Delegation means it must not carry its own copy of the routing table.
-	for _, dup := range []string{"prowl-agent find", "prowl-agent def", "prowl-agent outline", "prowl-agent references", "prowl-agent impact", "prowl-agent overview"} {
-		if strings.Contains(content, dup) {
-			t.Errorf("search command duplicates the canonical routing table (names %q); it must delegate to code-search", dup)
-		}
-	}
-	if !strings.Contains(lower, "grep") || !strings.Contains(lower, "glob") {
-		t.Error("search command drops the grep/glob boundary")
 	}
 }
 
 // Both native scouts inherit the existing scout's contract: read-only (no write
-// or edit tool), and structural discovery leads with the prowl-agent CLI before
-// any grep fallback.
+// or edit tool), and structural discovery leads with the prowl CLI before any
+// grep fallback.
 func TestNativeScoutsAreReadOnlyAndCLIFirst(t *testing.T) {
 	for _, client := range []string{"claude", "omp"} {
 		scout := nativeAsset(t, client, "agents/code-scout.md")
 		content := scout.Content
 		lower := strings.ToLower(content)
-		if !strings.Contains(content, "prowl-agent") {
-			t.Errorf("%s code-scout never runs the prowl-agent CLI", client)
+		if !strings.Contains(content, "prowl ") {
+			t.Errorf("%s code-scout never runs the prowl CLI", client)
 		}
 		tools := strings.ToLower(frontmatterValue(content, "tools:"))
 		if tools == "" {
@@ -505,137 +473,17 @@ func TestNativeScoutsAreReadOnlyAndCLIFirst(t *testing.T) {
 			t.Errorf("%s code-scout does not declare a read-only contract", client)
 		}
 		body := strings.ToLower(openingSection(content))
-		p := strings.Index(body, "prowl-agent")
+		p := strings.Index(body, "prowl ")
 		if g := strings.Index(body, "grep"); g >= 0 && p > g {
-			t.Errorf("%s code-scout reaches for grep before prowl-agent", client)
+			t.Errorf("%s code-scout reaches for grep before prowl", client)
 		}
 	}
-}
-
-// The omp routing extension is advisory only. Without standing up a Node/Bun
-// runtime (CONTRIBUTING forbids making Go tests require an interpreter; live OMP
-// smoke comes later), this asserts the static contract of the source: it
-// registers only a tool_result observer, classifies the lowercase grep/glob
-// tools and search-shell bash commands, returns early on errors, and patches
-// the result by appending exactly one text chunk after the spread of existing
-// content -- with no block, input, details, or isError override.
-func TestNativeOMPExtensionIsNonBlockingAppendOnly(t *testing.T) {
-	ext := nativeAsset(t, "omp", "extensions/prowl-routing.ts")
-	content := ext.Content
-
-	// (a) Only tool_result is registered -- no tool_call, so it cannot block or
-	// rewrite tool input.
-	if got := strings.Count(content, "pi.on("); got != 1 {
-		t.Errorf("routing extension registers %d handlers; it must register exactly one (tool_result)", got)
-	}
-	if !strings.Contains(content, `pi.on("tool_result"`) {
-		t.Error("routing extension does not observe tool_result")
-	}
-	if strings.Contains(content, `pi.on("tool_call"`) {
-		t.Error("routing extension intercepts tool_call; it must not rewrite input or block")
-	}
-
-	// (b) Lowercase grep/glob are classified as broad searches.
-	for _, positive := range []string{`toolName === "grep"`, `toolName === "glob"`} {
-		if !strings.Contains(content, positive) {
-			t.Errorf("routing extension does not classify %s as a broad search", positive)
-		}
-	}
-
-	// Native grep/glob and shell searches must be narrowed by path/operands
-	// before the advisory fires; exact or file-bounded controls remain native.
-	for _, classifier := range []string{"repoWidePath(", "bashIsRepoWide("} {
-		if !strings.Contains(content, classifier) {
-			t.Errorf("routing extension omits bounded-search classifier %q", classifier)
-		}
-	}
-	if strings.Contains(content, `if (toolName === "grep" || toolName === "glob") return true`) {
-		t.Error("routing extension treats every native grep/glob as repository-wide")
-	}
-	if !strings.Contains(content, "words.slice(1).every") {
-		t.Error("routing extension does not recognize explicit repository-root grep operands")
-	}
-
-	// (c) A bash call is classified by extracting its command and testing it
-	// against the TREE_SEARCH utility set.
-	if !strings.Contains(content, `toolName === "bash"`) {
-		t.Error("routing extension does not classify bash calls")
-	}
-	if !strings.Contains(content, "input?.command") {
-		t.Error("routing extension does not extract the bash command from tool input")
-	}
-	if !strings.Contains(content, "TREE_SEARCH.test(") {
-		t.Error("routing extension does not test bash commands against TREE_SEARCH")
-	}
-	treeSearch := lineContaining(content, "const TREE_SEARCH")
-	for _, util := range []string{"rg", "grep", "egrep", "fgrep", "ag", "ack", "find", "fd"} {
-		if !strings.Contains(treeSearch, util) {
-			t.Errorf("TREE_SEARCH omits the search utility %q: %q", util, treeSearch)
-		}
-	}
-
-	// (d) A non-search tool call (and a non-matching bash command) falls through
-	// to an explicit negative.
-	if !strings.Contains(content, "return false") {
-		t.Error("routing extension has no explicit non-matching fallthrough (return false)")
-	}
-
-	// (e) Error results return early, before any reminder is appended.
-	if !strings.Contains(content, "if (event.isError) return") {
-		t.Error("routing extension does not return early on error results")
-	}
-
-	// (f)/(g) The single object return is a content patch: it spreads the
-	// existing content and appends exactly one text chunk, with no other keys.
-	ret := returnObject(content)
-	if ret == "" {
-		t.Fatal("routing extension has no object return to inspect")
-	}
-	if !strings.Contains(ret, "...event.content") {
-		t.Error("returned patch does not spread the existing result content; it must be append-only")
-	}
-	if got := strings.Count(ret, `type: "text"`); got != 1 {
-		t.Errorf("returned patch appends %d text chunks; it must append exactly one", got)
-	}
-	if !strings.Contains(ret, "content:") {
-		t.Error("returned patch does not set content")
-	}
-	for _, forbidden := range []string{"block", "input", "details", "isError"} {
-		if strings.Contains(ret, forbidden) {
-			t.Errorf("returned patch carries a %q field; it must only patch content", forbidden)
-		}
-	}
-}
-
-// lineContaining returns the first line of s that contains sub, or "".
-func lineContaining(s, sub string) string {
-	for _, line := range strings.Split(s, "\n") {
-		if strings.Contains(line, sub) {
-			return line
-		}
-	}
-	return ""
-}
-
-// returnObject returns the text of the first object-literal return in s -- from
-// "return {" through its terminating "};" -- so a test can inspect only the
-// fields the handler actually returns.
-func returnObject(s string) string {
-	start := strings.Index(s, "return {")
-	if start < 0 {
-		return ""
-	}
-	rest := s[start:]
-	if end := strings.Index(rest, "};"); end >= 0 {
-		return rest[:end]
-	}
-	return rest
 }
 
 // The CLI-first cutover removes MCP as a surface: no native asset may name an
 // MCP transport or a retired MCP tool, or an agent could route back to it.
 func TestNativeAssetsNameNoMCPTool(t *testing.T) {
-	for _, client := range []string{"claude", "omp"} {
+	for _, client := range []string{"claude", "omp", "prowl"} {
 		for _, asset := range Native(client) {
 			lower := strings.ToLower(asset.Content)
 			for _, banned := range []string{"mcp", "search_context", "read_symbol"} {
@@ -658,4 +506,34 @@ func nativeAsset(t *testing.T, client, path string) Asset {
 	}
 	t.Fatalf("native %s bundle is missing %q", client, path)
 	return Asset{}
+}
+
+// The prowl client ships a single native routing skill: prowl auto-discovers a
+// skill at <root>/<name>/SKILL.md, so the asset must be exactly SKILL.md, carry
+// frontmatter naming it prowl (matching the install directory), and lead with
+// the grep/glob-vs-Prowl boundary that routes structural work through the
+// read-only prowl CLI.
+func TestNativeProwlRoutingSkill(t *testing.T) {
+	assets := Native("prowl")
+	if len(assets) != 1 {
+		t.Fatalf("Native(prowl) returned %d assets, want exactly the routing SKILL.md", len(assets))
+	}
+	skill := nativeAsset(t, "prowl", "SKILL.md")
+	if name := frontmatterValue(skill.Content, "name:"); name != "prowl" {
+		t.Errorf("prowl routing skill frontmatter name = %q, want prowl", name)
+	}
+	if desc := frontmatterValue(skill.Content, "description:"); desc == "" {
+		t.Error("prowl routing skill has no frontmatter description")
+	}
+	body := strings.ToLower(skill.Content)
+	for _, want := range []string{"prowl", "grep", "glob"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("prowl routing skill body omits %q", want)
+		}
+	}
+	for _, banned := range []string{"mcp", "search_context", "read_symbol"} {
+		if strings.Contains(body, banned) {
+			t.Errorf("prowl routing skill names the MCP token %q", banned)
+		}
+	}
 }

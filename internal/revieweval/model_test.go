@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
+	"github.com/neur0map/prowl/internal/agenttrial"
 )
 
 func TestValidateManifestRejectsTraversalOverlapAndBoundary(t *testing.T) {

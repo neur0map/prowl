@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/parse/extract"
+	"github.com/neur0map/prowl/internal/parse/extract"
 )
 
 func TestHashRegionNormalizesLineEndings(t *testing.T) {

@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/neur0map/prowl/internal/setup"
 )
 
 func TestDetectIntegrationsOnlyReportsPresentClients(t *testing.T) {
@@ -68,10 +70,15 @@ func TestApplyIntegrationsWritesOnlySelectedClients(t *testing.T) {
 	if err := ApplySetupPlan(plan); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{filepath.Join(root, ".cursor", "mcp.json"), filepath.Join(root, "AGENTS.md")} {
-		data, err := os.ReadFile(path)
-		if err != nil || !strings.Contains(string(data), "prowl-agent") {
-			t.Fatalf("selected integration %s not written correctly: %q %v", path, data, err)
+	for _, check := range []struct {
+		path, needle string
+	}{
+		{filepath.Join(root, ".cursor", "mcp.json"), `"prowl"`},
+		{filepath.Join(root, "AGENTS.md"), "prowl overview"},
+	} {
+		data, err := os.ReadFile(check.path)
+		if err != nil || !strings.Contains(string(data), check.needle) {
+			t.Fatalf("selected integration %s not written correctly: %q %v", check.path, data, err)
 		}
 	}
 	for _, path := range []string{filepath.Join(root, ".mcp.json"), filepath.Join(root, ".vscode", "mcp.json"), filepath.Join(root, "opencode.json")} {
@@ -187,7 +194,7 @@ func TestInitDryRunJSONDoesNotWrite(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	var out bytes.Buffer
-	cmd := newInitCmd()
+	cmd := newInitCmd("v0.0.0-test")
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"--dry-run", "--json", "--integrations", "cursor"})
@@ -225,7 +232,7 @@ func TestInitNoInputWritesOnlySelectedIntegration(t *testing.T) {
 	}
 	t.Chdir(root)
 	var out bytes.Buffer
-	cmd := newInitCmd()
+	cmd := newInitCmd("v0.0.0-test")
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs([]string{"--no-input", "--json", "--integrations", "cursor"})
@@ -257,5 +264,105 @@ func TestRemoveIntegrationsDeletesProwlOnlyAgentsFile(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("Prowl-only AGENTS.md remains after removal: %v", err)
+	}
+}
+
+// TestInitWiresUserOnlyHarnessSkills proves the supported init contract for the
+// user-level-only harnesses (Pi/Hermes/OpenClaw/Prowl Legacy): a selection that
+// includes one actually installs its skills through the user-skill transaction
+// -- init no longer counts it "configured" while writing nothing -- a dry-run
+// preview touches nothing, re-apply is idempotent, and --remove-integrations
+// removes them symmetrically. A project-only selection stays a pure no-op.
+func TestInitWiresUserOnlyHarnessSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	const version = "v1.2.3"
+	selection := []string{IntegrationAgents, IntegrationGeneric, "pi"}
+
+	// A project-only selection is a pure no-op: no user-only harness, no plan.
+	if up, err := planInitUserSkills(version, []string{IntegrationAgents, IntegrationGeneric, IntegrationCursor}, false); err != nil || up != nil {
+		t.Fatalf("project-only selection produced a user plan: %+v (err %v)", up, err)
+	}
+
+	// Dry-run preview names the harness and its install actions but writes nothing.
+	preview, err := planInitUserSkills(version, selection, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview == nil || len(preview.Clients) != 1 || preview.Clients[0] != "pi" {
+		t.Fatalf("preview clients = %+v, want [pi]", preview)
+	}
+	if len(writeActions(preview.Plan)) == 0 {
+		t.Fatal("preview had no user-skill install actions")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".pi")); !os.IsNotExist(err) {
+		t.Fatal("planning wrote user assets before apply")
+	}
+
+	// Apply installs the harness's skills under its user root.
+	applied, err := applyInitUserSkills(version, selection, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applied == nil || len(writeActions(applied.Plan)) == 0 {
+		t.Fatalf("apply installed nothing: %+v", applied)
+	}
+	for _, action := range writeActions(applied.Plan) {
+		if _, err := os.Stat(filepath.Join(home, filepath.FromSlash(action.Destination))); err != nil {
+			t.Fatalf("installed action %s missing on disk: %v", action.Destination, err)
+		}
+	}
+
+	// Re-apply is idempotent: the fresh plan has no more writes.
+	again, err := applyInitUserSkills(version, selection, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != nil && planHasWrites(again.Plan) {
+		t.Fatalf("second apply still had writes: %+v", writeActions(again.Plan))
+	}
+
+	// --remove-integrations symmetry: removal uninstalls the harness skills, so a
+	// fresh install plan sees every asset as a missing install again.
+	if _, err := applyInitUserSkills(version, selection, true); err != nil {
+		t.Fatal(err)
+	}
+	reinstall, err := planInitUserSkills(version, selection, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reinstall == nil || len(writeActions(reinstall.Plan)) == 0 {
+		t.Fatal("removal left nothing to reinstall; user assets were not removed")
+	}
+	for _, action := range reinstall.Plan.Actions {
+		if action.Kind != "install" {
+			t.Fatalf("after removal, %s is %q, want a fresh install", action.Destination, action.Kind)
+		}
+	}
+}
+
+// TestInitPickerNamesKeepsDetectedUserOnlyHarness: the interactive picker must
+// offer (and thereby preserve) a detected user-only harness. huh rebuilds the
+// bound slice from rendered options only, so a selected "pi" absent from the
+// options would be silently dropped and its user-level skills never installed.
+// Every selected name must appear in the offered names; a user-only harness
+// that is NOT selected must not be advertised on a bare init.
+func TestInitPickerNamesKeepsDetectedUserOnlyHarness(t *testing.T) {
+	selected := []string{IntegrationAgents, IntegrationGeneric, setup.IntegrationPi}
+	names := initPickerNames(selected)
+
+	for _, want := range selected {
+		if !slices.Contains(names, want) {
+			t.Errorf("offered names %v dropped selected %q", names, want)
+		}
+	}
+	for _, want := range []string{IntegrationCursor, IntegrationVSCode, IntegrationOMP} {
+		if !slices.Contains(names, want) {
+			t.Errorf("offered names %v missing project-level %q", names, want)
+		}
+	}
+	if slices.Contains(names, setup.IntegrationHermes) {
+		t.Errorf("offered names %v advertised an undetected user-only harness", names)
 	}
 }

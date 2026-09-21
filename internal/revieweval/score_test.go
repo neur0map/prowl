@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/agenttrial"
+	"github.com/neur0map/prowl/internal/agenttrial"
 )
 
 func TestMatchUsesLexicographicMaximumAndDuplicatesBecomeFP(t *testing.T) {

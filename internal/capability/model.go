@@ -15,7 +15,7 @@ type Manifest struct {
 	Prompts     []string `yaml:"prompts" json:"prompts"`
 	Resources   []string `yaml:"resources" json:"resources"`
 	Tools       []string `yaml:"tools" json:"tools"`
-	// Commands are the prowl-agent CLI recipes that deliver this workflow. The
+	// Commands are the prowl CLI recipes that deliver this workflow. The
 	// CLI is the primary agent surface, so discovery leads with these; Tools /
 	// Resources / Prompts are the MCP projection of the same capability.
 	Commands []string `yaml:"commands" json:"commands"`

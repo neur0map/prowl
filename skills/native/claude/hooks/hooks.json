@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "prowl-agent _search-advisory"
+            "command": "prowl _search-advisory"
           }
         ]
       }

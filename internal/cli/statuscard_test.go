@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/query"
-	"github.com/prowl-agent/prowl-agent/internal/selfupdate"
-	"github.com/prowl-agent/prowl-agent/internal/store"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/query"
+	"github.com/neur0map/prowl/internal/selfupdate"
+	"github.com/neur0map/prowl/internal/store"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 func sampleStatus() query.Status {
@@ -25,7 +25,7 @@ func TestRenderStatusCard(t *testing.T) {
 	out := renderStatusCard("v1", "/home/x/proj", "proj", sampleStatus(), selfupdate.Result{Available: true},
 		[]projSaving{{Name: "proj", Saved: 3100000}, {Name: "other", Saved: 1000000}},
 		query.Savings{Queries: 150, SavedTokens: 4100000})
-	for _, want := range []string{"prowl-agent", "proj", "INDEX", "LANGUAGES", "cpp", "TOKENS SAVED", "ACROSS YOUR PROJECTS", "combined", "update available", "measure it yourself"} {
+	for _, want := range []string{"prowl", "proj", "INDEX", "LANGUAGES", "cpp", "TOKENS SAVED", "ACROSS YOUR PROJECTS", "combined", "update available", "measure it yourself"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("card missing %q", want)
 		}

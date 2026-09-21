@@ -1,0 +1,3635 @@
+{
+ "generated": "merged from freellmapi (awesome-freellm-apis), litellm and Prowl's own provider set",
+ "providers": [
+  {
+   "apiKeyUrl": "https://build.nvidia.com/settings/api-keys",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/nvidia_nim",
+   "env": "NVIDIA_NIM_API_KEY",
+   "freeModels": 130,
+   "friction": "phone",
+   "id": "nvidia-nim",
+   "maxContext": 1000000,
+   "modalities": [
+    "audio",
+    "embedding",
+    "image",
+    "pdf",
+    "reasoning",
+    "rerank",
+    "text",
+    "video",
+    "vision"
+   ],
+   "name": "NVIDIA NIM",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://modelscope.cn/my/myaccesstoken",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/modelscope",
+   "env": "MODELSCOPE_API_KEY",
+   "freeModels": 59,
+   "friction": "registration",
+   "id": "modelscope",
+   "maxContext": 1000000,
+   "modalities": [
+    "audio",
+    "image",
+    "reasoning",
+    "text",
+    "video",
+    "vision"
+   ],
+   "name": "ModelScope",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://dash.cloudflare.com/profile/api-tokens",
+   "class": "free",
+   "docsUrl": "",
+   "env": "CLOUDFLARE_API_KEY",
+   "freeModels": 40,
+   "friction": "none",
+   "id": "cloudflare-workers-ai",
+   "maxContext": 262000,
+   "modalities": [
+    "code",
+    "image",
+    "reasoning",
+    "text",
+    "video"
+   ],
+   "name": "Cloudflare Workers AI",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://aistudio.google.com/app/apikey",
+   "class": "free",
+   "docsUrl": "",
+   "env": "GEMINI_API_KEY",
+   "freeModels": 19,
+   "friction": "none",
+   "id": "google-gemini",
+   "maxContext": 1000000,
+   "modalities": [
+    "audio",
+    "image",
+    "pdf",
+    "reasoning",
+    "text",
+    "video",
+    "vision"
+   ],
+   "name": "Google Gemini",
+   "note": "Listed only: Gemini uses generateContent, not OpenAI chat completions, and that native wire is not implemented in Prowl.",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://token.llm7.io",
+   "class": "free",
+   "docsUrl": "",
+   "env": "LLM7_API_KEY",
+   "freeModels": 19,
+   "friction": "none",
+   "id": "llm7-io",
+   "maxContext": 1000000,
+   "modalities": [
+    "audio",
+    "code",
+    "image",
+    "pdf",
+    "reasoning",
+    "text",
+    "video",
+    "vision"
+   ],
+   "name": "LLM7.io",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://ollama.com/settings/keys",
+   "class": "free",
+   "docsUrl": "",
+   "env": "OLLAMA_API_KEY",
+   "freeModels": 17,
+   "friction": "registration",
+   "id": "ollama-cloud",
+   "maxContext": 1000000,
+   "modalities": [
+    "code",
+    "image",
+    "reasoning",
+    "text",
+    "video",
+    "vision"
+   ],
+   "name": "Ollama Cloud",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://docs.github.com/en/github-models",
+   "class": "free",
+   "docsUrl": "https://docs.github.com/en/github-models",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "github-models",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "GitHub Models",
+   "note": "Retired by GitHub on July 30, 2026.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://app.kilo.ai/profile",
+   "class": "free",
+   "docsUrl": "",
+   "env": "KILO_API_KEY",
+   "freeModels": 15,
+   "friction": "none",
+   "id": "kilo-code",
+   "maxContext": 1000000,
+   "modalities": [
+    "audio",
+    "code",
+    "image",
+    "reasoning",
+    "text",
+    "video"
+   ],
+   "name": "Kilo Code",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.mistral.ai/api-keys",
+   "class": "free",
+   "docsUrl": "",
+   "env": "MISTRAL_API_KEY",
+   "freeModels": 15,
+   "friction": "none",
+   "id": "mistral-ai",
+   "maxContext": 256000,
+   "modalities": [
+    "code",
+    "image",
+    "text"
+   ],
+   "name": "Mistral AI",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/",
+   "class": "free",
+   "docsUrl": "",
+   "env": "OVH_AI_ENDPOINTS_API_KEY",
+   "freeModels": 14,
+   "friction": "registration",
+   "id": "ovhcloud-ai-endpoints",
+   "maxContext": 262000,
+   "modalities": [
+    "audio",
+    "code",
+    "image",
+    "reasoning",
+    "text",
+    "video"
+   ],
+   "name": "OVHcloud AI Endpoints",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://opencode.ai/auth",
+   "class": "free",
+   "docsUrl": "",
+   "env": "OPENCODE_API_KEY",
+   "freeModels": 13,
+   "friction": "registration",
+   "id": "opencode-zen",
+   "maxContext": 1000000,
+   "modalities": [
+    "audio",
+    "reasoning",
+    "vision"
+   ],
+   "name": "OpenCode Zen",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://dashboard.cohere.com/api-keys",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/cohere",
+   "env": "COHERE_API_KEY",
+   "freeModels": 12,
+   "friction": "none",
+   "id": "cohere",
+   "maxContext": 256000,
+   "modalities": [
+    "image",
+    "text"
+   ],
+   "name": "Cohere",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.groq.com/keys",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/groq",
+   "env": "GROQ_API_KEY",
+   "freeModels": 12,
+   "friction": "none",
+   "id": "groq",
+   "maxContext": 262000,
+   "modalities": [
+    "image",
+    "reasoning",
+    "text"
+   ],
+   "name": "Groq",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://www.aionlabs.ai/app/api-keys/",
+   "class": "free",
+   "docsUrl": "",
+   "env": "AION_API_KEY",
+   "freeModels": 11,
+   "friction": "registration",
+   "id": "aion-labs",
+   "maxContext": 131000,
+   "modalities": [
+    "text"
+   ],
+   "name": "Aion Labs",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://huggingface.co/settings/tokens",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/huggingface",
+   "env": "HF_TOKEN",
+   "freeModels": 8,
+   "friction": "none",
+   "id": "hugging-face",
+   "maxContext": 131000,
+   "modalities": [
+    "code",
+    "image",
+    "text"
+   ],
+   "name": "Hugging Face",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://open.bigmodel.cn/usercenter/apikeys",
+   "class": "free",
+   "docsUrl": "",
+   "env": "ZAI_API_KEY",
+   "freeModels": 8,
+   "friction": "none",
+   "id": "z-ai-zhipu-ai",
+   "maxContext": 200000,
+   "modalities": [
+    "image",
+    "reasoning",
+    "text",
+    "video"
+   ],
+   "name": "Z AI (Zhipu AI)",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://cloud.cerebras.ai/",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/cerebras",
+   "env": "CEREBRAS_API_KEY",
+   "freeModels": 6,
+   "friction": "none",
+   "id": "cerebras",
+   "maxContext": 131000,
+   "modalities": [
+    "reasoning",
+    "text"
+   ],
+   "name": "Cerebras",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://platform.agnes-ai.com/settings/apiKeys",
+   "class": "free",
+   "docsUrl": "",
+   "env": "AGNES_API_KEY",
+   "freeModels": 5,
+   "friction": "registration",
+   "id": "agnes-ai",
+   "maxContext": 256000,
+   "modalities": [
+    "image",
+    "reasoning",
+    "text",
+    "video",
+    "vision"
+   ],
+   "name": "Agnes AI",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://bailian.console.alibabacloud.com/?apiKey=1",
+   "class": "free",
+   "docsUrl": "",
+   "env": "DASHSCOPE_API_KEY",
+   "freeModels": 5,
+   "friction": "registration",
+   "id": "alibaba-cloud-model-studio",
+   "maxContext": 1000000,
+   "modalities": [
+    "code",
+    "image",
+    "text"
+   ],
+   "name": "Alibaba Cloud Model Studio",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://cloud.sambanova.ai/apis",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/sambanova",
+   "env": "SAMBANOVA_API_KEY",
+   "freeModels": 4,
+   "friction": "registration",
+   "id": "sambanova",
+   "maxContext": 128000,
+   "modalities": [
+    "image",
+    "reasoning",
+    "text"
+   ],
+   "name": "SambaNova",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://cloud.siliconflow.cn/account/ak",
+   "class": "free",
+   "docsUrl": "",
+   "env": "SILICONFLOW_API_KEY",
+   "freeModels": 3,
+   "friction": "registration",
+   "id": "siliconflow",
+   "maxContext": 131000,
+   "modalities": [
+    "text"
+   ],
+   "name": "SiliconFlow",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.x.ai",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/xai",
+   "env": "XAI_API_KEY",
+   "freeModels": 3,
+   "friction": "registration",
+   "id": "xai",
+   "maxContext": 2000000,
+   "modalities": [
+    "text"
+   ],
+   "name": "xAI",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://studio.ai21.com/account/api-key",
+   "class": "free",
+   "docsUrl": "",
+   "env": "AI21_API_KEY",
+   "freeModels": 2,
+   "friction": "registration",
+   "id": "ai21-labs",
+   "maxContext": 256000,
+   "modalities": [
+    "text"
+   ],
+   "name": "AI21 Labs",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://chutes.ai/",
+   "class": "free",
+   "docsUrl": "",
+   "env": "CHUTES_API_KEY",
+   "freeModels": 2,
+   "friction": "registration",
+   "id": "chutes-ai",
+   "maxContext": 131000,
+   "modalities": [
+    "reasoning",
+    "text"
+   ],
+   "name": "Chutes.ai",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://platform.deepseek.com/api_keys",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/deepseek",
+   "env": "DEEPSEEK_API_KEY",
+   "freeModels": 2,
+   "friction": "registration",
+   "id": "deepseek",
+   "maxContext": 128000,
+   "modalities": [
+    "text"
+   ],
+   "name": "DeepSeek",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://glhf.chat/",
+   "class": "free",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "glhf-chat",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "Glhf.chat",
+   "note": "The advertised API timed out repeatedly during the production audit; routing is disabled until a working endpoint is published.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.nscale.com/",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/nscale",
+   "env": "NSCALE_API_KEY",
+   "freeModels": 2,
+   "friction": "registration",
+   "id": "nscale",
+   "maxContext": 128000,
+   "modalities": [
+    "text"
+   ],
+   "name": "Nscale",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://studio.nebius.com/settings/api-keys",
+   "class": "free",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/nebius",
+   "env": "NEBIUS_API_KEY",
+   "freeModels": 1,
+   "friction": "registration",
+   "id": "nebius",
+   "maxContext": 128000,
+   "modalities": [
+    "text"
+   ],
+   "name": "Nebius",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://openrouter.ai/workspaces/default/keys",
+   "class": "credits",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/openrouter",
+   "env": "OPENROUTER_API_KEY",
+   "freeModels": 32,
+   "friction": "registration",
+   "id": "openrouter",
+   "maxContext": 1000000,
+   "modalities": [
+    "audio",
+    "code",
+    "embeddings",
+    "image",
+    "reasoning",
+    "rerank",
+    "speech",
+    "text",
+    "video"
+   ],
+   "name": "OpenRouter",
+   "probe": "key_endpoint",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://github.com/ggml-org/llama.cpp",
+   "class": "local",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "llamacpp",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "llama.cpp",
+   "note": "Runs on this machine; no key, no quota",
+   "probe": "none",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://lmstudio.ai",
+   "class": "local",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/lm_studio",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "lm_studio",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Lm Studio",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "litellm",
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://ollama.com/download",
+   "class": "local",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/ollama",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "ollama",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Ollama",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "litellm",
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "local",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/ollama_chat",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "ollama_chat",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Ollama Chat",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "local",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/oobabooga",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "oobabooga",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Oobabooga",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "local",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/petals",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "petals",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Petals",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://docs.vllm.ai",
+   "class": "local",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/vllm",
+   "env": "",
+   "freeModels": 0,
+   "friction": "none",
+   "id": "vllm",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Vllm",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "litellm",
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://claude.ai/upgrade",
+   "class": "oauth",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/anthropic",
+   "env": "",
+   "freeModels": 0,
+   "friction": "subscription",
+   "id": "anthropic",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Anthropic",
+   "note": "Claude Pro / Max subscription",
+   "probe": "none",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://github.com/features/copilot/plans",
+   "class": "oauth",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "subscription",
+   "id": "copilot",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "GitHub Copilot",
+   "note": "GitHub Copilot subscription",
+   "probe": "none",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://hyper.charm.land",
+   "class": "oauth",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "subscription",
+   "id": "hyper",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Charm Hyper",
+   "note": "Charm Hyper subscription: current balance is available; the published free grant is 100 Hypercredits/month, while no 24h allowance endpoint is published.",
+   "probe": "none",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://chatgpt.com/#pricing",
+   "class": "oauth",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/openai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "subscription",
+   "id": "openai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "OpenAI",
+   "note": "ChatGPT Plus / Pro subscription",
+   "probe": "none",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/a2a",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "a2a",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "A2A",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/a2a_agent",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "a2a_agent",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "A2A Agent",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/ai21",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "ai21",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Ai21",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/ai21_chat",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "ai21_chat",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Ai21 Chat",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "aihubmix",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "AIHubMix",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/aiml",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "aiml",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Aiml",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/aiohttp_openai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "aiohttp_openai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Aiohttp Openai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "alibaba-singapore",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Alibaba (Singapore)",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "alibaba-us",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Alibaba (US)",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/amazon_nova",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "amazon_nova",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Amazon Nova",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://docs.anyscale.com/services",
+   "class": "paid",
+   "docsUrl": "https://docs.anyscale.com/services",
+   "env": "",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "anyscale",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "Anyscale",
+   "note": "The retired shared Endpoints URL cannot route requests. Use a custom provider with your Anyscale service URL.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/apertis",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "apertis",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Apertis",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/assemblyai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "assemblyai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Assemblyai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "atlascloud",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Atlas Cloud",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/auto_router",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "auto_router",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Auto Router",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "avian",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Avian",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "bedrock-europe",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "AWS Bedrock Europe",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.aws.amazon.com/iam",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/bedrock",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "bedrock",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "AWS Bedrock US",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/aws_polly",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "aws_polly",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Aws Polly",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/azure_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "azure_ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Azure Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://portal.azure.com",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/azure",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "azure",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Azure OpenAI",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://app.baseten.co/settings/api-keys",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/baseten",
+   "env": "BASETEN_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "baseten",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Baseten",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/bedrock_mantle",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "bedrock_mantle",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Bedrock Mantle",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/black_forest_labs",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "black_forest_labs",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Black Forest Labs",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/bytez",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "bytez",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Bytez",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/charity_engine",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "charity_engine",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Charity Engine",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/chatgpt",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "chatgpt",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Chatgpt",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://chutes.ai/app/api",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/chutes",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "chutes",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Chutes",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/clarifai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "clarifai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Clarifai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/cloudflare",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "cloudflare",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Cloudflare",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.mistral.ai/models/codestral",
+   "env": "CODESTRAL_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "codestral",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Codestral",
+   "note": "The dedicated endpoint has no model-list API. Prowl verifies authentication with a no-charge nonexistent-model probe and registers the documented codestral-2508 model.",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/cognition",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "cognition",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Cognition",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/cometapi",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "cometapi",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Cometapi",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/compactifai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "compactifai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Compactifai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "coralbricks",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "CoralBricks",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "cortecs",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Cortecs",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/cursor",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "cursor",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Cursor",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/darkbloom",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "darkbloom",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Darkbloom",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/dashscope",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "dashscope",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Dashscope",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/databricks",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "databricks",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Databricks",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/datarobot",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "datarobot",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Datarobot",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/deepgram",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "deepgram",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Deepgram",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/deepinfra",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "deepinfra",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Deepinfra",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/docker_model_runner",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "docker_model_runner",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Docker Model Runner",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/dotprompt",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "dotprompt",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Dotprompt",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/elevenlabs",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "elevenlabs",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Elevenlabs",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/empower",
+   "env": "",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "empower",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "Empower",
+   "note": "The published API endpoint is not reachable with a valid TLS connection; routing is disabled.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/fal_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "fal_ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Fal Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/featherless_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "featherless_ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Featherless Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://app.fireworks.ai/settings/users/api-keys",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "fireworks",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Fireworks",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/fireworks_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "fireworks_ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Fireworks Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/friendliai",
+   "env": "FRIENDLIAI_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "friendliai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Friendliai",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.galadriel.com",
+   "env": "",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "galadriel",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "Galadriel",
+   "note": "The documented API endpoint is not reachable with a valid TLS connection; routing is disabled.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/gdc",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "gdc",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Gdc",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://developers.sber.ru/docs/ru/gigachat/api/reference/rest/post-token",
+   "env": "",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "gigachat",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "GigaChat",
+   "note": "GigaChat requires an OAuth token exchange and custom certificate handling; a static bearer key is not sufficient.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://docs.github.com/en/github-models",
+   "class": "paid",
+   "docsUrl": "https://docs.github.com/en/github-models",
+   "env": "",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "github",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "GitHub Models (legacy)",
+   "note": "Retired by GitHub on July 30, 2026.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/github_copilot",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "github_copilot",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Github Copilot",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://aistudio.google.com/app/apikey",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/gemini",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "gemini",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Google Gemini",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.cloud.google.com/apis/credentials",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/vertex_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "vertexai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Google Vertex AI",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/gradient_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "gradient_ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Gradient Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/helicone",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "helicone",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Helicone",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/heroku",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "heroku",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Heroku",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/humanloop",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "humanloop",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Humanloop",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/hyperbolic",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "hyperbolic",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Hyperbolic",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/inception",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "inception",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Inception",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/infinity",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "infinity",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Infinity",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "ionet",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "io.net",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/jina_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "jina_ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Jina Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "kimi-coding",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Kimi Coding",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/lambda_ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "lambda_ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Lambda Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/langflow",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "langflow",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Langflow",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/langfuse",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "langfuse",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Langfuse",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/langgraph",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "langgraph",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Langgraph",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/lemonade",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "lemonade",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Lemonade",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/libertai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "libertai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Libertai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/litellm_agent",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "litellm_agent",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Litellm Agent",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/litellm_proxy",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "litellm_proxy",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Litellm Proxy",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/llamafile",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "llamafile",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Llamafile",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://open.manus.im/docs/openai-compatibility",
+   "class": "paid",
+   "docsUrl": "https://open.manus.im/docs/openai-compatibility",
+   "env": "",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "manus",
+   "maxContext": 0,
+   "modalities": [],
+   "name": "Manus",
+   "note": "Manus exposes an asynchronous Responses API with API_KEY authentication, not the chat-completions bearer adapter used here.",
+   "probe": "none",
+   "routable": false,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/maritalk",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "maritalk",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Maritalk",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/meta",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "meta",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Meta",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/meta_llama",
+   "env": "LLAMA_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "meta-llama",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Meta Llama",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/milvus",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "milvus",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Milvus",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://www.minimax.io/platform/user-center/basic-information",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/minimax",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "minimax",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "MiniMax",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "minimax-china",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "MiniMax China",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.mistral.ai/api-keys",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/mistral",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "mistral",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Mistral",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/mongodb",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "mongodb",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Mongodb",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://platform.moonshot.ai/console/api-keys",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/moonshot",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "moonshot",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Moonshot",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/morph",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "morph",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Morph",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/nano-gpt",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "nano-gpt",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Nano Gpt",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/neosantara",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "neosantara",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Neosantara",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "neuralwatt",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Neuralwatt",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/nlp_cloud",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "nlp_cloud",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Nlp Cloud",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/novita",
+   "env": "NOVITA_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "novita",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Novita",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/nvidia_riva",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "nvidia_riva",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Nvidia Riva",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/oci",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "oci",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Oci",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "opencode-go",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "OpenCode Go",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/ovhcloud",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "ovhcloud",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Ovhcloud",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/parasail",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "parasail",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Parasail",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://www.perplexity.ai/account/api/keys",
+   "class": "paid",
+   "docsUrl": "https://docs.perplexity.ai/docs/agent-api/quickstart",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "perplexity",
+   "maxContext": 127072,
+   "modalities": [
+    "text",
+    "image"
+   ],
+   "name": "Perplexity",
+   "note": "Routed through the Agent API (POST /v1/agent), not the deprecated Sonar chat endpoint. Explicit research presets: fast, low, medium (deep research), high, xhigh, wide-research; canonical model perplexity/sonar. Every response carries token usage and an exact per-request cost (usage.cost.total_cost) with inline citations retained in the raw body.",
+   "probe": "none",
+   "routable": true,
+   "sources": [
+    "litellm",
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/pg_vector",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "pg_vector",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Pg Vector",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/pinstripes",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "pinstripes",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Pinstripes",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/poe",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "poe",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Poe",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/predibase",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "predibase",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Predibase",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/publicai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "publicai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Publicai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "qiniucloud",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "QiniuCloud",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/qwen_ai_platform",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "qwen_ai_platform",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Qwen Ai Platform",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/qwencloud",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "qwencloud",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Qwencloud",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/ragflow",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "ragflow",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Ragflow",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/recraft",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "recraft",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Recraft",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/reducto",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "reducto",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Reducto",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/replicate",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "replicate",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Replicate",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/runwayml",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "runwayml",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Runwayml",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/s3_vectors",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "s3_vectors",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "S3 Vectors",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/sagemaker",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "sagemaker",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Sagemaker",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/sap",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "sap",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Sap",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://console.scaleway.com/iam/api-keys",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/scaleway",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "scaleway",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Scaleway",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/scx-ai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "scx-ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Scx Ai",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/snowflake",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "snowflake",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Snowflake",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/soniox",
+   "env": "SONIOX_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "soniox",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Soniox",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/stability",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "stability",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Stability",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://synthetic.new/settings/keys",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/synthetic",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "synthetic",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Synthetic",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/tencent",
+   "env": "TENCENT_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "tencent",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Tencent",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/tensormesh",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "tensormesh",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Tensormesh",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/text-completion-codestral",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "text-completion-codestral",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Text Completion Codestral",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/text-completion-inception",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "text-completion-inception",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Text Completion Inception",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://api.together.ai/settings/api-keys",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/together_ai",
+   "env": "TOGETHER_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "together-ai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Together Ai",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/topaz",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "topaz",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Topaz",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/triton",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "triton",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Triton",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/v0",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "v0",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "V0",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/valkey",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "valkey",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Valkey",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://venice.ai/settings/api",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "venice",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Venice AI",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://vercel.com/account/tokens",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "vercel",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Vercel",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/vercel_ai_gateway",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "vercel_ai_gateway",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Vercel Ai Gateway",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/volcengine",
+   "env": "VOLCENGINE_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "volcengine",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Volcengine",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/voyage",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "voyage",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Voyage",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/wandb",
+   "env": "WANDB_API_KEY",
+   "freeModels": 0,
+   "friction": "registration",
+   "id": "wandb",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Wandb",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "freellmapi",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/watsonx",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "watsonx",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Watsonx",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/watsonx_text",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "watsonx_text",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Watsonx Text",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/xiaomi_mimo",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "xiaomi_mimo",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Xiaomi Mimo",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/xinference",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "xinference",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Xinference",
+   "probe": "headers",
+   "routable": false,
+   "sources": [
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "https://z.ai/manage-apikey/apikey-list",
+   "class": "paid",
+   "docsUrl": "https://docs.litellm.ai/docs/providers/zai",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "zai",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Z.AI",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl",
+    "litellm"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "zhipu",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Zhipu",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  },
+  {
+   "apiKeyUrl": "",
+   "class": "paid",
+   "docsUrl": "",
+   "env": "",
+   "freeModels": 0,
+   "friction": "card",
+   "id": "zhipu-coding",
+   "maxContext": 0,
+   "modalities": [
+    "text"
+   ],
+   "name": "Zhipu Coding",
+   "probe": "headers",
+   "routable": true,
+   "sources": [
+    "prowl"
+   ]
+  }
+ ],
+ "sources": {
+  "awesome-freellm-apis": "https://github.com/open-free-llm-api/awesome-freellm-apis",
+  "freellmapi": "https://github.com/tashfeenahmed/freellmapi",
+  "litellm": "https://github.com/BerriAI/litellm",
+  "prowl": "Prowl's own hosted, subscription and local providers"
+ }
+}

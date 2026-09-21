@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/prowl-agent/prowl-agent/internal/config"
-	"github.com/prowl-agent/prowl-agent/internal/workspace"
+	"github.com/neur0map/prowl/internal/config"
+	"github.com/neur0map/prowl/internal/workspace"
 )
 
 func TestReindexer(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 )
 
 // The CLI is the primary agent surface, so every builtin workflow must ship the
-// prowl-agent commands that run it, and the discovery Summary must carry them.
+// prowl commands that run it, and the discovery Summary must carry them.
 func TestBuiltinManifestsShipCLICommands(t *testing.T) {
 	catalog, err := BuiltinCatalog()
 	if err != nil {
@@ -21,8 +21,8 @@ func TestBuiltinManifestsShipCLICommands(t *testing.T) {
 			t.Errorf("capability %q ships no CLI commands", manifest.Name)
 		}
 		for _, recipe := range manifest.Commands {
-			if !strings.HasPrefix(recipe, "prowl-agent ") {
-				t.Errorf("capability %q recipe %q is not a prowl-agent command", manifest.Name, recipe)
+			if !strings.HasPrefix(recipe, "prowl ") {
+				t.Errorf("capability %q recipe %q is not a prowl command", manifest.Name, recipe)
 			}
 		}
 		if len(manifest.Summary().Commands) != len(manifest.Commands) {

@@ -12,14 +12,14 @@ import (
 )
 
 // TestServeProcessE2E builds the real binary, inits a fixture, then drives
-// `prowl-agent serve` over a real stdio subprocess via the MCP client.
+// `prowl serve` over a real stdio subprocess via the MCP client.
 func TestServeProcessE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping process e2e in -short mode")
 	}
 	tmp := t.TempDir()
-	bin := filepath.Join(tmp, "prowl-agent")
-	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", bin, "./cmd/prowl-agent")
+	bin := filepath.Join(tmp, "prowl")
+	build := exec.Command("go", "build", "-tags", "sqlite_fts5", "-o", bin, "./cmd/prowl")
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build binary: %v\n%s", err, out)

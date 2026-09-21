@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{{.Title}}</title>
+    <link rel="icon" type="image/svg+xml" href="{{.Favicon}}" />
+    {{.FontLicense}}
+    <style>
+      @font-face {
+        font-family: "Manrope";
+        font-style: normal;
+        font-weight: 400 800;
+        font-display: swap;
+        src: url("{{.Font}}") format("woff2");
+      }
+      {{.CSS}}
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <span class="wordmark" role="img" aria-label="Prowl"
+          >{{.Wordmark}}</span
+        >
+        <span class="context">Authorization</span>
+      </header>
+
+      <main class="confirmation {{.Kind}}" aria-labelledby="outcome">
+        <div class="stage">
+          <div class="message">
+            <h1 id="outcome">{{.Heading}}</h1>
+            <p class="detail">
+              {{.Detail}}{{with .Subject}}
+              <strong class="subject">{{.}}</strong>{{end}}
+            </p>
+
+            {{if .ErrorCode}}
+            <div class="reason">
+              <code>{{.ErrorCode}}</code>
+              <p>
+                {{with .ErrorDescription}}{{.}}{{else}}Your provider did not
+                return more details.{{end}}
+              </p>
+            </div>
+            {{end}}
+          </div>
+
+          <div class="art" aria-hidden="true">
+            <div class="signal">
+              {{.Mark}}
+              <span class="seal">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  {{if .ErrorCode}}
+                  <path d="m7 7 10 10M17 7 7 17" />
+                  {{else}}
+                  <path d="m5 12 4 4L19 6" />
+                  {{end}}
+                </svg>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <footer class="handoff">
+          <p class="next-step">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="2.5" y="4.5" width="19" height="15" rx="3" />
+              <path d="m7 9 3 3-3 3m6 0h4" />
+            </svg>
+            {{if .ErrorCode}}Try again from your terminal.{{else}}Continue in
+            your terminal.{{end}}
+          </p>
+          <p class="status" id="status">{{.Status}}</p>
+        </footer>
+
+        {{if .CloseDelay}}
+        <div
+          class="rail"
+          id="rail"
+          data-delay="{{.CloseDelay}}"
+          aria-hidden="true"
+        >
+          <span></span>
+        </div>
+        {{end}}
+      </main>
+
+      <footer class="colophon">
+        <a
+          href="https://github.com/neur0map/prowl"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Prowl on GitHub</a
+        >
+      </footer>
+    </div>
+
+    <script>
+      {{.JS}}
+    </script>
+  </body>
+</html>
