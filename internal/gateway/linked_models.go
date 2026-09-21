@@ -58,16 +58,20 @@ func (e *Engine) SeedLoginModels(ctx context.Context, keyID int64, platform stri
 	}
 
 	// A newly enrolled login must route without waiting for the next boot's
-	// EnsureDefaultProfile pass, so its models also join the ACTIVE profile
-	// immediately - but never over an operator exclusion (a model the operator
-	// removed stays removed) and never as a duplicate. With no active profile
-	// the login routes through the global fallback chain until one is activated.
-	activeProfileID, hasActiveProfile := activeProfileForSeed(ctx, tx)
+	// EnsureDefaultProfile pass, so its models also join the DEFAULT
+	// (auto-include) profile immediately - the chain that is meant to accumulate
+	// every model. They are NOT pushed into a curated named set, even when one is
+	// active: a set the operator hand-picked (say "Quick chores") must not be
+	// flooded with an account's whole catalogue on every boot. New login models
+	// still land in the global fallback chain above, and the operator adds them
+	// to a curated set deliberately. Exclusions are still honoured, and a login
+	// never re-adds a model the operator removed from Default.
+	defaultProfileID, hasDefaultProfile := defaultProfileForSeed(ctx, tx)
 	var nextProfilePos int64
-	if hasActiveProfile {
+	if hasDefaultProfile {
 		if err := tx.QueryRowContext(ctx,
 			"SELECT COALESCE(MAX(position), 0) FROM profile_models WHERE profile_id = ?",
-			activeProfileID).Scan(&nextProfilePos); err != nil {
+			defaultProfileID).Scan(&nextProfilePos); err != nil {
 			return 0, err
 		}
 	}
@@ -115,14 +119,14 @@ func (e *Engine) SeedLoginModels(ctx context.Context, keyID int64, platform stri
 			ON CONFLICT(model_db_id) DO NOTHING`, modelDBID, nextPosition); err != nil {
 			return seeded, fmt.Errorf("chain %s/%s: %w", platform, m.model.ID, err)
 		}
-		if hasActiveProfile {
+		if hasDefaultProfile {
 			res, err := tx.ExecContext(ctx, `
 				INSERT INTO profile_models (profile_id, model_db_id, position)
 				SELECT ?, ?, ?
 				 WHERE NOT EXISTS (SELECT 1 FROM profile_models WHERE profile_id = ? AND model_db_id = ?)
 				   AND NOT EXISTS (SELECT 1 FROM profile_exclusions WHERE profile_id = ? AND model_db_id = ?)`,
-				activeProfileID, modelDBID, nextProfilePos+1,
-				activeProfileID, modelDBID, activeProfileID, modelDBID)
+				defaultProfileID, modelDBID, nextProfilePos+1,
+				defaultProfileID, modelDBID, defaultProfileID, modelDBID)
 			if err != nil {
 				return seeded, fmt.Errorf("profile %s/%s: %w", platform, m.model.ID, err)
 			}
@@ -142,18 +146,19 @@ func (e *Engine) SeedLoginModels(ctx context.Context, keyID int64, platform stri
 	return seeded, nil
 }
 
-// activeProfileForSeed returns the active profile id within a seeding tx,
-// verifying the setting still names a real profile. A missing, unparseable or
-// dangling active_profile_id reads as "no active profile", exactly as
-// activeProfileID does, so the login's models fall to the global chain until
-// one is activated. Kept SQL-only so it shares the seeding transaction's view;
-// CAST of a missing or non-numeric setting yields NULL/0, which matches no real
-// profile id.
-func activeProfileForSeed(ctx context.Context, tx *sql.Tx) (int64, bool) {
+// defaultProfileForSeed returns the id of the Default (auto-include) profile
+// within a seeding tx. Login models auto-join only this profile - the chain
+// meant to accumulate every model - never a curated named set, so activating a
+// hand-picked set does not turn each boot's seed pass into a flood of an
+// account's whole catalogue. When no Default profile exists yet (a fresh DB
+// before EnsureDefaultProfile has run) the login falls to the global fallback
+// chain until the profile is created. Matched case-insensitively on name to
+// mirror EnsureDefaultProfile, and kept SQL-only so it shares the seeding
+// transaction's view.
+func defaultProfileForSeed(ctx context.Context, tx *sql.Tx) (int64, bool) {
 	var id int64
 	err := tx.QueryRowContext(ctx, `
-		SELECT p.id FROM profiles p
-		 WHERE p.id = CAST((SELECT value FROM settings WHERE key = 'active_profile_id') AS INTEGER)`).Scan(&id)
+		SELECT id FROM profiles WHERE LOWER(name) = 'default' ORDER BY id LIMIT 1`).Scan(&id)
 	if err != nil {
 		return 0, false
 	}
@@ -192,20 +197,27 @@ func (e *Engine) retireAbsentLoginModels(ctx context.Context, keyID int64, keep 
 	// connection, so a held cursor across a write deadlocks. Only currently
 	// available rows are considered, so a repeated authoritative discovery of the
 	// same absent model does not re-retire it.
+	//
+	// A row under any scope other than the login's own is a legacy duplicate:
+	// login models were once stored under the catalogue's empty scope, and an
+	// install that enrolled before the scoped identity arrived carries both.
+	// Those rows share every model id with the scoped set, so they are retired
+	// by scope rather than by id - otherwise every login model listed twice.
 	rows, err := tx.QueryContext(ctx,
-		"SELECT id, model_id FROM models WHERE key_id = ? AND source = ? AND available = 1", keyID, loginModelSource)
+		"SELECT id, model_id, platform, endpoint_scope FROM models WHERE key_id = ? AND source = ? AND available = 1",
+		keyID, loginModelSource)
 	if err != nil {
 		return 0, err
 	}
 	var stale []int64
 	for rows.Next() {
 		var id int64
-		var modelID string
-		if err := rows.Scan(&id, &modelID); err != nil {
+		var modelID, platform, scope string
+		if err := rows.Scan(&id, &modelID, &platform, &scope); err != nil {
 			_ = rows.Close()
 			return 0, err
 		}
-		if _, ok := present[modelID]; !ok {
+		if _, ok := present[modelID]; !ok || scope != loginEndpointScope(platform) {
 			stale = append(stale, id)
 		}
 	}

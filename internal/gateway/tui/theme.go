@@ -262,43 +262,111 @@ func roundedPanel(title, body string, width int) string {
 	return strings.Join(out, "\n")
 }
 
-func metricCard(label, value, detail string, width int) string {
-	body := stTitle.Render(value) + "\n" + stFaint.Render(truncate(detail, max(width-4, 1)))
-	return roundedPanel(label, body, width)
-}
-
 type metric struct {
 	label  string
 	value  string
 	detail string
 }
 
+// metricStrip is the flat stat row every page leads with: a small-caps label,
+// a bold value and one faint detail line per column, with no box around it.
+// Three rows instead of four, and the eye reads left to right like a
+// dashboard stat bar rather than hopping between framed cards.
 func metricStrip(items []metric, width int) string {
 	if len(items) == 0 {
 		return ""
 	}
-	gaps := len(items) - 1
-	cardW := max((width-gaps)/len(items), 8)
-	cards := make([]string, 0, len(items))
+	colW := max((width-1)/len(items), 10)
+	var labels, values, details strings.Builder
 	for _, item := range items {
-		cards = append(cards, metricCard(item.label, item.value, item.detail, cardW))
+		cell := func(s string) string { return padRight(truncate(s, colW-2), colW) }
+		labels.WriteString(cell(stFaint.Render(item.label)))
+		values.WriteString(cell(stTitle.Render(item.value)))
+		details.WriteString(cell(stSubtle.Render(item.detail)))
 	}
-	withGaps := make([]string, 0, len(cards)*2-1)
-	for i, card := range cards {
+	return truncate(labels.String(), width) + "\n" +
+		truncate(values.String(), width) + "\n" +
+		truncate(details.String(), width)
+}
+
+// toolbar lays chips out on one line, the way a web page keeps its primary
+// controls above the table. Chips that do not fit are dropped from the right.
+func toolbar(chips []string, width int) string {
+	var out strings.Builder
+	out.WriteString(" ")
+	x := 1
+	for i, chip := range chips {
+		w := lipgloss.Width(chip)
+		gap := 0
 		if i > 0 {
-			withGaps = append(withGaps, " ")
+			gap = 1
 		}
-		withGaps = append(withGaps, card)
+		if x+gap+w > width {
+			break
+		}
+		if gap > 0 {
+			out.WriteString(" ")
+		}
+		out.WriteString(chip)
+		x += gap + w
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, withGaps...)
+	return padRight(out.String(), width)
 }
 
-func statCell(label, value string, width int) string {
-	return metricCard(label, value, "", width)
+// toolbarWrap is toolbar for a modal: chips that do not fit flow onto the
+// next line instead of being dropped, so every action stays reachable.
+func toolbarWrap(chips []string, width int) string {
+	var lines []string
+	var line strings.Builder
+	x := 0
+	for _, chip := range chips {
+		w := lipgloss.Width(chip)
+		if x > 0 && x+1+w > width {
+			lines = append(lines, line.String())
+			line.Reset()
+			x = 0
+		}
+		if x > 0 {
+			line.WriteString(" ")
+			x++
+		}
+		line.WriteString(chip)
+		x += w
+	}
+	if line.Len() > 0 {
+		lines = append(lines, line.String())
+	}
+	return strings.Join(lines, "\n")
 }
 
-func lipJoin(cells []string) string {
-	return lipgloss.JoinHorizontal(lipgloss.Top, cells...)
+// filterChip is a toolbar control whose label carries its current value, so
+// the active lens is visible without opening anything. A non-neutral value is
+// rendered as primary so a narrowed view is never a mystery.
+func filterChip(key, label, value string, active bool) string {
+	return actionChip(key, label+": "+value, active, false, false)
+}
+
+// groupRule is a section divider inside a table: a marker, the group title,
+// then a faint rule carrying the trailing summary at its right end.
+func groupRule(marker, title, summary string, width int) string {
+	head := marker + " " + stHead.Render(title) + " "
+	tail := ""
+	if summary != "" {
+		tail = " " + stSubtle.Render(summary) + " "
+	}
+	rule := max(width-lipgloss.Width(head)-lipgloss.Width(tail), 0)
+	return head + stFaint.Render(strings.Repeat("─", rule)) + tail
+}
+
+// emptyState is the centred placeholder a table shows when it has nothing to
+// list: what is missing, then the one key that fixes it.
+func emptyState(title, hint string, width int) string {
+	return "\n" + centre(stHead.Render(title), width) + "\n" + centre(stSubtle.Render(hint), width)
+}
+
+func centre(s string, width int) string {
+	pad := max((width-lipgloss.Width(s))/2, 0)
+	return strings.Repeat(" ", pad) + s
 }
 
 func humanInt(n int64) string {

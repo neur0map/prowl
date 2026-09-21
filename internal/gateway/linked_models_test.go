@@ -347,7 +347,7 @@ func candidateKeys(t *testing.T, eng *Engine, modelID string) (catalog, login []
 
 // TestEnrolledLoginJoinsActiveProfileImmediately proves a newly enrolled login
 // routes without waiting for the next boot's EnsureDefaultProfile pass: its
-// models join the ACTIVE profile the moment they are seeded.
+// models join the Default (auto-include) profile the moment they are seeded.
 func TestEnrolledLoginJoinsActiveProfileImmediately(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -412,6 +412,45 @@ func TestEnrolledLoginRespectsOperatorExclusion(t *testing.T) {
 	require.NoError(t, eng.DB().QueryRow(
 		`SELECT COUNT(*) FROM profile_models WHERE profile_id = ? AND model_db_id = ?`, profileID, modelID).Scan(&inProfile))
 	require.Zero(t, inProfile, "a refresh must not re-add a login model the operator excluded")
+}
+
+// TestEnrolledLoginLeavesCuratedActiveSetAlone pins the fix for a curated set
+// being flooded on every boot: when a hand-picked named set is active, seeding
+// a login must add its models to the Default (auto-include) profile only, never
+// to the curated set. Otherwise an account's whole catalogue reappears in the
+// operator's "Quick chores" set after every restart.
+func TestEnrolledLoginLeavesCuratedActiveSetAlone(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	eng, err := OpenEngine(ctx, t.TempDir(), EngineOptions{SkipCatalogSeed: true})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = eng.Close() })
+
+	res, err := eng.DB().Exec(`INSERT INTO profiles(name, active, created_at) VALUES('Default', 0, 0)`)
+	require.NoError(t, err)
+	defaultID, _ := res.LastInsertId()
+	res, err = eng.DB().Exec(`INSERT INTO profiles(name, active, created_at) VALUES('Quick chores', 1, 0)`)
+	require.NoError(t, err)
+	curatedID, _ := res.LastInsertId()
+	_, err = eng.DB().Exec(`INSERT INTO settings(key, value, updated_at) VALUES('active_profile_id', ?, 0)`, curatedID)
+	require.NoError(t, err)
+
+	keyID, err := eng.Vault().AddLinked(ctx, "anthropic", "Prowl login")
+	require.NoError(t, err)
+	_, err = eng.SeedLoginModels(ctx, keyID, "anthropic", []LinkedModel{{ID: "claude-opus-5", Tools: true}})
+	require.NoError(t, err)
+
+	var modelID int64
+	require.NoError(t, eng.DB().QueryRow(
+		`SELECT id FROM models WHERE model_id = 'claude-opus-5' AND source = 'login'`).Scan(&modelID))
+
+	var inDefault, inCurated int
+	require.NoError(t, eng.DB().QueryRow(
+		`SELECT COUNT(*) FROM profile_models WHERE profile_id = ? AND model_db_id = ?`, defaultID, modelID).Scan(&inDefault))
+	require.Equal(t, 1, inDefault, "a login model joins the Default auto-include profile")
+	require.NoError(t, eng.DB().QueryRow(
+		`SELECT COUNT(*) FROM profile_models WHERE profile_id = ? AND model_db_id = ?`, curatedID, modelID).Scan(&inCurated))
+	require.Zero(t, inCurated, "a login model must not flood the curated active set")
 }
 
 // retiringLogin is a managed credential source whose model list and
@@ -526,6 +565,52 @@ func TestAuthoritativeEmptyDiscoveryRetiresAllLoginModels(t *testing.T) {
 	eng.ReconcileLoginModels(context.Background())
 	require.Equal(t, []string{"claude-opus-5"}, loginModelIDs(t, eng),
 		"a non-authoritative empty result must never retire")
+}
+
+// TestAuthoritativeDiscoveryRetiresLegacyUnscopedRows proves an install that
+// enrolled a login before login models carried their own endpoint scope does
+// not list every model twice forever: the legacy empty-scope rows for the same
+// key are retired on the next authoritative discovery, while the scoped rows
+// - and the operator's flags on them - are untouched.
+func TestAuthoritativeDiscoveryRetiresLegacyUnscopedRows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	eng, err := OpenEngine(ctx, t.TempDir(), EngineOptions{SkipCatalogSeed: true})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = eng.Close() })
+
+	keyID, err := eng.Vault().AddLinked(ctx, "anthropic", "Prowl login")
+	require.NoError(t, err)
+	// The legacy row: same platform/model/key, but stored under the
+	// catalogue's empty scope by an older release.
+	_, err = eng.DB().Exec(`
+		INSERT INTO models(platform, model_id, display_name, enabled, key_id, source, endpoint_scope, available)
+		VALUES('anthropic', 'claude-opus-5', 'Claude Opus 5', 0, ?, 'login', '', 1)`, keyID)
+	require.NoError(t, err)
+
+	_, err = eng.SeedLoginModels(ctx, keyID, "anthropic", []LinkedModel{{ID: "claude-opus-5", Tools: true}})
+	require.NoError(t, err)
+	var before int
+	require.NoError(t, eng.DB().QueryRow(
+		`SELECT COUNT(*) FROM models WHERE model_id = 'claude-opus-5' AND available = 1`).Scan(&before))
+	require.Equal(t, 2, before, "seeding under the scoped identity leaves the legacy row beside it")
+
+	_, err = eng.retireAbsentLoginModels(ctx, keyID, []LinkedModel{{ID: "claude-opus-5"}})
+	require.NoError(t, err)
+	rows, err := eng.DB().Query(
+		`SELECT endpoint_scope, available FROM models WHERE model_id = 'claude-opus-5' ORDER BY endpoint_scope`)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	got := map[string]int{}
+	for rows.Next() {
+		var scope string
+		var available int
+		require.NoError(t, rows.Scan(&scope, &available))
+		got[scope] = available
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, map[string]int{"": 0, "link:anthropic": 1}, got,
+		"the legacy unscoped row is retired; the scoped row stays available")
 }
 
 // TestRetiredLoginModelReturnsWithExclusionPreserved proves an authoritative

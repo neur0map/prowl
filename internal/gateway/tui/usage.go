@@ -246,7 +246,7 @@ func (m *usageModel) statStrip() string {
 			fmt.Sprintf("%.0f%% failover", summary.FailoverRate*100),
 		})
 	}
-	return metricStrip(metrics, m.width)
+	return inset(metricStrip(metrics, m.width-1), 1)
 }
 
 // qualityDetail names how many of the window's requests carry exact,

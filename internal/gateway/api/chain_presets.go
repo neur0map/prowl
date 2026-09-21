@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/neur0map/prowl/internal/gateway"
 )
 
 // Presets: a set you can start from instead of curating a hundred rows.
@@ -26,6 +28,12 @@ type chainPreset struct {
 
 	// Group separates task-shaped sets from catalogue-mechanical cuts.
 	Group string `json:"group"`
+
+	// Strategy is the routing order the preset suggests for the set it creates,
+	// so applying a preset carries its meaning rather than just its membership:
+	// "quick chores" routes fastest-first, "deep work" smartest-first. It is
+	// stored on the created set and surfaced so the client can preview it.
+	Strategy string `json:"strategy"`
 
 	// reqs are the conditions membership demands. One descriptor renders both
 	// the SQL predicate and the English requirements, so the count, the rows
@@ -126,24 +134,28 @@ var chainPresets = []chainPreset{
 	// Task sets: "for this kind of work, these models."
 	{
 		ID: "deep-work", Name: "Deep work", Group: "task",
+		Strategy:    string(gateway.RoutingSmartest),
 		Description: "Tool-using, reasoning models with room for a long problem.",
 		reqs:        []req{reqTools(), reqReasoning(), reqContext(131072)},
 		order:       intelligenceOrder,
 	},
 	{
 		ID: "coding", Name: "Coding", Group: "task",
+		Strategy:    string(gateway.RoutingBalanced),
 		Description: "Tool callers with a large context, most capable then fastest.",
 		reqs:        []req{reqTools(), reqContext(131072)},
 		order:       "m.intelligence_rank ASC, m.speed_rank ASC, m.model_id ASC",
 	},
 	{
 		ID: "writing", Name: "Writing", Group: "task",
+		Strategy:    string(gateway.RoutingSmartest),
 		Description: "The most capable models with enough context for a draft.",
 		reqs:        []req{reqCapabilityQuantile(0.25), reqContext(32768)},
 		order:       intelligenceOrder,
 	},
 	{
 		ID: "quick-chores", Name: "Quick chores", Group: "task",
+		Strategy: string(gateway.RoutingFastest),
 		Description: fmt.Sprintf(
 			"Free or near-free models, quickest first, for cheap throwaway work under $%.0f per million output tokens.",
 			cheapThresholdPerM),
@@ -152,18 +164,21 @@ var chainPresets = []chainPreset{
 	},
 	{
 		ID: "long-documents", Name: "Long documents", Group: "task",
+		Strategy:    string(gateway.RoutingBalanced),
 		Description: "Models that accept 200K tokens or more, widest first.",
 		reqs:        []req{reqContext(200000)},
 		order:       "m.context_window DESC, m.intelligence_rank ASC",
 	},
 	{
 		ID: "vision", Name: "Images in", Group: "task",
+		Strategy:    string(gateway.RoutingBalanced),
 		Description: "Models that accept images, most capable first.",
 		reqs:        []req{reqVision()},
 		order:       intelligenceOrder,
 	},
 	{
 		ID: "local", Name: "Local only", Group: "task",
+		Strategy:    string(gateway.RoutingPriority),
 		Description: "Models served from a local runtime, most capable first.",
 		reqs:        []req{reqPlatforms("ollama", "lmstudio", "llamacpp")},
 		order:       intelligenceOrder,
@@ -172,24 +187,28 @@ var chainPresets = []chainPreset{
 	// Catalogue cuts: mechanical slices of what is enrolled.
 	{
 		ID: "free", Name: "Everything free", Group: "catalogue",
+		Strategy:    string(gateway.RoutingBalanced),
 		Description: "Models with no published per-token price.",
 		reqs:        []req{reqFreeTier()},
 		order:       intelligenceOrder,
 	},
 	{
 		ID: "paid", Name: "Paid models", Group: "catalogue",
+		Strategy:    string(gateway.RoutingBalanced),
 		Description: "Models that bill per token, cheapest first.",
 		reqs:        []req{reqRaw("m.paid_output_per_m IS NOT NULL", "Bills per token")},
 		order:       "m.paid_output_per_m ASC, m.intelligence_rank ASC",
 	},
 	{
 		ID: "subscriptions", Name: "My subscriptions", Group: "catalogue",
+		Strategy:    string(gateway.RoutingBalanced),
 		Description: "Models served by a login you enrolled, most capable first.",
 		reqs:        []req{reqRaw("m.source = 'login'", "From an enrolled login")},
 		order:       intelligenceOrder,
 	},
 	{
 		ID: "flagships", Name: "Flagships", Group: "catalogue",
+		Strategy:    string(gateway.RoutingSmartest),
 		Description: "The most capable model from each provider.",
 		reqs: []req{reqRaw(`m.intelligence_rank = (
 			SELECT MIN(x.intelligence_rank) FROM models x
@@ -214,6 +233,20 @@ func (p chainPreset) requirements() []string {
 	}
 	return out
 }
+
+// presetCandidates is the FROM/WHERE core every preset count and fill shares:
+// enabled, provider-available, and served by a connected provider - a row
+// whose platform has no usable credential (or, for a custom relay, whose own
+// key is dead) is one the router would drop, so a preset that counted it
+// would promise a set larger than it can route. Mirrors usableKeyIDSet /
+// keyCountsByPlatform(healthyOnly) in routing_routes.go.
+const presetCandidates = `FROM models m
+	 WHERE m.enabled = 1 AND m.available = 1
+	   AND EXISTS (SELECT 1 FROM api_keys k
+	                WHERE k.enabled = 1 AND k.status IN ('healthy', 'unknown')
+	                  AND (CASE WHEN m.source = 'custom' AND m.key_id IS NOT NULL
+	                            THEN k.id = m.key_id
+	                            ELSE k.platform = m.platform END))`
 
 func presetByID(id string) (chainPreset, bool) {
 	for _, preset := range chainPresets {
@@ -244,7 +277,7 @@ func (s *Server) handleChainPresets(w http.ResponseWriter, r *http.Request) {
 	for _, preset := range chainPresets {
 		row := chainPresetRow{chainPreset: preset, Requirements: preset.requirements()}
 		if err := s.engine.DB().QueryRowContext(r.Context(),
-			"SELECT COUNT(*) FROM models m WHERE m.enabled = 1 AND m.available = 1 AND ("+preset.where()+")",
+			"SELECT COUNT(*) "+presetCandidates+" AND ("+preset.where()+")",
 		).Scan(&row.Models); err != nil {
 			row.Models = 0
 		}
@@ -314,7 +347,8 @@ func (s *Server) handleChainFromPreset(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(r.Context(),
-		"INSERT INTO profiles(name, active, created_at) VALUES(?, 0, strftime('%s','now'))", name)
+		"INSERT INTO profiles(name, strategy, active, created_at) VALUES(?, ?, 0, strftime('%s','now'))",
+		name, preset.Strategy)
 	if err != nil {
 		// A duplicate name is the operator's mistake, not a server fault.
 		WriteError(w, http.StatusConflict, TypeInvalidRequest,
@@ -328,8 +362,7 @@ func (s *Server) handleChainFromPreset(w http.ResponseWriter, r *http.Request) {
 	if _, err := tx.ExecContext(r.Context(), `
 		INSERT INTO profile_models(profile_id, model_db_id, position)
 		SELECT ?, m.id, ROW_NUMBER() OVER (ORDER BY `+preset.order+`)
-		  FROM models m
-		 WHERE m.enabled = 1 AND m.available = 1 AND (`+preset.where()+`)`, profileID); err != nil {
+		  `+presetCandidates+` AND (`+preset.where()+`)`, profileID); err != nil {
 		WriteError(w, http.StatusInternalServerError, TypeServer,
 			"could not fill the list from that preset")
 		return
@@ -404,8 +437,10 @@ func (s *Server) handleChainFromSelection(w http.ResponseWriter, r *http.Request
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// A hand-picked selection carries no preset, so it inherits the operator's
+	// default strategy (empty string) until the operator sets one on the set.
 	res, err := tx.ExecContext(r.Context(),
-		"INSERT INTO profiles(name, active, created_at) VALUES(?, 0, strftime('%s','now'))", name)
+		"INSERT INTO profiles(name, strategy, active, created_at) VALUES(?, '', 0, strftime('%s','now'))", name)
 	if err != nil {
 		WriteError(w, http.StatusConflict, TypeInvalidRequest,
 			"a list named "+name+" already exists")

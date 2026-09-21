@@ -331,11 +331,11 @@ func (m *setupModel) View() tea.View {
 		))
 	}
 	var b strings.Builder
-	b.WriteString(metricStrip([]metric{
+	b.WriteString(inset(metricStrip([]metric{
 		{"Supported", fmt.Sprintf("%d", len(m.data.supported)), "known harnesses"},
 		{"Detected", fmt.Sprintf("%d", len(m.data.installed)), "installed locally"},
 		{"Connected", fmt.Sprintf("%d", len(m.data.targets)), "routing through Prowl"},
-	}, m.width))
+	}, m.width-1), 1))
 	b.WriteString("\n")
 	if m.busy != "" {
 		b.WriteString(roundedPanel("Applying setup", stWarn.Render("● "+m.busy), m.width) + "\n")

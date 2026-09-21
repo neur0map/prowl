@@ -68,8 +68,18 @@ func ClassifyPrompt(messages []map[string]any, params map[string]any) PromptProf
 	// An explicit request to research current material is stronger than a
 	// coincidental repository/codebase noun. This is the common shape of a
 	// request to investigate another project's implementation.
-	if signalScore(lower, explicitResearchSignals) > 0 {
+	explicitResearch := signalScore(lower, explicitResearchSignals) > 0
+	if explicitResearch {
 		research += 4
+	}
+	// An agentic harness pastes repository context, file listings and tool
+	// output into the turn, which is thick with incidental "documentation",
+	// "sources" and "latest" nouns. That is not a request for current web
+	// research: the two-stage research route is deliberate, so without an
+	// explicit web-research intent a tool-driven turn is classified by what it
+	// asks (coding/agentic/general), never routed to research on context alone.
+	if usesTools && !explicitResearch {
+		research = 0
 	}
 	if strings.Contains(lower, "```") || strings.Contains(lower, "diff --git") || strings.Contains(lower, "stack trace") {
 		coding += 4
@@ -93,19 +103,25 @@ func ClassifyPrompt(messages []map[string]any, params map[string]any) PromptProf
 		confidence = clamp01(0.45 + float64(lead)*0.12 + float64(scores[0].score)*0.04)
 	}
 
-	// Complexity follows the current task, not the full conversation token
-	// count. A large static system prompt must not buy an expensive model.
-	taskTokens := estimatedTextTokens(len(text))
+	// Complexity follows the current task, not the pasted context. A large
+	// static system prompt must not buy an expensive model - and neither must
+	// the wall of repository context and tool output an agentic harness stuffs
+	// into the turn. When tools are present the turn's bulk is context, so its
+	// length says nothing about how hard the ASK is; difficulty then comes
+	// only from the request's own signals below. Without tools a long single
+	// instruction (a pasted document to work through) still scales up.
 	complexity := 0.12
-	switch {
-	case taskTokens >= 12000:
-		complexity += 0.48
-	case taskTokens >= 4000:
-		complexity += 0.34
-	case taskTokens >= 1200:
-		complexity += 0.20
-	case taskTokens >= 400:
-		complexity += 0.08
+	if !usesTools {
+		switch taskTokens := estimatedTextTokens(len(text)); {
+		case taskTokens >= 12000:
+			complexity += 0.48
+		case taskTokens >= 4000:
+			complexity += 0.34
+		case taskTokens >= 1200:
+			complexity += 0.20
+		case taskTokens >= 400:
+			complexity += 0.08
+		}
 	}
 	if agentic > 0 {
 		complexity += 0.16

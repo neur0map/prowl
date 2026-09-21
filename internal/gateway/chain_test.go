@@ -567,6 +567,56 @@ func TestResolveChain_NamedProfileAndErrors(t *testing.T) {
 	}
 }
 
+// TestResolveChain_ProfileStrategyOrdersItsChain proves a set orders its own
+// chain by its own strategy: the strategy is part of what the set means, so an
+// active set that stores 'fastest' resolves fastest-first even when the
+// operator's configured default is balanced, and auto:<name> does the same. A
+// set with no strategy inherits the configured default, and a global-sort alias
+// still forces its own axis regardless of any set.
+func TestResolveChain_ProfileStrategyOrdersItsChain(t *testing.T) {
+	db := openTestStore(t)
+	m := insertModel(t, db, "p", "m1", "Large", 1)
+	res, _ := db.Exec(`INSERT INTO profiles(name, active, strategy, created_at) VALUES('quick',0,'fastest',0)`)
+	profID, _ := res.LastInsertId()
+	mustExec(t, db, `INSERT INTO profile_models(profile_id, model_db_id, position) VALUES(?,?,0)`, profID, m)
+	mustExec(t, db, `INSERT INTO settings(key, value, updated_at) VALUES('active_profile_id', ?, 0)`, profID)
+
+	rc, err := ResolveChain(db, "auto", RoutingBalanced)
+	if err != nil {
+		t.Fatalf("auto: %v", err)
+	}
+	if rc.OrderBy != RoutingFastest {
+		t.Fatalf("active set strategy should force fastest over configured balanced, got %v", rc.OrderBy)
+	}
+
+	rc, err = ResolveChain(db, "auto:quick", RoutingBalanced)
+	if err != nil {
+		t.Fatalf("auto:quick: %v", err)
+	}
+	if rc.OrderBy != RoutingFastest {
+		t.Fatalf("named set strategy should force fastest, got %v", rc.OrderBy)
+	}
+
+	// Clearing the set's strategy makes it inherit the configured default.
+	mustExec(t, db, `UPDATE profiles SET strategy = '' WHERE id = ?`, profID)
+	rc, err = ResolveChain(db, "auto", RoutingBalanced)
+	if err != nil {
+		t.Fatalf("auto without set strategy: %v", err)
+	}
+	if rc.OrderBy != RoutingBalanced {
+		t.Fatalf("a set with no strategy should inherit configured balanced, got %v", rc.OrderBy)
+	}
+
+	// A global-sort alias forces its own axis regardless of the active set.
+	rc, err = ResolveChain(db, "auto:smart", RoutingBalanced)
+	if err != nil {
+		t.Fatalf("auto:smart: %v", err)
+	}
+	if rc.OrderBy != RoutingSmartest {
+		t.Fatalf("auto:smart should force smartest regardless of the set, got %v", rc.OrderBy)
+	}
+}
+
 func TestResolveChain_EmptyChainsDegradeCleanly(t *testing.T) {
 	db := openTestStore(t)
 

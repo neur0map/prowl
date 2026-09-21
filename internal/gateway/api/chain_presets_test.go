@@ -24,6 +24,64 @@ func seedPresetCatalogue(t *testing.T, s *Server) {
 			('anthropic','sub-flagship','Sub Flagship',1,5,200000,1,1,1,25.0,'login'),
 			('anthropic','sub-small','Sub Small',8,1,200000,1,0,1,4.0,'login')`)
 	require.NoError(t, err)
+	// Presets only take models a connected provider can serve, so the
+	// fixture connects every platform it seeds.
+	connectPlatforms(t, s, "groq", "openrouter", "anthropic")
+}
+
+// TestPresetsTakeOnlyConnectedProviders proves a preset neither counts nor
+// inserts a model whose provider has no usable credential: a set built from a
+// preset must route as large as it advertised, not carry members the router
+// would drop.
+func TestPresetsTakeOnlyConnectedProviders(t *testing.T) {
+	t.Parallel()
+
+	s := testServer(t, Options{MachineKey: compatMachineKey})
+	tok := session(t, s)
+	seedPresetCatalogue(t, s)
+	// A tool-capable, large-context model on a provider nobody connected.
+	_, err := s.engine.DB().Exec(`
+		INSERT INTO models(platform, model_id, display_name, intelligence_rank,
+			speed_rank, context_window, enabled, supports_vision, supports_tools,
+			paid_output_per_m, source)
+		VALUES ('mistral','orphan','Orphan',3,3,262144,1,0,1,NULL,'catalog')`)
+	require.NoError(t, err)
+
+	count := func() int {
+		_, body := do(t, s, http.MethodGet, "/api/profiles/presets", "", authed(tok))
+		var payload struct {
+			Presets []struct {
+				ID     string `json:"id"`
+				Models int    `json:"models"`
+			} `json:"presets"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &payload))
+		for _, p := range payload.Presets {
+			if p.ID == "coding" {
+				return p.Models
+			}
+		}
+		t.Fatal("no coding preset")
+		return 0
+	}
+	before := count()
+	status, created := createFromPreset(t, s, tok, "coding", "coding-a", false)
+	require.Equal(t, http.StatusCreated, status)
+	require.Equal(t, before, created.Models)
+	members, _ := profileMembers(t, s, created.ID)
+	var orphan int64
+	require.NoError(t, s.engine.DB().QueryRow(`SELECT id FROM models WHERE model_id = 'orphan'`).Scan(&orphan))
+	require.NotContains(t, members, orphan, "an unconnected provider's model must not be taken")
+
+	// Connecting the provider brings its model into the count and the set.
+	_, err = s.engine.DB().Exec(`
+		INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled, created_at)
+		VALUES ('mistral', 'test', 'x', 'y', 'z', 'unknown', 1, 0)`)
+	require.NoError(t, err)
+	require.Equal(t, before+1, count(), "a freshly connected provider's matching model joins the count")
+	_, created = createFromPreset(t, s, tok, "coding", "coding-b", false)
+	members, _ = profileMembers(t, s, created.ID)
+	require.Contains(t, members, orphan)
 }
 
 // presetCreated is the response both save paths return.
@@ -262,8 +320,21 @@ func TestPresetRequirementsNameEveryCondition(t *testing.T) {
 		"the context floor must appear exactly as the predicate demands")
 }
 
+// connectPlatforms stores a usable key per platform so presets, which only
+// take models a connected provider can serve, see the seeded rows.
+func connectPlatforms(t *testing.T, s *Server, platforms ...string) {
+	t.Helper()
+	for _, platform := range platforms {
+		_, err := s.engine.DB().Exec(`
+			INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled, created_at)
+			VALUES (?, 'test', 'x', 'y', 'z', 'healthy', 1, 0)`, platform)
+		require.NoError(t, err)
+	}
+}
+
 func seedRankedModels(t *testing.T, s *Server, ranks map[string]int) {
 	t.Helper()
+	connectPlatforms(t, s, "test")
 	for modelID, rank := range ranks {
 		_, err := s.engine.DB().Exec(`
 			INSERT INTO models(platform, model_id, display_name, intelligence_rank,
@@ -467,6 +538,7 @@ func TestFreePresetsUseAccessTierNotOutputPriceNull(t *testing.T) {
 	s := testServer(t, Options{MachineKey: compatMachineKey})
 	tok := session(t, s)
 	db := s.engine.DB()
+	connectPlatforms(t, s, "groq", "anthropic", "openrouter")
 
 	free := seedCat(t, db, catSpec{platform: "groq", modelID: "free", name: "Free", sizeLabel: "Medium"})
 	sub := seedCat(t, db, catSpec{platform: "anthropic", modelID: "sub", name: "Sub",
@@ -538,4 +610,46 @@ func TestPresetCreatorsRejectReservedAndCaseCollidingNames(t *testing.T) {
 	require.Equal(t, http.StatusConflict, status, "a case-collision must be refused across creators")
 	require.Equal(t, after, profileCount(), "a refused collision must not create a profile")
 	require.Equal(t, 1, nameCount("coding"), "exactly one list holds the case-insensitive name")
+}
+
+// TestPresetAppliesItsStrategy proves a preset's suggested routing strategy is
+// both advertised and stored: every preset row carries a strategy, and applying
+// quick-chores creates a set that routes fastest-first, so the set carries the
+// preset's meaning rather than only its membership.
+func TestPresetAppliesItsStrategy(t *testing.T) {
+	t.Parallel()
+
+	s := testServer(t, Options{MachineKey: compatMachineKey})
+	tok := session(t, s)
+	seedPresetCatalogue(t, s)
+
+	_, body := do(t, s, http.MethodGet, "/api/profiles/presets", "", authed(tok))
+	var presets struct {
+		Presets []struct {
+			ID       string `json:"id"`
+			Strategy string `json:"strategy"`
+		} `json:"presets"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &presets))
+	byPreset := map[string]string{}
+	for _, p := range presets.Presets {
+		require.NotEmpty(t, p.Strategy, "%s must advertise a strategy", p.ID)
+		byPreset[p.ID] = p.Strategy
+	}
+	require.Equal(t, "fastest", byPreset["quick-chores"], "quick chores routes fastest-first")
+
+	status, created := createFromPreset(t, s, tok, "quick-chores", "chores", false)
+	require.Equal(t, http.StatusCreated, status)
+
+	_, listBody := do(t, s, http.MethodGet, "/api/profiles", "", authed(tok))
+	var list []struct {
+		ID       int64  `json:"id"`
+		Strategy string `json:"strategy"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(listBody), &list))
+	got := map[int64]string{}
+	for _, p := range list {
+		got[p.ID] = p.Strategy
+	}
+	require.Equal(t, "fastest", got[created.ID], "the created set must carry the preset's strategy")
 }

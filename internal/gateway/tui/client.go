@@ -275,6 +275,7 @@ type Profile struct {
 	Name       string `json:"name"`
 	Type       string `json:"type"`
 	ModelCount int    `json:"modelCount"`
+	Strategy   string `json:"strategy"`
 	CreatedAt  string `json:"created_at"`
 }
 
@@ -285,6 +286,7 @@ type ChainPreset struct {
 	Group        string   `json:"group"`
 	Requirements []string `json:"requirements"`
 	Models       int      `json:"models"`
+	Strategy     string   `json:"strategy"`
 }
 
 type ModelRow struct {

@@ -135,24 +135,26 @@ func TestOAuthSignInStartsAndOpensBrowser(t *testing.T) {
 	t.Cleanup(func() { openURL = originalOpenURL })
 
 	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.logins.data.platforms = []SignInPlatform{{ID: "openai", Name: "ChatGPT", RoutesTo: "openai"}}
-	app.logins.loaded = true
-	app.logins.buildRows()
+	app.providers.data.directory = []DirectoryProvider{{ID: "openai", Name: "OpenAI", Class: "oauth", Platform: "openai", Adapter: true, Routable: true}}
+	app.providers.data.platforms = []SignInPlatform{{ID: "openai", Name: "ChatGPT", RoutesTo: "openai"}}
+	app.providers.loaded = true
+	app.providers.buildRows()
+	app.providers.list.selectID("provider:openai")
 
-	_, start := app.logins.Update(tea.KeyPressMsg{Text: "s", Code: 's'})
+	_, start := app.providers.Update(tea.KeyPressMsg{Text: "c", Code: 'c'})
 	if start == nil {
-		t.Fatal("sign-in key returned no command")
+		t.Fatal("connect on a sign-in provider returned no command")
 	}
 	msg := start()
 	if !started {
-		t.Fatal("sign-in command did not call POST /api/signin")
+		t.Fatal("connect did not call POST /api/signin")
 	}
 	startedMsg, ok := msg.(signInStartedMsg)
 	if !ok {
-		t.Fatalf("sign-in command returned %T; want signInStartedMsg", msg)
+		t.Fatalf("connect returned %T; want signInStartedMsg", msg)
 	}
 
-	_, follow := app.logins.Update(startedMsg)
+	_, follow := app.providers.Update(startedMsg)
 	followMsg := follow()
 	batch, ok := followMsg.(tea.BatchMsg)
 	if !ok {
@@ -167,49 +169,74 @@ func TestOAuthSignInStartsAndOpensBrowser(t *testing.T) {
 	if opened != "https://example.test/oauth" {
 		t.Fatalf("opened URL = %q; want OAuth URL", opened)
 	}
-	if app.logins.active == nil || app.logins.active.ID != "flow-1" {
-		t.Fatalf("active session = %#v; want flow-1", app.logins.active)
+	if app.providers.signin.active == nil || app.providers.signin.active.ID != "flow-1" {
+		t.Fatalf("active session = %#v; want flow-1", app.providers.signin.active)
 	}
 }
 
-func TestModelsTabControlsSelectedModel(t *testing.T) {
-	var path string
-	var patch map[string]bool
+func TestRoutingEditorTogglesSelectedModel(t *testing.T) {
+	var reorderPath string
+	var reorder []reorderReq
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path = r.URL.Path
-		if r.Method != http.MethodPatch {
+		switch {
+		case r.URL.Path == "/api/profiles/7/models" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]profileMember{{ModelDBID: 41, Priority: 1}})
+		case r.URL.Path == "/api/profiles/7/reorder" && r.Method == http.MethodPut:
+			reorderPath = r.URL.Path
+			_ = json.NewDecoder(r.Body).Decode(&reorder)
+			_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+		default:
 			http.NotFound(w, r)
-			return
 		}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-			t.Fatalf("decode model patch: %v", err)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
 	}))
 	defer server.Close()
 
 	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.routing.defaultModels = true
-	app.routing.loaded = true
-	app.routing.data.models = []ModelRow{
-		{ID: 41, Platform: "anthropic", ModelID: "claude-opus", DisplayName: "Claude Opus", Enabled: true, FallbackEnabled: true, Available: true},
-		{ID: 42, Platform: "openai", ModelID: "gpt-codex", DisplayName: "GPT Codex", Available: true},
+	m := &app.routing
+	m.loaded = true
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		activeID: 7,
+		profiles: []Profile{{ID: 7, Name: "Deep work", ModelCount: 1}},
+		models: []ModelRow{
+			{ID: 41, Platform: "anthropic", ModelID: "claude-opus", DisplayName: "Claude Opus", Enabled: true, Available: true},
+			{ID: 42, Platform: "openai", ModelID: "gpt-codex", DisplayName: "GPT Codex", Enabled: true, Available: true},
+		},
 	}
-	app.routing.buildRows()
-	app.routing.list.move(1)
+	m.buildHomeRows()
 
-	_, command := app.routing.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	// Open Deep work: its membership loads and the editor takes over, folded.
+	m.wantSetID = 7
+	m.Update(setEditLoadedMsg{id: 7, name: "Deep work", order: []int64{41}})
+	if m.mode != routingEditor {
+		t.Fatalf("opening a set did not switch to the editor (mode=%d)", m.mode)
+	}
+	// Reach a model row: expand its provider, then land on GPT Codex.
+	if !m.editorList.selectID("group:openai") {
+		t.Fatal("no OpenAI provider header in the editor")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if !m.editorList.selectID("model:42") {
+		t.Fatal("GPT Codex row is not reachable after expanding its provider")
+	}
+
+	_, command := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	if command == nil {
-		t.Fatal("selected model returned no update command")
+		t.Fatal("space on a model returned no update command")
 	}
-	if _, ok := command().(doneMsg); !ok {
-		t.Fatal("selected model did not complete its update")
+	if _, ok := command().(setEditLoadedMsg); !ok {
+		t.Fatal("toggling membership did not re-read the set from the server")
 	}
-	if path != "/api/models/42" {
-		t.Fatalf("patched %q; want selected model /api/models/42", path)
+	if reorderPath != "/api/profiles/7/reorder" {
+		t.Fatalf("membership toggle PUT %q; want the set's own reorder endpoint", reorderPath)
 	}
-	if !patch["fallbackEnabled"] || !patch["enabled"] {
-		t.Fatalf("model selection patch = %#v; want selected and catalogue-enabled", patch)
+	// The set held 41; selecting 42 writes the whole membership, every row enabled.
+	got := map[int64]bool{}
+	for _, req := range reorder {
+		got[req.ModelDBID] = req.Enabled
+	}
+	if !got[41] || !got[42] {
+		t.Fatalf("reorder body = %+v; want 41 and 42 both enabled", reorder)
 	}
 }
 

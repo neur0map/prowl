@@ -34,7 +34,7 @@ func newToolkitModel(app *App) toolkitModel {
 		{"Durable knowledge", "prowl knowledge", "reviewed decisions, concepts, and gotchas"},
 		{"Large-change review", "prowl review plan", "bounded review units with a coverage gate"},
 		{"Agent setup", "prowl init / skills", "project index, rules, MCP, and client skills"},
-		{"Model gateway", "prowl gateway", "accounts, credentials, models, routing, and usage"},
+		{"Model gateway", "prowl gateway", "providers, routing sets, and usage"},
 		{"Editor services", "prowl serve / lsp", "MCP and language-server integrations"},
 		{"Capability finder", "prowl capabilities search", "the right workflow for an intent"},
 	}

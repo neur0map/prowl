@@ -73,6 +73,38 @@ func TestClassifyPromptUsesOnlyLatestUserTurn(t *testing.T) {
 	require.Equal(t, "simple", profile.ComplexityLabel())
 }
 
+// TestClassifyPromptAgenticContextIsNotWebResearchOrComplex proves the shape
+// that misrouted in practice: an agentic harness turn whose bulk is pasted
+// repository context, file listings and tool output - thick with incidental
+// "documentation", "investigate", "latest" and "sources" nouns - wrapping a
+// trivial ask ("find the path"). It must classify by the ASK (not web
+// research) and stay simple (the context length is not task difficulty), so a
+// path search is not steered to a big model or the two-stage research route.
+func TestClassifyPromptAgenticContextIsNotWebResearchOrComplex(t *testing.T) {
+	tools := map[string]any{"tools": []any{map[string]any{"type": "function"}}}
+	context := strings.Repeat(
+		"current file listing and documentation. investigate the latest structure. "+
+			"internal/gateway/service/service.go defines the server. sources and references follow. ", 220)
+
+	profile := ClassifyPrompt(
+		[]map[string]any{{"role": "user", "content": context + "\n\nfind the path to the sqlite database file"}},
+		tools,
+	)
+	require.NotEqual(t, DomainResearch, profile.Domain,
+		"incidental context nouns must not classify a tool-driven turn as web research")
+	require.Equal(t, "simple", profile.ComplexityLabel(),
+		"pasted agentic context is not task difficulty")
+
+	// The deliberate two-stage research route still fires on an explicit
+	// web-research ask even with tools present.
+	explicit := ClassifyPrompt(
+		[]map[string]any{{"role": "user", "content": "Research the latest official documentation and cite sources."}},
+		tools,
+	)
+	require.Equal(t, DomainResearch, explicit.Domain,
+		"an explicit web-research intent still routes to research")
+}
+
 func TestOrderSmartChainUsesDomainCapability(t *testing.T) {
 	entries := []ChainEntry{
 		{ModelDBID: 1, ModelID: "general-top", DisplayName: "General Top", Tier: TierLarge, IntelRank: 1, Enabled: true},

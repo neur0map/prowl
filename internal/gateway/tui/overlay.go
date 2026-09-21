@@ -359,9 +359,10 @@ func (h *helpOverlay) View() tea.View {
 		title string
 		rows  [][2]string
 	}{
-		{"Move", [][2]string{{"↑↓ / j k", "select a row"}, {"pgup / pgdn", "scroll"}, {"tab / ← → / 1-9", "change screen"}}},
-		{"Act", [][2]string{{"enter", "open or edit"}, {"space", "select, pause or activate"}, {"/", "search the active list"}, {".", "show every screen action"}}},
-		{"Leave", [][2]string{{"esc", "close, clear or go back"}, {"q / ctrl+c", "quit"}}},
+		{"Move", [][2]string{{"1-7", "jump to a section"}, {"tab / shift+tab", "next / previous section"}, {"↑↓ / j k", "select a row"}, {"pgup / pgdn / g G", "scroll"}, {"← → / h l", "collapse or expand a provider"}}},
+		{"Routing", [][2]string{{"enter", "open a set, or create one from a preset"}, {"space", "activate a set · select a model or a whole provider"}, {"r", "strategy for the selected set"}, {"n / x / d", "new, rename, delete a set"}}},
+		{"Providers", [][2]string{{"enter", "manage a provider"}, {"c", "connect: key, keyless enable or sign-in"}, {"space", "pause / resume"}, {"d", "disconnect"}}},
+		{"Everywhere", [][2]string{{"/", "search the table"}, {"f", "filter the table"}, {".", "every action for this section"}, {"esc", "close, clear or go back"}, {"ctrl+r", "reload this section"}, {"q / ctrl+c", "quit"}}},
 	}
 	var body strings.Builder
 	body.WriteString(brandText("How to move", 0) + "\n")
@@ -379,5 +380,90 @@ func (h *helpOverlay) View() tea.View {
 	boxW, boxH := lipgloss.Width(box), lipgloss.Height(box)
 	x, y := overlayOrigin(h.width, h.height, boxW, boxH)
 	h.close = hitRegion{x: x + 3, y: y + boxH - 3, w: lipgloss.Width(closeLabel), h: 1}
+	return tea.NewView(box)
+}
+
+// confirmOverlay is the pointer-safe gate every destructive action passes
+// through. The operator already chose the verb, so the confirm button owns
+// focus: enter applies it, esc keeps.
+type confirmOverlay struct {
+	question      string
+	yes           func() tea.Msg
+	verb          string
+	width, height int
+	running       bool
+	// op is the id of the operation this confirm launched, stamped on the
+	// result so only this confirm - not an unrelated background completion -
+	// is dismissed when it finishes.
+	op                uint64
+	cancelHit, yesHit hitRegion
+}
+
+func (c *confirmOverlay) Init() tea.Cmd { return nil }
+
+func (c *confirmOverlay) runYes() (tea.Model, tea.Cmd) {
+	c.running = true
+	c.op = nextOverlayOp()
+	op := c.op
+	inner := c.yes()
+	return c, func() tea.Msg {
+		msg := inner
+		if fn, ok := inner.(func() tea.Msg); ok {
+			msg = fn()
+		}
+		return tagOverlayOp(msg, op)
+	}
+}
+
+func (c *confirmOverlay) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		c.width, c.height = msg.Width, msg.Height
+	case tea.MouseClickMsg:
+		if c.running {
+			return c, nil
+		}
+		switch {
+		case c.cancelHit.contains(msg.X, msg.Y):
+			return nil, nil
+		case c.yesHit.contains(msg.X, msg.Y):
+			return c.runYes()
+		}
+	case tea.KeyPressMsg:
+		if c.running {
+			return c, nil
+		}
+		switch msg.String() {
+		case "esc", "n", "left", "h":
+			return nil, nil
+		case "enter", "space", "y", "right", "l":
+			return c.runYes()
+		default:
+			return c, nil
+		}
+	}
+	return c, nil
+}
+
+func (c *confirmOverlay) View() tea.View {
+	verb := c.verb
+	if verb == "" {
+		verb = "Remove"
+	}
+	cancel := actionChip("esc", "Keep", false, false, false)
+	confirm := actionChip("enter", verb, true, true, false)
+	status := stFaint.Render("Nothing changes until you confirm.")
+	if c.running {
+		status = stWarn.Render("● Applying change…")
+	}
+	body := brandText("Confirm "+strings.ToLower(verb), 0) + "\n" +
+		stSubtle.Render("This action changes gateway state immediately.") + "\n\n" +
+		c.question + "\n\n" + status + "\n\n" + cancel + " " + confirm
+	box := stModal.Width(min(max(c.width-16, 44), 72)).Render(body)
+	boxW, boxH := lipgloss.Width(box), lipgloss.Height(box)
+	boxX, boxY := overlayOrigin(c.width, c.height, boxW, boxH)
+	buttonY := boxY + boxH - 3
+	c.cancelHit = hitRegion{x: boxX + 3, y: buttonY, w: lipgloss.Width(cancel), h: 1}
+	c.yesHit = hitRegion{x: boxX + 4 + lipgloss.Width(cancel), y: buttonY, w: lipgloss.Width(confirm), h: 1}
 	return tea.NewView(box)
 }

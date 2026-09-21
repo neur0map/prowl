@@ -67,10 +67,97 @@ func TestOverviewShowsCombinedSavingsAcrossProjects(t *testing.T) {
 	app.overview.setSize(120, 30)
 
 	view := ansi.Strip(app.overview.View().Content)
-	for _, want := range []string{"Est. tokens saved", "~4.2M", "151 answers · 3 projects"} {
+	for _, want := range []string{"saved", "~4.2M", "151 answers · 3 projects"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("Home overview missing %q:\n%s", want, view)
 		}
+	}
+}
+
+// TestHomeCapacityLeadsWithTightestWindow proves the bar's remaining percent is
+// 100 minus the busiest window across accounts, the block is led by whichever
+// window is closest to its limit, each window shows its own used-percent, an
+// account with measured routed tokens shows them as an observation, and a
+// credit account shows its balance.
+func TestHomeCapacityLeadsWithTightestWindow(t *testing.T) {
+	app := New(&Client{BaseURL: "http://127.0.0.1:8788"}, true, "test")
+	bal := 97.5
+	app.overview.data = overviewMsg{
+		accounts: []LoginUsage{
+			{Provider: "anthropic", Name: "Claude", Windows: []LoginUsageWindow{
+				{Key: "five_hour", Label: "5h session", Utilization: 20, TokensUsed: 50000},
+				{Key: "seven_day", Label: "7d all models", Utilization: 53},
+			}},
+			{Provider: "openai", Name: "ChatGPT (Codex)", Windows: []LoginUsageWindow{
+				{Key: "seven_day", Label: "7d all models", Utilization: 95, ResetsAt: "2999-01-01T00:00:00Z"},
+			}},
+			{Provider: "hyper", Name: "Hyper", Balance: &bal, Unit: "Hypercredits"},
+		},
+	}
+	app.overview.loadedAt = time.Now()
+	app.overview.setSize(120, 40)
+
+	view := ansi.Strip(app.overview.View().Content)
+	for _, want := range []string{
+		"Subscription capacity",
+		"5% left", // 100 - max(53, 95)
+		"ChatGPT (Codex) 7d all models at 95% used", // the tightest window leads
+		" 20% used",
+		"50k routed via Prowl", // measured tokens shown as an observation
+		" 95% used",
+		"97.5 Hypercredits left",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("Home capacity view missing %q:\n%s", want, view)
+		}
+	}
+	// The old fabricated token-total apology must be gone.
+	if strings.Contains(view, "token totals not measured") || strings.Contains(view, " of ~") {
+		t.Fatalf("Home capacity still shows a fabricated token total:\n%s", view)
+	}
+}
+
+// TestHomeCapacityShowsPercentWithoutRoutedTokens proves a window with no
+// measured routed tokens still shows its honest remaining percent and simply
+// omits the routed-token observation, never an apology.
+func TestHomeCapacityShowsPercentWithoutRoutedTokens(t *testing.T) {
+	app := New(&Client{}, true, "test")
+	app.overview.data = overviewMsg{
+		accounts: []LoginUsage{
+			{Provider: "openai", Name: "ChatGPT (Codex)", Windows: []LoginUsageWindow{
+				{Key: "seven_day", Label: "7d all models", Utilization: 95, TokensUsed: 0},
+			}},
+		},
+	}
+	app.overview.loadedAt = time.Now()
+	app.overview.setSize(120, 40)
+
+	view := ansi.Strip(app.overview.View().Content)
+	if !strings.Contains(view, "5% left") || !strings.Contains(view, " 95% used") {
+		t.Fatalf("Home capacity view missing the honest percent:\n%s", view)
+	}
+	if strings.Contains(view, "routed via Prowl") || strings.Contains(view, "token totals not measured") {
+		t.Fatalf("Home capacity invented a token figure with no measured spend:\n%s", view)
+	}
+}
+
+// TestHomeWithoutAccountsHintsProviders proves the capacity block collapses to
+// a single pointer at where to connect a subscription when none is connected,
+// rather than drawing a meaningless full bar.
+func TestHomeWithoutAccountsHintsProviders(t *testing.T) {
+	app := New(&Client{}, true, "test")
+	app.overview.data = overviewMsg{strategy: "smartest"}
+	app.overview.loadedAt = time.Now()
+	app.overview.setSize(120, 40)
+
+	view := ansi.Strip(app.overview.View().Content)
+	if !strings.Contains(view, "Connect a subscription on Providers (3) to see its allowance here.") {
+		t.Fatalf("Home did not hint where to connect a subscription:\n%s", view)
+	}
+	// The section keeps its heading so the page shape is stable; only the
+	// bar and its percentage must be absent.
+	if strings.Contains(view, "% left") || strings.Contains(view, "━") {
+		t.Fatalf("Home drew a capacity bar with no accounts connected:\n%s", view)
 	}
 }
 func TestProjectsViewKeepsListRangeVisible(t *testing.T) {

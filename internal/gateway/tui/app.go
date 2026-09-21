@@ -11,38 +11,36 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Tab is one screen of the console.
+// Tab is one section of the console.
 type Tab int
 
 const (
 	TabOverview Tab = iota
-	TabProjects
-	TabProviders
-	TabKeys
-	TabLogins
 	TabRouting
+	TabProviders
 	TabUsage
-	TabToolkit
+	TabProjects
 	TabSetup
+	TabToolkit
 )
 
+// tabMeta is what the sidebar and page heading show for a section. group is
+// the sidebar heading it sits under; an empty group is the top-level entry.
 type tabMeta struct {
 	name  string
-	short string
 	desc  string
 	glyph string
+	group string
 }
 
 var tabsMeta = []tabMeta{
-	{"Overview", "Home", "Project intelligence and gateway readiness at a glance.", "◉"},
-	{"Projects", "Projects", "See every indexed project, its coverage and freshness.", "▦"},
-	{"Providers", "Providers", "Browse service endpoints and add bring-your-own API keys.", "◇"},
-	{"Credentials", "Keys", "Manage individual API keys, health and cooldowns.", "◆"},
-	{"Accounts", "Accounts", "Connect subscription accounts and use their models directly.", "◎"},
-	{"Models", "Models", "Build model sets and choose how Prowl routes each request.", "⌁"},
-	{"Activity", "Activity", "See which provider and model served each request, with tokens, latency and outcomes.", "▥"},
-	{"Toolkit", "Toolkit", "Understand every Prowl function and copy its command.", "◫"},
-	{"Setup", "Setup", "Connect coding harnesses to Prowl safely.", "△"},
+	{"Home", "Project intelligence and gateway readiness at a glance.", "◉", ""},
+	{"Routing", "Sets of models and the strategy each one routes with.", "⌁", "Gateway"},
+	{"Providers", "Connect API keys and subscription accounts. Only connected providers offer models.", "◇", "Gateway"},
+	{"Activity", "Which provider and model served each request, with tokens, latency and outcomes.", "▥", "Gateway"},
+	{"Projects", "Every indexed project, its coverage and freshness.", "▦", "Workspace"},
+	{"Setup", "Connect coding harnesses to Prowl safely.", "△", "Workspace"},
+	{"Toolkit", "Every Prowl function and its copyable command.", "◫", "Workspace"},
 }
 
 func (t Tab) name() string { return tabsMeta[t].name }
@@ -110,6 +108,9 @@ func tagOverlayOp(msg tea.Msg, op uint64) tea.Msg {
 	case setCreatedMsg:
 		m.op = op
 		return m
+	case keyRegeneratedMsg:
+		m.op = op
+		return m
 	case errMsg:
 		m.op = op
 		return m
@@ -161,14 +162,12 @@ type App struct {
 	tabs          []Tab
 
 	overview  overviewModel
-	projects  projectsModel
-	providers providersModel
-	keys      keysModel
-	logins    loginsModel
 	routing   routingModel
+	providers providersModel
 	usage     usageModel
-	toolkit   toolkitModel
+	projects  projectsModel
 	setup     setupModel
+	toolkit   toolkitModel
 
 	spinner spinner.Model
 	overlay tea.Model
@@ -177,6 +176,7 @@ type App struct {
 	hits                       []hitRegion
 	hover                      hitRegion
 	hoverActive                bool
+	sideW                      int
 	bodyX, bodyY, bodyW, bodyH int
 	quitting, ready            bool
 	motionPhase                int
@@ -190,7 +190,7 @@ func New(client *Client, owned bool, version string) *App {
 		Owned:            owned,
 		DaemonManageable: owned,
 		Version:          version,
-		tabs:             []Tab{TabOverview, TabProjects, TabProviders, TabKeys, TabLogins, TabRouting, TabUsage, TabToolkit, TabSetup},
+		tabs:             []Tab{TabOverview, TabRouting, TabProviders, TabUsage, TabProjects, TabSetup, TabToolkit},
 		visited:          map[Tab]bool{TabOverview: true},
 		spinner: spinner.New(
 			spinner.WithSpinner(spinner.Line),
@@ -198,17 +198,11 @@ func New(client *Client, owned bool, version string) *App {
 		),
 	}
 	a.overview = overviewModel{app: a}
+	a.routing = newRoutingModel(a)
+	a.providers = newProvidersModel(a)
+	a.usage = usageModel{app: a}
 	a.projects = projectsModel{app: a, list: newList("Search projects")}
 	a.projects.list.setHeaders("Project", "Index", "Files", "Symbols", "Edges", "Est. saved", "Updated")
-	a.providers = providersModel{app: a, list: newList("Search providers")}
-	a.providers.list.setHeaders("Provider", "Access", "Free", "Context", "Setup", "State")
-	a.keys = keysModel{app: a, list: newList("Search credentials")}
-	a.keys.list.setHeaders("Credential", "Health", "State", "Identity", "Traffic", "Cooldown")
-	a.logins = loginsModel{app: a, list: newList("Search accounts")}
-	a.logins.list.setHeaders("Account", "Connection", "Routing", "Allowance", "Identity")
-	a.routing = routingModel{app: a, list: newList("Search model sets")}
-	a.routing.list.setHeaders("Model set", "Models", "State")
-	a.usage = usageModel{app: a}
 	a.toolkit = newToolkitModel(a)
 	a.setup = setupModel{app: a, list: newList("Search harnesses")}
 	return a
@@ -232,22 +226,18 @@ func (a *App) screenFor(tab Tab) tea.Model {
 	switch tab {
 	case TabOverview:
 		return &a.overview
-	case TabProjects:
-		return &a.projects
-	case TabProviders:
-		return &a.providers
-	case TabKeys:
-		return &a.keys
-	case TabLogins:
-		return &a.logins
 	case TabRouting:
 		return &a.routing
+	case TabProviders:
+		return &a.providers
 	case TabUsage:
 		return &a.usage
-	case TabToolkit:
-		return &a.toolkit
+	case TabProjects:
+		return &a.projects
 	case TabSetup:
 		return &a.setup
+	case TabToolkit:
+		return &a.toolkit
 	}
 	return nil
 }
@@ -256,20 +246,14 @@ func (a *App) screenLoading(tab Tab) bool {
 	switch tab {
 	case TabOverview:
 		return a.overview.loadedAt.IsZero()
-	case TabProjects:
-		return !a.projects.loaded
-	case TabProviders:
-		return !a.providers.loaded
-	case TabKeys:
-		return !a.keys.loaded
-	case TabLogins:
-		return !a.logins.loaded
 	case TabRouting:
 		return !a.routing.loaded
+	case TabProviders:
+		return !a.providers.loaded
 	case TabUsage:
 		return !a.usage.loaded
-	case TabToolkit:
-		return false
+	case TabProjects:
+		return !a.projects.loaded
 	case TabSetup:
 		return !a.setup.loaded
 	default:
@@ -279,16 +263,12 @@ func (a *App) screenLoading(tab Tab) bool {
 
 func (a *App) currentList() *list {
 	switch a.tab {
-	case TabProjects:
-		return &a.projects.list
+	case TabRouting:
+		return a.routing.activeList()
 	case TabProviders:
 		return &a.providers.list
-	case TabKeys:
-		return &a.keys.list
-	case TabLogins:
-		return &a.logins.list
-	case TabRouting:
-		return &a.routing.list
+	case TabProjects:
+		return &a.projects.list
 	case TabToolkit:
 		return &a.toolkit.list
 	case TabSetup:
@@ -344,12 +324,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The failing action left its owning screen busy; clear it so the
 		// screen stays responsive instead of stuck behind a spinner.
 		switch msg.Screen {
-		case "keys":
-			a.keys.busy = ""
+		case "providers":
+			a.providers.busy = ""
 		case "setup":
 			a.setup.busy = ""
-		case "logins":
-			a.logins.busy = ""
 		case "routing":
 			a.routing.busy = ""
 		}
@@ -368,41 +346,32 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.showToast("ok", "model set created"),
 			cmd,
 		)
+	case keyRegeneratedMsg:
+		a.dismissActiveOverlay(msg.op)
+		_, cmd := a.overview.Update(msg)
+		return a, tea.Batch(
+			a.showToast("ok", "API key regenerated - repoint your harnesses (Setup re-injects it)"),
+			cmd,
+		)
 	case closeOverlayMsg:
 		a.overlay = nil
 		if msg.Reload >= 0 {
 			return a, a.refreshCmd(msg.Reload)
 		}
 		return a, nil
-	case loginsLoadedMsg, loginsUsageLoadedMsg, signInStartedMsg, signInStartFailedMsg, signInPolledMsg, signInPollErrMsg, signInTickMsg, signInCancelledMsg:
-		// Login flows keep polling while the operator browses another tab or
-		// opens an account detail. Route their asynchronous results back to the
-		// owning model instead of letting the current screen or overlay swallow
-		// them.
-		_, cmd := a.logins.Update(msg)
-		if _, usage := msg.(loginsUsageLoadedMsg); usage && a.tab == TabLogins {
-			if _, detailOpen := a.overlay.(*detailOverlay); detailOpen {
-				if selected := a.logins.list.selected(); selected != nil {
-					row, ok := selected.key.(loginRowData)
-					if ok && row.platform.SignedIn {
-						a.overlay = a.logins.accountDetail(row)
-						a.sizeOverlay()
-					}
-				}
-			}
-		}
+	case providersLoadedMsg, providerUsageLoadedMsg, providerDetailMsg, revealMsg, revealExpiredMsg,
+		signInStartedMsg, signInStartFailedMsg, signInPolledMsg, signInPollErrMsg, signInTickMsg, signInCancelledMsg:
+		// Provider work keeps running while the operator browses another
+		// section or has a manage overlay open. Route the asynchronous results
+		// back to the owning model instead of letting the current screen or
+		// overlay swallow them.
+		_, cmd := a.providers.Update(msg)
 		return a, cmd
 	case overviewMsg:
 		_, cmd := a.overview.Update(msg)
 		return a, cmd
 	case projectsLoadedMsg:
 		_, cmd := a.projects.Update(msg)
-		return a, cmd
-	case providersLoadedMsg:
-		_, cmd := a.providers.Update(msg)
-		return a, cmd
-	case keysLoadedMsg, revealMsg, revealExpiredMsg:
-		_, cmd := a.keys.Update(msg)
 		return a, cmd
 	case routingLoadedMsg, setEditLoadedMsg:
 		_, cmd := a.routing.Update(msg)
@@ -466,9 +435,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case k == "ctrl+c" || k == "q":
 			a.quitting = true
 			return a, tea.Quit
-		case k == "tab" || k == "right":
+		case k == "tab":
 			return a, a.switchTab(1)
-		case k == "shift+tab" || k == "left":
+		case k == "shift+tab":
 			return a, a.switchTab(-1)
 		case len(k) == 1 && k[0] >= '1' && k[0] <= '9':
 			idx := int(k[0] - '1')
@@ -612,7 +581,7 @@ func (a *App) showToast(kind, text string) tea.Cmd {
 // dismissActiveOverlay closes only the overlay that launched the operation whose
 // result just arrived: a confirming confirmOverlay or a submitting form whose
 // own op id matches the completion. A passive overlay the operator opened
-// meanwhile - help, the account detail, a picker - has no op and is left
+// meanwhile - help, a manage panel, a picker - has no op and is left
 // untouched, and a completion from a *different* in-flight operation (op
 // mismatch) is ignored, so an unrelated background success or error can never
 // yank a confirm or form off the screen.
@@ -650,16 +619,29 @@ func (a *App) hovered(kind hitKind, tab Tab, key string) bool {
 	return a.hover.key == key
 }
 
+// Layout: a two-row header, a sidebar beside the content, and a two-row
+// footer. The content opens with a two-row page heading, so the page body
+// starts at bodyY and the chrome costs six rows in total.
+const (
+	headerH     = 2
+	headingH    = 2
+	footerH     = 2
+	sideWide    = 15
+	sideNarrow  = 4
+	sideCollaps = 96 // below this width the sidebar shows glyphs only
+)
+
 func (a *App) applyLayout() {
 	if a.width == 0 || a.height == 0 {
 		return
 	}
-	const headerH = 5
-	const headingH = 3
-	const footerH = 3
-	a.bodyX = 1
+	a.sideW = sideWide
+	if a.width < sideCollaps {
+		a.sideW = sideNarrow
+	}
+	a.bodyX = a.sideW + 2
 	a.bodyY = headerH + headingH
-	a.bodyW = max(a.width-3, 20)
+	a.bodyW = max(a.width-a.bodyX-1, 20)
 	a.bodyH = max(a.height-headerH-headingH-footerH, 4)
 	if resizable, ok := a.screen().(interface{ setSize(int, int) }); ok {
 		resizable.setSize(a.bodyW, a.bodyH)
@@ -677,26 +659,31 @@ func (a *App) View() tea.View {
 
 	a.hits = a.hits[:0]
 	a.applyLayout()
-	body := fillLines(a.screen().View().Content, a.bodyW, a.bodyH)
-	bodyLines := strings.Split(body, "\n")
-	for i := range bodyLines {
-		bodyLines[i] = " " + bodyLines[i]
+	canvasW := max(a.width-1, 1)
+
+	content := a.pageHeading() + "\n" + fillLines(a.screen().View().Content, a.bodyW, a.bodyH)
+	contentH := headingH + a.bodyH
+	contentLines := strings.Split(fillLines(content, a.bodyW, contentH), "\n")
+	sideLines := strings.Split(a.sidebar(contentH), "\n")
+	sep := stFaint.Render("│")
+	middle := make([]string, 0, contentH)
+	for i := range contentH {
+		middle = append(middle, sideLines[i]+sep+" "+contentLines[i])
 	}
-	body = strings.Join(bodyLines, "\n")
-	content := strings.Join([]string{
+
+	view := strings.Join([]string{
 		a.header(),
-		a.pageHeading(),
-		body,
+		strings.Join(middle, "\n"),
 		a.footer(),
 	}, "\n")
-	content = fillLines(content, max(a.width-1, 1), a.height)
+	view = fillLines(view, canvasW, a.height)
 	if a.overlay != nil {
 		if ov, ok := a.overlay.(interface{ View() tea.View }); ok {
-			content = mergeOverlay(content, ov.View().Content, a.width, a.height).Content
+			view = mergeOverlay(view, ov.View().Content, a.width, a.height).Content
 		}
 	}
 
-	v := tea.NewView(content)
+	v := tea.NewView(view)
 	v.AltScreen = true
 	// Native mouse capture stays off so the terminal keeps its own text
 	// selection and copy - no Shift dance required. Every screen action is
@@ -708,108 +695,105 @@ func (a *App) View() tea.View {
 	return v
 }
 
+// header is the brand row and the rule beneath it: who this is, where it is
+// listening, and whether it is alive - the facts a dashboard keeps in its top
+// bar.
 func (a *App) header() string {
 	width := max(a.width-1, 8)
-	inner := width - 2
 	mode := "attached"
 	if a.Owned {
 		mode = "session"
 	}
-	brand := " " + brandText("PROWL", a.motionPhase) + stFaint.Render(" / ") + stHead.Render("control plane")
-	status := stGood.Render("● online")
-	brandRow := joinEdges(brand, status+" ", inner)
-
+	brand := " " + brandText("PROWL", a.motionPhase) + "  " + stSubtle.Render("control plane")
 	endpoint := strings.TrimPrefix(a.Client.BaseURL, "http://127.0.0.1")
-	meta := " " + stSubtle.Render(endpoint)
-	build := stFaint.Render(mode+"  "+a.Version) + " "
-	metaRow := joinEdges(meta, build, inner)
-
-	return strings.Join([]string{
-		stFaint.Render("╭") + gradientRule(inner, a.motionPhase) + stFaint.Render("╮"),
-		frameRow(brandRow, inner),
-		frameRow(metaRow, inner),
-		frameRow(a.navigation(inner), inner),
-		stFaint.Render("╰") + gradientRule(inner, a.motionPhase+inner/3) + stFaint.Render("╯"),
-	}, "\n")
+	status := stGood.Render("● online") + stFaint.Render("  ·  ") +
+		stSubtle.Render(endpoint) + stFaint.Render("  ·  "+mode+"  ·  "+a.Version) + " "
+	return joinEdges(brand, status, width) + "\n" + " " + gradientRule(width-1, a.motionPhase)
 }
 
-func (a *App) navigation(width int) string {
-	labels := make([]string, len(a.tabs))
-	total := 1
-	for i, tab := range a.tabs {
+// sidebar is the section list: grouped, with the active section lit and its
+// number beside it so the keyboard shortcut is never a guess. Below the
+// collapse width only the glyphs remain.
+func (a *App) sidebar(height int) string {
+	wide := a.sideW == sideWide
+	lines := make([]string, 0, height)
+	y := headerH
+	lastGroup := ""
+	for _, tab := range a.tabs {
 		meta := tabsMeta[tab]
-		labels[i] = meta.glyph + " " + meta.short
-		total += lipgloss.Width(labels[i]) + 3
-	}
-	if total > width {
-		total = 1
-		for i, tab := range a.tabs {
-			meta := tabsMeta[tab]
-			if tab == a.tab {
-				labels[i] = meta.glyph + " " + meta.short
+		if meta.group != lastGroup {
+			lastGroup = meta.group
+			if wide {
+				lines = append(lines, "", " "+stFaint.Render(strings.ToUpper(meta.group)))
 			} else {
-				labels[i] = meta.glyph
+				lines = append(lines, "", "")
 			}
-			total += lipgloss.Width(labels[i]) + 3
+			y += 2
 		}
-	}
-
-	var out strings.Builder
-	out.WriteString(" ")
-	x := 1
-	for i, tab := range a.tabs {
-		label := labels[i]
+		number := fmt.Sprintf("%d", indexOf(a.tabs, tab)+1)
+		var label string
+		switch {
+		case wide:
+			label = padRight(" "+meta.glyph+" "+meta.name, a.sideW-2) + stFaint.Render(number)
+		default:
+			label = " " + meta.glyph + " "
+		}
 		active := tab == a.tab
 		hovered := a.hovered(hitNavigation, tab, "")
 		var rendered string
 		switch {
 		case active:
-			rendered = lipgloss.NewStyle().
-				Background(colorRaised).
-				Padding(0, 1).
-				Render(brandText(label, a.motionPhase+i))
+			text := padRight(" "+meta.glyph+" "+meta.name, a.sideW-2)
+			if !wide {
+				text = " " + meta.glyph + " "
+			}
+			rendered = brandText("▌", a.motionPhase) +
+				lipgloss.NewStyle().Background(colorRaised).Render(brandText(text, a.motionPhase+3))
+			if wide {
+				rendered += lipgloss.NewStyle().Background(colorRaised).Foreground(colorGold).Render(number)
+			}
 		case hovered:
-			rendered = lipgloss.NewStyle().
-				Background(colorShoji).
-				Foreground(colorMoon).
-				Padding(0, 1).
-				Render(label)
+			rendered = " " + lipgloss.NewStyle().Background(colorShoji).Foreground(colorMoon).Render(label)
 		default:
-			rendered = lipgloss.NewStyle().
-				Foreground(colorMist).
-				Padding(0, 1).
-				Render(label)
+			rendered = " " + lipgloss.NewStyle().Foreground(colorMist).Render(label)
 		}
-		w := lipgloss.Width(rendered)
-		if x+w > width {
-			break
-		}
-		out.WriteString(rendered)
-		out.WriteString(" ")
-		a.hits = append(a.hits, hitRegion{x: 1 + x, y: 3, w: w, h: 1, kind: hitNavigation, tab: tab})
-		x += w + 1
+		lines = append(lines, padRight(rendered, a.sideW))
+		a.hits = append(a.hits, hitRegion{x: 0, y: y, w: a.sideW, h: 1, kind: hitNavigation, tab: tab})
+		y++
 	}
-	return padRight(out.String(), width)
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	for i := range lines {
+		lines[i] = padRight(truncate(lines[i], a.sideW), a.sideW)
+	}
+	return strings.Join(lines[:height], "\n")
 }
 
+// pageHeading names the section and describes it in one line; a toast takes
+// over that line while it lasts, so transient messages never push the body.
 func (a *App) pageHeading() string {
 	meta := tabsMeta[a.tab]
-	canvasW := max(a.width-1, 8)
-	title := " " + brandText(meta.glyph+"  "+meta.name, a.motionPhase)
-	position := stFaint.Render(fmt.Sprintf("%02d / %02d", indexOf(a.tabs, a.tab)+1, len(a.tabs))) + " "
-	line1 := joinEdges(title, position, canvasW)
-	line2 := " " + stSubtle.Render(truncate(meta.desc, max(canvasW-2, 1)))
-	line3 := " " + gradientRule(max(canvasW-2, 1), a.motionPhase*2)
-	if a.toast.Text != "" {
-		line3 = " " + pillSuffix(a.toast.Kind) + " " +
-			truncate(a.toast.Text, max(canvasW-5, 1))
+	heading := meta.glyph + "  " + meta.name
+	// A screen may name where it has drilled to; the heading shows it as a
+	// breadcrumb so the title carries the operator's location, not just the
+	// section.
+	if c, ok := a.screen().(interface{ crumb() string }); ok {
+		if cr := c.crumb(); cr != "" {
+			heading += " › " + cr
+		}
 	}
-	line3 = padRight(line3, canvasW)
-	return strings.Join([]string{
-		padRight(line1, canvasW),
-		padRight(line2, canvasW),
-		padRight(line3, canvasW),
-	}, "\n")
+	title := brandText(heading, a.motionPhase)
+	context := ""
+	if s, ok := a.screen().(interface{ headline() string }); ok {
+		context = stSubtle.Render(s.headline())
+	}
+	line1 := joinEdges(title, context+" ", a.bodyW)
+	line2 := stSubtle.Render(truncate(meta.desc, max(a.bodyW-1, 1)))
+	if a.toast.Text != "" {
+		line2 = pillSuffix(a.toast.Kind) + " " + truncate(a.toast.Text, max(a.bodyW-3, 1))
+	}
+	return padRight(line1, a.bodyW) + "\n" + padRight(line2, a.bodyW)
 }
 
 func joinEdges(left, right string, width int) string {
@@ -817,20 +801,13 @@ func joinEdges(left, right string, width int) string {
 	return truncate(left+strings.Repeat(" ", gap)+right, width)
 }
 
-func frameRow(content string, width int) string {
-	return stFaint.Render("│") + padRight(truncate(content, width), width) + stFaint.Render("│")
-}
-
 // footer keeps the current screen's keybinds visible. Toasts intentionally
 // render in pageHeading so transient messages never replace these controls.
 func (a *App) footer() string {
 	width := max(a.width-1, 8)
-	inner := width - 2
-	top := stFaint.Render("╭") + gradientRule(inner, a.motionPhase+inner/2) + stFaint.Render("╮")
-	bottom := stFaint.Render("╰" + strings.Repeat("─", inner) + "╯")
+	top := " " + stFaint.Render(strings.Repeat("─", width-1))
 
 	globals := []action{
-		{Key: "ctrl+r", Label: "Reload"},
 		{Key: "?", Label: "Help"},
 		{Key: "q", Label: "Quit"},
 	}
@@ -846,7 +823,7 @@ func (a *App) footer() string {
 	}
 	globalLine := strings.Join(globalParts, " ")
 	globalW := lipgloss.Width(globalLine)
-	globalX := max(inner-globalW-1, 1)
+	globalX := max(width-globalW-1, 1)
 
 	var left strings.Builder
 	left.WriteString(" ")
@@ -874,14 +851,14 @@ func (a *App) footer() string {
 			}
 			left.WriteString(rendered)
 			left.WriteString(" ")
-			a.hits = append(a.hits, hitRegion{x: 1 + x, y: a.height - 2, w: w, h: 1, kind: hitAction, key: item.Key})
+			a.hits = append(a.hits, hitRegion{x: x, y: a.height - 1, w: w, h: 1, kind: hitAction, key: item.Key})
 			x += w + 1
 			shown++
 		}
 		if shown < len(screenActions) && x+moreW+1 < globalX {
 			left.WriteString(more)
 			left.WriteString(" ")
-			a.hits = append(a.hits, hitRegion{x: 1 + x, y: a.height - 2, w: moreW, h: 1, kind: hitAction, key: "__more__"})
+			a.hits = append(a.hits, hitRegion{x: x, y: a.height - 1, w: moreW, h: 1, kind: hitAction, key: "__more__"})
 		}
 	}
 	gap := max(globalX-lipgloss.Width(left.String()), 1)
@@ -890,10 +867,10 @@ func (a *App) footer() string {
 	x = globalX
 	for i, item := range globals {
 		renderedW := lipgloss.Width(globalParts[i])
-		a.hits = append(a.hits, hitRegion{x: 1 + x, y: a.height - 2, w: renderedW, h: 1, kind: hitAction, key: item.Key})
+		a.hits = append(a.hits, hitRegion{x: x, y: a.height - 1, w: renderedW, h: 1, kind: hitAction, key: item.Key})
 		x += renderedW + 1
 	}
-	return top + "\n" + frameRow(line, inner) + "\n" + bottom
+	return top + "\n" + padRight(truncate(line, width), width)
 }
 
 func pillSuffix(kind string) string {

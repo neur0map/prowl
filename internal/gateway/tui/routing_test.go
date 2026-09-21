@@ -9,37 +9,121 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
-// TestRoutingSetEditEditsExactSetWithoutActivating: Enter on a saved set loads
-// that set's membership and edits it in place through /reorder, and never
-// activates it - Space is the only activation path. This is the leak-free
-// editing contract two distinct sets rely on.
-func TestRoutingSetEditEditsExactSetWithoutActivating(t *testing.T) {
-	var (
-		mu           sync.Mutex
-		members      = []map[string]any{}
-		reorderBody  []map[string]any
-		activeCalled bool
-	)
+func visibleNames(l *list) []string {
+	out := []string{}
+	for _, idx := range l.filtered() {
+		out = append(out, ansi.Strip(l.rows[idx].cells[0]))
+	}
+	return out
+}
+
+func rowByID(l *list, id string) *row {
+	for i := range l.rows {
+		if l.rows[i].id == id {
+			return &l.rows[i]
+		}
+	}
+	return nil
+}
+
+func cellText(r *row, i int) string {
+	if r == nil || i >= len(r.cells) {
+		return ""
+	}
+	return ansi.Strip(r.cells[i])
+}
+
+// routingHomeFixture is a loaded library: one active set inheriting the default
+// strategy, one with its own strategy, one empty, and two presets (one whose
+// name matches an existing set).
+func routingHomeFixture(app *App) *routingModel {
+	m := &app.routing
+	m.loaded = true
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		activeID: 7,
+		profiles: []Profile{
+			{ID: 7, Name: "Deep work", ModelCount: 3, Strategy: ""},
+			{ID: 8, Name: "Fast lane", ModelCount: 2, Strategy: "fastest"},
+			{ID: 9, Name: "Scratch", ModelCount: 0, Strategy: ""},
+		},
+		presets: []ChainPreset{
+			{ID: "free", Name: "Free models", Group: "catalogue", Models: 12, Description: "every free model"},
+			{ID: "deepwork", Name: "Deep work", Group: "task", Models: 5, Strategy: "smartest", Description: "task preset that matches a set"},
+		},
+		models: []ModelRow{
+			{ID: 1, Platform: "anthropic", DisplayName: "Claude Opus", Access: "subscription", IntelligenceRank: 1, Enabled: true, Available: true},
+			{ID: 2, Platform: "groq", DisplayName: "GPT-OSS 120B", Access: "free", IntelligenceRank: 12, Enabled: true, Available: true},
+			{ID: 3, Platform: "mistral", DisplayName: "Mistral Large", Access: "free", IntelligenceRank: 8, Enabled: true},
+		},
+		// Deep work holds a model on a disconnected provider (3): the library
+		// must not count it as capacity.
+		members: map[int64][]int64{7: {1, 2, 3}, 8: {2, 1}, 9: nil},
+	}
+	m.setSize(120, 40)
+	m.buildHomeRows()
+	return m
+}
+
+// TestRoutingHomeListsSetsThenPresets: the landing view is the set library -
+// the sets group (active first) then the presets group - with each set's own
+// strategy or the inherited default shown, and the headline naming the active
+// set and the strategy it actually routes with.
+func TestRoutingHomeListsSetsThenPresets(t *testing.T) {
+	app := New(&Client{}, true, "test")
+	m := routingHomeFixture(app)
+
+	names := visibleNames(&m.homeList)
+	want := []string{"Your sets", "● Deep work", "○ Fast lane", "○ Scratch", "Presets", "Deep work", "Free models"}
+	if strings.Join(names, "|") != strings.Join(want, "|") {
+		t.Fatalf("home rows =\n  %v\nwant\n  %v", names, want)
+	}
+
+	// The active set inherits the default strategy, so its cell names it as the
+	// default; a set with its own strategy shows that strategy verbatim.
+	if got := cellText(rowByID(&m.homeList, "set:7"), 2); got != "Balanced · default" {
+		t.Fatalf("inheriting set strategy cell = %q; want the default named as default", got)
+	}
+	if got := cellText(rowByID(&m.homeList, "set:7"), 3); got != "active" {
+		t.Fatalf("active set state cell = %q; want active", got)
+	}
+	if got := cellText(rowByID(&m.homeList, "set:8"), 2); got != "Fastest" {
+		t.Fatalf("own-strategy cell = %q; want Fastest", got)
+	}
+	if got := cellText(rowByID(&m.homeList, "set:9"), 3); got != "empty" {
+		t.Fatalf("empty set state cell = %q; want empty", got)
+	}
+	// A preset whose name matches an existing set is already built.
+	if got := cellText(rowByID(&m.homeList, "preset:deepwork"), 1); got != "created" {
+		t.Fatalf("matching preset models cell = %q; want created", got)
+	}
+
+	if got := cellText(rowByID(&m.homeList, "set:7"), 1); got != "2 of 3" {
+		t.Fatalf("models cell = %q; want the usable count when a member's provider is not connected", got)
+	}
+	if got := cellText(rowByID(&m.homeList, "set:8"), 1); got != "2" {
+		t.Fatalf("fully usable set models cell = %q", got)
+	}
+	if got := m.headline(); got != "active: Deep work · Balanced · 2 of 3 usable models" {
+		t.Fatalf("headline = %q", got)
+	}
+}
+
+// TestRoutingEnterOpensSetCollapsed: enter on a set reads its membership and
+// drops into the editor with every provider folded; a directional key expands
+// one, space writes membership, and esc returns to the library.
+func TestRoutingEnterOpensSetCollapsed(t *testing.T) {
+	reordered := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/api/profiles/1/models":
-			_ = json.NewEncoder(w).Encode(members)
-		case r.Method == http.MethodPut && r.URL.Path == "/api/profiles/1/reorder":
-			_ = json.NewDecoder(r.Body).Decode(&reorderBody)
-			members = members[:0]
-			for _, e := range reorderBody {
-				members = append(members, map[string]any{
-					"model_db_id": e["modelDbId"], "priority": e["priority"], "enabled": true,
-				})
-			}
+		case r.URL.Path == "/api/profiles/7/models" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]profileMember{{ModelDBID: 41, Priority: 1}})
+		case r.URL.Path == "/api/profiles/7/reorder" && r.Method == http.MethodPut:
+			reordered = true
 			_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
-		case r.Method == http.MethodPost && r.URL.Path == "/api/profiles/active":
-			activeCalled = true
-			_ = json.NewEncoder(w).Encode(map[string]any{"activeProfileId": 1})
 		default:
 			http.NotFound(w, r)
 		}
@@ -47,595 +131,559 @@ func TestRoutingSetEditEditsExactSetWithoutActivating(t *testing.T) {
 	defer server.Close()
 
 	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.routing.loaded = true
-	app.routing.data.profiles = []Profile{{ID: 1, Name: "coding", ModelCount: 0}}
-	app.routing.data.models = []ModelRow{
-		{ID: 41, Platform: "anthropic", ModelID: "claude-opus", DisplayName: "Claude Opus", Enabled: true, Available: true},
-		{ID: 42, Platform: "openai", ModelID: "gpt-codex", DisplayName: "GPT Codex", Enabled: true, Available: true},
-	}
-	app.routing.buildRows()
-
-	app.routing.list.selectRow(setChoice{id: 1, name: "coding", active: false})
-	if app.routing.list.selected() == nil {
-		t.Fatal("set row not selectable in the policy list")
-	}
-
-	// Enter opens set editing without activating the set.
-	_, openCmd := app.routing.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	loaded := runCmd(t, openCmd)
-	editMsg, ok := loaded.(setEditLoadedMsg)
-	if !ok {
-		t.Fatalf("Enter on a set produced %T; want setEditLoadedMsg", loaded)
-	}
-	app.routing.Update(editMsg)
-	if app.routing.setID != 1 {
-		t.Fatalf("setID = %d; want the edited set 1", app.routing.setID)
-	}
-	if !app.routing.editing() || app.routing.defaultModels {
-		t.Fatal("Enter on a set must open that set's editor, not the defaults")
-	}
-
-	// An empty set opens the catalogue immediately so the first model can be
-	// added without discovering a hidden search command.
-	if !app.routing.addingModels || len(app.routing.list.rows) != 2 {
-		t.Fatalf("empty set editor = adding %v with %d rows; want the two-model catalogue", app.routing.addingModels, len(app.routing.list.rows))
-	}
-	// Space toggles model 41 into the set and rewrites ordered membership.
-	app.routing.list.cursor = 0
-	if mo, ok := app.routing.list.selected().key.(ModelRow); !ok || mo.ID != 41 {
-		t.Fatalf("first model row = %#v; want model 41", app.routing.list.selected())
-	}
-	_, toggleCmd := app.routing.Update(tea.KeyPressMsg{Code: tea.KeySpace})
-	reloaded := runCmd(t, toggleCmd)
-	if editMsg, ok = reloaded.(setEditLoadedMsg); !ok {
-		t.Fatalf("membership toggle produced %T; want setEditLoadedMsg", reloaded)
-	}
-	app.routing.Update(editMsg)
-	if !app.routing.addingModels || len(app.routing.list.rows) != 2 {
-		t.Fatalf("adding the first model left adding mode=%v with %d rows; want the remaining catalogue visible", app.routing.addingModels, len(app.routing.list.rows))
-	}
-
-	app.routing.list.cursor = 1
-	if mo, ok := app.routing.list.selected().key.(ModelRow); !ok || mo.ID != 42 {
-		t.Fatalf("second model row = %#v; want model 42", app.routing.list.selected())
-	}
-	_, toggleCmd = app.routing.Update(tea.KeyPressMsg{Code: tea.KeySpace})
-	reloaded = runCmd(t, toggleCmd)
-	if editMsg, ok = reloaded.(setEditLoadedMsg); !ok {
-		t.Fatalf("second membership toggle produced %T; want setEditLoadedMsg", reloaded)
-	}
-	app.routing.Update(editMsg)
-
-	mu.Lock()
-	defer mu.Unlock()
-	if activeCalled {
-		t.Fatal("editing a set must never activate it")
-	}
-	if len(reorderBody) != 2 ||
-		int64(reorderBody[0]["modelDbId"].(float64)) != 41 ||
-		int64(reorderBody[1]["modelDbId"].(float64)) != 42 {
-		t.Fatalf("reorder body = %#v; want models 41 then 42", reorderBody)
-	}
-	for _, entry := range reorderBody {
-		if entry["enabled"] != true {
-			t.Fatalf("member must be written enabled; got %#v", entry)
-		}
-	}
-	if !app.routing.setMembers[41] || !app.routing.setMembers[42] {
-		t.Fatalf("set members = %#v; want models 41 and 42", app.routing.setMembers)
-	}
-}
-
-// TestRoutingSpaceActivatesASet: Space on a set is the activation path, distinct
-// from Enter's in-place edit.
-func TestRoutingSpaceActivatesASet(t *testing.T) {
-	var activated int64 = -1
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/api/profiles/active" {
-			var body struct {
-				ProfileID int64 `json:"profileId"`
-			}
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			activated = body.ProfileID
-			_ = json.NewEncoder(w).Encode(map[string]any{"activeProfileId": body.ProfileID})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer server.Close()
-
-	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.routing.loaded = true
-	app.routing.data.profiles = []Profile{{ID: 7, Name: "writing"}}
-	app.routing.buildRows()
-	app.routing.list.selectRow(setChoice{id: 7, name: "writing", active: false})
-
-	_, spaceCmd := app.routing.Update(tea.KeyPressMsg{Code: tea.KeySpace})
-	msg := runCmd(t, spaceCmd)
-	if _, ok := msg.(doneMsg); !ok {
-		t.Fatalf("Space on a set produced %T; want doneMsg after activation", msg)
-	}
-	if activated != 7 {
-		t.Fatalf("activated profile = %d; want 7", activated)
-	}
-	if app.routing.editing() {
-		t.Fatal("Space activates a set; it must not open the editor")
-	}
-}
-
-// TestRoutingEscLeavesModelEditingAndMIsUnbound protects the predictable
-// navigation contract: Enter opens the selected active row, Esc returns, and
-// the former hidden m shortcut no longer changes modes.
-func TestRoutingEscLeavesModelEditingAndMIsUnbound(t *testing.T) {
-	app := New(&Client{BaseURL: "http://127.0.0.1:0"}, true, "test")
-	app.routing.loaded = true
-	app.routing.data.models = []ModelRow{{ID: 1, Platform: "p", ModelID: "x", DisplayName: "X", Available: true}}
-	app.routing.buildRows()
-	app.routing.list.filter = "Default"
-
-	app.routing.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if !app.routing.defaultModels {
-		t.Fatal("Enter on active Default models must open its model editor")
-	}
-	if app.routing.list.filter != "" {
-		t.Fatal("the model-set search must not leak into the model catalogue")
-	}
-	app.routing.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if app.routing.editing() {
-		t.Fatal("Esc must return from model editing to the model-set list")
-	}
-
-	app.routing.Update(tea.KeyPressMsg{Text: "m", Code: 'm'})
-	if app.routing.editing() {
-		t.Fatal("m is intentionally unbound and must not open a hidden editing mode")
-	}
-	app.routing.list.filter = "saved-set-name"
-	app.routing.wantSetID = 7
-	app.routing.Update(setEditLoadedMsg{id: 7, name: "saved-set-name"})
-	if app.routing.list.filter != "" {
-		t.Fatal("a saved-set search must be cleared when its model editor opens")
-	}
-}
-
-// TestIntelThresholdIsAQuantileNotAConstant: lower intelligence ranks are more
-// capable, and the cut is derived from the live catalogue rather than a magic
-// rank that would drift as the catalogue changes.
-func TestIntelThresholdIsAQuantileNotAConstant(t *testing.T) {
-	low := []ModelRow{{IntelligenceRank: 10}, {IntelligenceRank: 20}, {IntelligenceRank: 30}, {IntelligenceRank: 40}}
-	high := []ModelRow{{IntelligenceRank: 100}, {IntelligenceRank: 200}, {IntelligenceRank: 300}, {IntelligenceRank: 400}}
-
-	if got := intelThreshold(low, 0.25); got != 10 {
-		t.Fatalf("low-distribution top-quartile threshold = %d; want rank 10", got)
-	}
-	if got := intelThreshold(high, 0.25); got != 100 {
-		t.Fatalf("high-distribution top-quartile threshold = %d; want rank 100", got)
-	}
-	if got := intelThreshold(low, 0.50); got != 20 {
-		t.Fatalf("low-distribution top-half threshold = %d; want rank 20", got)
-	}
-	if intelThreshold(nil, 0.25) != 0 {
-		t.Fatal("an empty catalogue must not panic and must threshold at 0")
-	}
-}
-
-// TestRoutingRenamePrefillsCurrentNameAndPatches: `r` on a set opens a rename
-// form pre-filled with the set's current name, and submitting a new name is a
-// real PATCH /api/profiles/{id} mutation.
-func TestRoutingRenamePrefillsCurrentNameAndPatches(t *testing.T) {
-	var (
-		patchPath string
-		patchBody map[string]string
-	)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/profiles/") {
-			patchPath = r.URL.Path
-			_ = json.NewDecoder(r.Body).Decode(&patchBody)
-			_ = json.NewEncoder(w).Encode(Profile{ID: 3, Name: patchBody["name"]})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer server.Close()
-
-	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.routing.loaded = true
-	app.routing.data.profiles = []Profile{{ID: 3, Name: "coding"}}
-	app.routing.buildRows()
-	app.routing.list.selectRow(setChoice{id: 3, name: "coding", active: false})
-
-	app.routing.Update(tea.KeyPressMsg{Text: "r", Code: 'r'})
-	form, ok := app.overlay.(*formOverlay)
-	if !ok {
-		t.Fatalf("r opened %T; want a rename form", app.overlay)
-	}
-	if got := form.fields[0].input.Value(); got != "coding" {
-		t.Fatalf("rename form prefill = %q; want the set's current name", got)
-	}
-
-	form.fields[0].input.SetValue("coding2")
-	msg := form.submit(form.values())
-	if _, ok := msg.(doneMsg); !ok {
-		t.Fatalf("rename submit produced %T; want doneMsg", msg)
-	}
-	if patchPath != "/api/profiles/3" {
-		t.Fatalf("renamed via %q; want PATCH /api/profiles/3", patchPath)
-	}
-	if patchBody["name"] != "coding2" {
-		t.Fatalf("rename body = %#v; want the new name", patchBody)
-	}
-}
-
-func TestRoutingStartsWithActiveProvidersAndSearchSpansAll(t *testing.T) {
-	app := New(&Client{}, true, "test")
 	m := &app.routing
 	m.loaded = true
-	m.defaultModels = true
-	m.data.models = []ModelRow{
-		{ID: 1, Platform: "alpha", ModelID: "free-best", DisplayName: "Free Best", Access: "free", IntelligenceRank: 1, Available: true},
-		{ID: 2, Platform: "beta", ModelID: "paid-hidden", DisplayName: "Paid Hidden", Access: "paid", IntelligenceRank: 2},
-		{ID: 3, Platform: "alpha", ModelID: "sub", DisplayName: "Subscription", Access: "subscription", IntelligenceRank: 4, Available: true},
-		{ID: 4, Platform: "gamma", ModelID: "free-hidden", DisplayName: "Free Hidden", Access: "free", IntelligenceRank: 3},
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		activeID: 7,
+		profiles: []Profile{{ID: 7, Name: "Deep work", ModelCount: 1}},
+		models: []ModelRow{
+			{ID: 41, Platform: "anthropic", DisplayName: "Claude Opus", Access: "subscription", IntelligenceRank: 1, Enabled: true, Available: true},
+			{ID: 42, Platform: "openai", DisplayName: "GPT Codex", Access: "paid", IntelligenceRank: 3, Enabled: true, Available: true},
+		},
 	}
-	m.buildRows()
+	m.setSize(120, 40)
+	m.buildHomeRows()
 
-	models := func() []ModelRow {
-		out := make([]ModelRow, 0, len(m.list.rows))
-		for _, row := range m.list.rows {
-			out = append(out, row.key.(ModelRow))
-		}
-		return out
+	if !m.homeList.selectID("set:7") {
+		t.Fatal("no Deep work set row")
 	}
-	if got := models(); len(got) != 2 || got[0].Platform != "alpha" || got[1].Platform != "alpha" {
-		t.Fatalf("default provider scope = %+v; want only active provider alpha", got)
+	_, cmd := m.Update(syntheticKey("enter"))
+	if cmd == nil {
+		t.Fatal("enter on a set returned no load command")
+	}
+	msg := cmd()
+	if _, ok := msg.(setEditLoadedMsg); !ok {
+		t.Fatalf("enter on a set produced %T; want a membership read", msg)
+	}
+	m.Update(msg)
+	if m.mode != routingEditor {
+		t.Fatalf("enter did not open the editor (mode=%d)", m.mode)
+	}
+	// Every visible row is a provider header: the models are folded away.
+	for _, idx := range m.editorList.filtered() {
+		if !m.editorList.rows[idx].header {
+			t.Fatalf("a model row is visible while the editor should be collapsed: %q", cellText(&m.editorList.rows[idx], 0))
+		}
+	}
+	if got := rowByID(&m.editorList, "group:anthropic").summary; got != "1 models · 1 selected" {
+		t.Fatalf("anthropic header summary = %q; want its model count and selection", got)
+	}
+	if got := rowByID(&m.editorList, "group:openai").summary; got != "1 models · 0 selected" {
+		t.Fatalf("openai header summary = %q", got)
+	}
+
+	// right expands a provider so its models are reachable.
+	if !m.editorList.selectID("group:openai") {
+		t.Fatal("no openai header")
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if !m.editorList.selectID("model:42") {
+		t.Fatal("right did not expand openai to reveal its model")
+	}
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd == nil {
+		t.Fatal("space on a model returned no command")
+	}
+	cmd()
+	if !reordered {
+		t.Fatal("space on a model did not write the set's membership")
+	}
+
+	m.Update(syntheticKey("esc"))
+	if m.mode != routingHome {
+		t.Fatalf("esc did not return to the library (mode=%d)", m.mode)
+	}
+}
+
+// TestRoutingSelectDisabledModelEnablesIt proves a globally-disabled model
+// (rendered ⊘) can be selected into a set: the reorder write (which marks
+// members enabled server-side) makes it a member, so it stops reading as
+// excluded, and the home library's usable count reflects the new member
+// without leaving and re-entering the editor.
+func TestRoutingSelectDisabledModelEnablesIt(t *testing.T) {
+	var reordered bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/profiles/7/models" && r.Method == http.MethodGet:
+			// After the write the set holds both models.
+			if reordered {
+				_ = json.NewEncoder(w).Encode([]profileMember{{ModelDBID: 41, Priority: 1}, {ModelDBID: 42, Priority: 2}})
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]profileMember{{ModelDBID: 41, Priority: 1}})
+		case r.URL.Path == "/api/profiles/7/reorder" && r.Method == http.MethodPut:
+			// The client sends one reorder that carries every member as enabled;
+			// the server enables them in its transaction (no per-model PATCH).
+			var body []reorderReq
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			has42 := false
+			for _, e := range body {
+				if e.ModelDBID == 42 {
+					has42 = e.Enabled
+				}
+			}
+			if !has42 {
+				t.Fatalf("reorder body did not carry model 42 as an enabled member: %+v", body)
+			}
+			reordered = true
+			_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
+	m := &app.routing
+	m.loaded = true
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		activeID: 7,
+		profiles: []Profile{{ID: 7, Name: "Deep work", ModelCount: 1}},
+		models: []ModelRow{
+			{ID: 41, Platform: "anthropic", DisplayName: "Claude Opus", Access: "subscription", IntelligenceRank: 1, Enabled: true, Available: true},
+			{ID: 42, Platform: "openai", DisplayName: "GPT Codex", Access: "subscription", IntelligenceRank: 3, Enabled: false, Available: true},
+		},
+		members: map[int64][]int64{7: {41}},
+	}
+	m.setSize(120, 40)
+	m.buildHomeRows()
+	m.Update(m.openSet(7, "Deep work")())
+
+	// The disabled model reads as excluded until selected.
+	m.editorList.selectID("group:openai")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if got := cellText(rowByID(&m.editorList, "model:42"), 0); !strings.Contains(got, "⊘") {
+		t.Fatalf("disabled model marker = %q; want ⊘ before selection", got)
+	}
+
+	m.editorList.selectID("model:42")
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd == nil {
+		t.Fatal("space on a disabled model returned no command")
+	}
+	m.Update(cmd())
+	if !reordered {
+		t.Fatal("selecting a disabled model must write the set membership")
+	}
+	if got := cellText(rowByID(&m.editorList, "model:42"), 0); !strings.Contains(got, "●") {
+		t.Fatalf("selected model marker = %q; want ● after selection", got)
+	}
+	// Home reflects the new member without a reload: Deep work is now 2 usable.
+	m.buildHomeRows()
+	if got := cellText(rowByID(&m.homeList, "set:7"), 1); got != "2" {
+		t.Fatalf("home usable count = %q; want 2 right after selecting in the editor", got)
+	}
+}
+
+// actionLabelFor returns the label the footer would render for a key, so a test
+// can assert an action both appears and reads the way the operator sees it.
+func actionLabelFor(actions []action, key string) (string, bool) {
+	for _, a := range actions {
+		if a.Key == key {
+			return a.Label, true
+		}
+	}
+	return "", false
+}
+
+func reorderIDs(body []reorderReq) []int64 {
+	out := make([]int64, 0, len(body))
+	for _, b := range body {
+		out = append(out, b.ModelDBID)
+	}
+	return out
+}
+
+func equalIDs(a, b []int64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestRoutingSelectAllVisible: A in the editor selects every model the current
+// filters and search leave visible - across folded providers - writing only the
+// ids that change, and clears them all once every visible model is already in.
+func TestRoutingSelectAllVisible(t *testing.T) {
+	var (
+		mu          sync.Mutex
+		members     = []int64{41}
+		lastReorder []reorderReq
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/profiles/7/models" && r.Method == http.MethodGet:
+			mu.Lock()
+			out := make([]profileMember, 0, len(members))
+			for i, id := range members {
+				out = append(out, profileMember{ModelDBID: id, Priority: int64(i + 1)})
+			}
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(out)
+		case r.URL.Path == "/api/profiles/7/reorder" && r.Method == http.MethodPut:
+			var body []reorderReq
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			mu.Lock()
+			lastReorder = body
+			members = nil
+			for _, b := range body {
+				members = append(members, b.ModelDBID)
+			}
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
+	m := &app.routing
+	m.loaded = true
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		activeID: 7,
+		profiles: []Profile{{ID: 7, Name: "Deep work", ModelCount: 1}},
+		models: []ModelRow{
+			{ID: 41, Platform: "anthropic", DisplayName: "Claude Opus", Access: "subscription", IntelligenceRank: 1, Enabled: true, Available: true},
+			{ID: 42, Platform: "openai", DisplayName: "GPT Codex", Access: "paid", IntelligenceRank: 3, Enabled: true, Available: true},
+			{ID: 43, Platform: "openai", DisplayName: "GPT Mini", Access: "paid", IntelligenceRank: 5, Enabled: true, Available: true},
+		},
+	}
+	m.setSize(120, 40)
+	m.buildHomeRows()
+	m.wantSetID = 7
+	m.Update(setEditLoadedMsg{id: 7, name: "Deep work", order: []int64{41}})
+
+	// One member so far: the footer offers to select every visible model.
+	if label, ok := actionLabelFor(m.editorActions(), "A"); !ok || label != "Select all" {
+		t.Fatalf("editor footer A = %q (present=%v); want \"Select all\"", label, ok)
+	}
+
+	// A writes every visible id once, existing member first and the two that
+	// changed appended, even though every provider is folded away.
+	_, cmd := m.Update(syntheticKey("A"))
+	if cmd == nil {
+		t.Fatal("A returned no write command")
+	}
+	m.Update(cmd())
+	mu.Lock()
+	got := reorderIDs(lastReorder)
+	mu.Unlock()
+	if want := []int64{41, 42, 43}; !equalIDs(got, want) {
+		t.Fatalf("select-all PUT ids = %v; want %v (existing member first)", got, want)
+	}
+
+	// Server truth now holds all three: the footer flips to clearing them, and
+	// A PUTs an empty body.
+	if label, ok := actionLabelFor(m.editorActions(), "A"); !ok || label != "Clear all" {
+		t.Fatalf("editor footer A = %q (present=%v); want \"Clear all\"", label, ok)
+	}
+	_, cmd = m.Update(syntheticKey("A"))
+	if cmd == nil {
+		t.Fatal("A on a full set returned no command")
+	}
+	m.Update(cmd())
+	mu.Lock()
+	got = reorderIDs(lastReorder)
+	mu.Unlock()
+	if len(got) != 0 {
+		t.Fatalf("clear-all PUT ids = %v; want an empty body", got)
+	}
+
+	// A search that matches only OpenAI's models limits A to that provider.
+	m.Update(syntheticKey("/"))
+	for _, r := range "GPT" {
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	m.Update(syntheticKey("enter")) // commit the search, keeping the filter set
+	_, cmd = m.Update(syntheticKey("A"))
+	if cmd == nil {
+		t.Fatal("A under a search returned no command")
+	}
+	m.Update(cmd())
+	mu.Lock()
+	got = reorderIDs(lastReorder)
+	mu.Unlock()
+	if want := []int64{42, 43}; !equalIDs(got, want) {
+		t.Fatalf("filtered select-all PUT ids = %v; want only OpenAI's ids %v", got, want)
+	}
+}
+
+// TestRoutingPresetCreatesAndOpens: enter on a fresh preset builds a set (with
+// activate:false) and opens it for editing; enter on a preset whose name
+// already names a set opens that set without building a second one.
+func TestRoutingPresetCreatesAndOpens(t *testing.T) {
+	var posts []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/profiles/presets/free" && r.Method == http.MethodPost:
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body["activate"] != false {
+				t.Fatalf("preset build activate flag = %v; want false", body["activate"])
+			}
+			posts = append(posts, r.URL.Path)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 15, "name": "Free models", "models": 9, "active": false})
+		case r.URL.Path == "/api/profiles/7/models" && r.Method == http.MethodGet:
+			_ = json.NewEncoder(w).Encode([]profileMember{{ModelDBID: 41, Priority: 1}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
+	m := &app.routing
+	m.loaded = true
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		profiles: []Profile{{ID: 7, Name: "Deep work", ModelCount: 1}},
+		presets: []ChainPreset{
+			{ID: "free", Name: "Free models", Group: "catalogue", Models: 9},
+			{ID: "deepwork", Name: "Deep work", Group: "task", Models: 5},
+		},
+		models: []ModelRow{{ID: 41, Platform: "anthropic", DisplayName: "Claude Opus", Enabled: true, Available: true}},
+	}
+	m.setSize(120, 40)
+	m.buildHomeRows()
+
+	// A fresh preset: POST then open the created set for editing.
+	if !m.homeList.selectID("preset:free") {
+		t.Fatal("no Free models preset row")
+	}
+	_, cmd := m.Update(syntheticKey("enter"))
+	if cmd == nil {
+		t.Fatal("enter on a preset returned no command")
+	}
+	created, ok := cmd().(setCreatedMsg)
+	if !ok {
+		t.Fatalf("building a preset produced %T; want setCreatedMsg", created)
+	}
+	if len(posts) != 1 || posts[0] != "/api/profiles/presets/free" {
+		t.Fatalf("preset build hit %v; want one POST to the preset", posts)
+	}
+	if created.profile.ID != 15 {
+		t.Fatalf("created set id = %d; want the server's 15", created.profile.ID)
+	}
+	m.Update(created)
+	if m.wantSetID != 15 {
+		t.Fatalf("after building a preset the editor opens set %d; want 15", m.wantSetID)
+	}
+	// The set read lands and the editor opens; go back to the library so the
+	// next preset can be chosen from the home list.
+	m.Update(setEditLoadedMsg{id: 15, name: "Everything free", order: []int64{41}})
+	m.Update(syntheticKey("esc"))
+
+	// A preset whose name already names a set opens that set, no POST.
+	if !m.homeList.selectID("preset:deepwork") {
+		t.Fatal("no matching preset row")
+	}
+	_, cmd = m.Update(syntheticKey("enter"))
+	if cmd == nil {
+		t.Fatal("enter on a matching preset returned no command")
+	}
+	if _, ok := cmd().(setEditLoadedMsg); !ok {
+		t.Fatal("a matching preset should open the existing set, not build one")
+	}
+	if len(posts) != 1 {
+		t.Fatalf("a matching preset triggered a build: %v", posts)
+	}
+}
+
+// TestRoutingStrategyPickerPatchesTheSet: r on a set opens a picker preselected
+// on that set's own strategy; a concrete choice patches the set's strategy and
+// the default choice clears it back to inheriting.
+func TestRoutingStrategyPickerPatchesTheSet(t *testing.T) {
+	var patchPath string
+	var patchBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			patchPath = r.URL.Path
+			_ = json.NewDecoder(r.Body).Decode(&patchBody)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+	}))
+	defer server.Close()
+
+	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
+	m := routingHomeFixture(app)
+
+	if !m.homeList.selectID("set:8") {
+		t.Fatal("no Fast lane set row")
+	}
+	m.Update(syntheticKey("r"))
+	pk, ok := app.overlay.(*pickerOverlay)
+	if !ok {
+		t.Fatalf("r opened %T; want a strategy picker", app.overlay)
+	}
+	if pk.choices[pk.cursor].id != "fastest" {
+		t.Fatalf("picker preselects %q; want the set's own strategy fastest", pk.choices[pk.cursor].id)
+	}
+	if m.strategyTarget != 8 {
+		t.Fatalf("strategy target = %d; want the set the picker was opened for (8)", m.strategyTarget)
+	}
+
+	_, cmd := m.Update(pickedMsg{kind: pickStrategy, id: "reliable"})
+	if cmd == nil {
+		t.Fatal("choosing a strategy returned no command")
+	}
+	cmd()
+	if patchPath != "/api/profiles/8" {
+		t.Fatalf("strategy PATCH hit %q; want the set", patchPath)
+	}
+	if patchBody["strategy"] != "reliable" {
+		t.Fatalf("strategy PATCH body = %v; want reliable", patchBody)
+	}
+
+	_, cmd = m.Update(pickedMsg{kind: pickStrategy, id: ""})
+	cmd()
+	if patchBody["strategy"] != "" {
+		t.Fatalf("clearing to default PATCHed %v; want an empty strategy", patchBody)
+	}
+}
+
+// TestRoutingSpaceActivatesSetFromHome: space activates a non-active set from
+// the library and is inert on the active one; the Default set never offers
+// delete.
+func TestRoutingSpaceActivatesSetFromHome(t *testing.T) {
+	var activePath string
+	var activeBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/profiles/active" && r.Method == http.MethodPost {
+			activePath = r.URL.Path
+			_ = json.NewDecoder(r.Body).Decode(&activeBody)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+	}))
+	defer server.Close()
+
+	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
+	m := &app.routing
+	m.loaded = true
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		activeID: 7,
+		profiles: []Profile{
+			{ID: 7, Name: "Deep work", ModelCount: 3},
+			{ID: 8, Name: "Fast lane", ModelCount: 2, Strategy: "fastest"},
+			{ID: 10, Name: "Default", ModelCount: 5},
+		},
+		models: []ModelRow{{ID: 1, Platform: "anthropic", DisplayName: "Claude Opus", Enabled: true, Available: true}},
+	}
+	m.setSize(120, 40)
+	m.buildHomeRows()
+
+	if !m.homeList.selectID("set:8") {
+		t.Fatal("no Fast lane set row")
+	}
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	if cmd == nil {
+		t.Fatal("space on a non-active set did nothing")
+	}
+	if _, ok := cmd().(doneMsg); !ok {
+		t.Fatal("activating a set did not complete")
+	}
+	if activePath != "/api/profiles/active" {
+		t.Fatalf("activation hit %q; want the active-set endpoint", activePath)
+	}
+	if activeBody["profileId"] != float64(8) {
+		t.Fatalf("activation body = %v; want the selected set id 8", activeBody)
+	}
+
+	// Space on the already-active set is inert.
+	if !m.homeList.selectID("set:7") {
+		t.Fatal("no active set row")
+	}
+	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace}); cmd != nil {
+		t.Fatal("space on the active set should not re-activate it")
+	}
+
+	// The Default set is never offered a delete.
+	if !m.homeList.selectID("set:10") {
+		t.Fatal("no Default set row")
+	}
+	for _, a := range m.actions() {
+		if a.Key == "d" {
+			t.Fatal("the Default set offered delete")
+		}
+	}
+}
+
+// TestRoutingSearchRevealsCollapsedMatches: in the editor with every provider
+// folded, a live search surfaces the matching model rows under their headers.
+func TestRoutingSearchRevealsCollapsedMatches(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/profiles/7/models" && r.Method == http.MethodGet {
+			_ = json.NewEncoder(w).Encode([]profileMember{{ModelDBID: 41, Priority: 1}})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
+	m := &app.routing
+	m.loaded = true
+	m.data = routingLoadedMsg{
+		routing:  RoutingState{Strategy: "balanced"},
+		activeID: 7,
+		profiles: []Profile{{ID: 7, Name: "Deep work", ModelCount: 1}},
+		models: []ModelRow{
+			{ID: 41, Platform: "anthropic", DisplayName: "Claude Opus", Access: "subscription", IntelligenceRank: 1, Enabled: true, Available: true},
+			{ID: 42, Platform: "openai", DisplayName: "GPT Codex", Access: "paid", IntelligenceRank: 3, Enabled: true, Available: true},
+		},
+	}
+	m.setSize(120, 40)
+	m.buildHomeRows()
+	m.wantSetID = 7
+	m.Update(setEditLoadedMsg{id: 7, name: "Deep work", order: []int64{41}})
+
+	// Every group starts folded.
+	for _, idx := range m.editorList.filtered() {
+		if !m.editorList.rows[idx].header {
+			t.Fatal("the editor did not open collapsed")
+		}
 	}
 
 	m.Update(syntheticKey("/"))
-	for _, r := range "Paid" {
-		m.Update(tea.KeyPressMsg{Text: string(r), Code: r})
+	for _, r := range "codex" {
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	filtered := m.list.filtered()
-	if len(filtered) != 1 {
-		t.Fatalf("full-catalogue search found %d rows; want inactive beta model", len(filtered))
-	}
-	if got := m.list.rows[filtered[0]].key.(ModelRow).Platform; got != "beta" {
-		t.Fatalf("search result provider = %q; want beta", got)
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.list.isSearching() || len(m.list.rows) != 4 || len(m.list.filtered()) != 1 {
-		t.Fatal("Enter must keep a full-catalogue search active without trapping keyboard actions")
-	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if !m.editing() || m.list.filter != "" || len(m.list.rows) != 2 {
-		t.Fatal("Esc must clear retained search before leaving the model editor")
-	}
-
-	m.providerMode = providerScopeAll
-	m.buildRows()
-	m.Update(syntheticKey("i"))
-	got := models()
-	if len(got) != 1 || got[0].ModelID != "free-best" {
-		t.Fatalf("elite intelligence filter = %+v; want only the lowest ordinal rank", got)
-	}
-}
-
-func TestProviderPickerAppliesExplicitMultiSelection(t *testing.T) {
-	app := New(&Client{}, true, "test")
-	m := &app.routing
-	m.loaded = true
-	m.defaultModels = true
-	m.data.models = []ModelRow{
-		{ID: 1, Platform: "alpha", ModelID: "active", DisplayName: "Active", Available: true},
-		{ID: 2, Platform: "beta", ModelID: "other", DisplayName: "Other"},
-	}
-	m.buildRows()
-
-	m.Update(syntheticKey("p"))
-	picker, ok := app.overlay.(*providerFilterOverlay)
-	if !ok {
-		t.Fatalf("p opened %T; want provider multi-select", app.overlay)
-	}
-	picker.Update(tea.KeyPressMsg{Code: tea.KeySpace}) // alpha off
-	picker.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	picker.Update(tea.KeyPressMsg{Code: tea.KeySpace}) // beta on
-	_, _ = picker.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	_ = picker.View()
-	closed, cmd := picker.Update(tea.MouseClickMsg{X: picker.applyHit.x, Y: picker.applyHit.y})
-	if closed != nil || cmd == nil {
-		t.Fatalf("clicking Apply left %T open with cmd=%v", closed, cmd != nil)
-	}
-	raw := cmd()
-	msg, ok := raw.(providerFilterMsg)
-	if !ok {
-		t.Fatalf("provider picker produced %T; want providerFilterMsg", raw)
-	}
-	m.Update(msg)
-	if m.providerMode != providerScopeCustom || !m.selectedProvider["beta"] || m.selectedProvider["alpha"] {
-		t.Fatalf("provider selection = mode %v values %#v; want only beta", m.providerMode, m.selectedProvider)
-	}
-	if len(m.list.rows) != 1 || m.list.rows[0].key.(ModelRow).Platform != "beta" {
-		t.Fatalf("custom provider rows = %#v; want only beta", m.list.rows)
-	}
-}
-func TestRoutingHomeKeepsTemplatesInGroupedPicker(t *testing.T) {
-	app := New(&Client{}, true, "test")
-	m := &app.routing
-	m.loaded = true
-	m.data.profiles = []Profile{{ID: 1, Name: "My set", ModelCount: 2}}
-	m.data.presets = []ChainPreset{
-		{ID: "access", Name: "Subscription only", Description: "models covered by an account", Group: "catalogue", Models: 3},
-		{ID: "coding", Name: "Coding", Description: "strong tool-using models", Group: "task", Models: 4},
-	}
-	m.buildRows()
-
-	if len(m.list.rows) != 2 {
-		t.Fatalf("model-set home has %d rows; want only defaults and saved sets", len(m.list.rows))
-	}
-	for _, row := range m.list.rows {
-		if _, ok := row.key.(setChoice); !ok {
-			t.Fatalf("primary list leaked a non-set row: %T", row.key)
+	names := visibleNames(&m.editorList)
+	found := false
+	for _, n := range names {
+		if strings.Contains(n, "GPT Codex") {
+			found = true
 		}
 	}
-
-	m.Update(syntheticKey("n"))
-	picker, ok := app.overlay.(*routingPickerOverlay)
-	if !ok {
-		t.Fatalf("n opened %T; want grouped template picker", app.overlay)
-	}
-	if len(picker.choices) != 3 {
-		t.Fatalf("template choices = %d; want blank plus two presets", len(picker.choices))
-	}
-	if picker.choices[0].group != "Start from scratch" ||
-		picker.choices[1].group != "For your work" ||
-		picker.choices[2].group != "By access" {
-		t.Fatalf("template groups = %q, %q, %q", picker.choices[0].group, picker.choices[1].group, picker.choices[2].group)
-	}
-	_, _ = picker.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	view := picker.View().Content
-	for _, group := range []string{"Start from scratch", "For your work", "By access"} {
-		if !strings.Contains(view, group) {
-			t.Fatalf("template picker did not render group %q", group)
-		}
+	if !found {
+		t.Fatalf("search did not reveal the collapsed match: %v", names)
 	}
 }
 
-func TestBlankTemplateCreatesAnActuallyEmptySet(t *testing.T) {
-	var request struct {
-		Name  string `json:"name"`
-		Empty bool   `json:"empty"`
+// TestIntelThresholdIsAQuantileOfConnectedModels: tier cut-offs are quantiles
+// of the connected catalogue, so an unconnected provider's ranks cannot skew
+// what "top 10%" means.
+func TestIntelThresholdIsAQuantileOfConnectedModels(t *testing.T) {
+	models := []ModelRow{
+		{IntelligenceRank: 1, Available: true},
+		{IntelligenceRank: 2, Available: true},
+		{IntelligenceRank: 3, Available: true},
+		{IntelligenceRank: 4, Available: true},
+		{IntelligenceRank: 100},
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/profiles" {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewDecoder(r.Body).Decode(&request)
-		_ = json.NewEncoder(w).Encode(Profile{ID: 11, Name: request.Name})
-	}))
-	defer server.Close()
-
-	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.routing.loaded = true
-	_ = app.routing.openCreateSet()
-	form, ok := app.overlay.(*formOverlay)
-	if !ok {
-		t.Fatalf("blank template opened %T; want naming form", app.overlay)
+	if got := intelThreshold(models, 0.5); got != 2 {
+		t.Fatalf("median threshold = %d; want 2 (the 100-ranked unconnected model must not count)", got)
 	}
-	form.fields[0].input.SetValue("scratch")
-	msg := runCmd(t, form.submitCmd())
-	if request.Name != "scratch" {
-		t.Fatalf("create request name = %q after %T; want scratch", request.Name, msg)
-	}
-	if !request.Empty {
-		t.Fatal("Start from scratch copied the default models instead of creating an empty set")
-	}
-
-	// The POST response must populate the list synchronously. The refresh command
-	// returned here is deliberately not run: visibility cannot depend on it.
-	_, _ = app.Update(msg)
-	selected := app.routing.list.selected()
-	choice, selectedCreatedSet := selected.key.(setChoice)
-	if !selectedCreatedSet || choice.id != 11 || choice.name != "scratch" {
-		t.Fatalf("created set was not immediately selected in the list: %#v", selected)
-	}
-	if app.overlay != nil {
-		t.Fatal("successful create left the naming form open")
-	}
-}
-
-func TestStaleRoutingRefreshCannotEraseNewlyCreatedSet(t *testing.T) {
-	app := New(&Client{}, true, "test")
-	m := &app.routing
-	m.loaded = true
-	m.data.routing.Strategy = "balanced"
-
-	_ = m.load() // generation 1 was already in flight when create completed.
-	_, _ = m.Update(setCreatedMsg{profile: Profile{ID: 11, Name: "scratch"}})
-	if m.loadGen != 2 {
-		t.Fatalf("post-create refresh generation = %d; want 2", m.loadGen)
-	}
-	_, _ = m.Update(routingLoadedMsg{
-		gen:     1,
-		routing: RoutingState{Strategy: "balanced"},
-	})
-	if len(m.data.profiles) != 1 || m.data.profiles[0].ID != 11 {
-		t.Fatalf("stale refresh erased the new set: %#v", m.data.profiles)
-	}
-}
-
-func TestSetEditorShowsOnlyMembersUntilSearch(t *testing.T) {
-	app := New(&Client{}, true, "test")
-	m := &app.routing
-	m.loaded = true
-	m.data.models = []ModelRow{
-		{ID: 41, Platform: "anthropic", DisplayName: "Claude Opus", Enabled: true, Available: true},
-		{ID: 42, Platform: "openai", DisplayName: "GPT Codex", Enabled: true, Available: true},
-	}
-	m.wantSetID = 7
-	m.Update(setEditLoadedMsg{id: 7, name: "coding", order: []int64{41}})
-
-	if len(m.list.rows) != 1 {
-		t.Fatalf("set editor shows %d rows; want its single selected model", len(m.list.rows))
-	}
-	if model, ok := m.list.rows[0].key.(ModelRow); !ok || model.ID != 41 {
-		t.Fatalf("set editor row = %#v; want member model 41", m.list.rows[0].key)
-	}
-
-	m.list.startSearch()
-	m.buildModelRows()
-	if len(m.list.rows) != 2 {
-		t.Fatalf("search shows %d rows; want the full two-model catalogue for adding", len(m.list.rows))
-	}
-}
-
-func TestSubscriptionProviderNamesExposeCodexAndClaude(t *testing.T) {
-	if got := providerDisplayName("openai"); got != "OpenAI / Codex" {
-		t.Fatalf("openai label = %q; want Codex visible", got)
-	}
-	if got := providerDisplayName("anthropic"); got != "Anthropic / Claude" {
-		t.Fatalf("anthropic label = %q; want Claude visible", got)
-	}
-}
-
-func TestRoutingDeleteRequiresConfirmationAndCallsDelete(t *testing.T) {
-	deleted := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && r.URL.Path == "/api/profiles/9" {
-			deleted = true
-			_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer server.Close()
-
-	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	app.routing.loaded = true
-	app.routing.data.profiles = []Profile{{ID: 9, Name: "old-set"}}
-	app.routing.buildRows()
-	app.routing.list.selectRow(setChoice{id: 9, name: "old-set"})
-
-	app.routing.Update(syntheticKey("d"))
-	confirm, ok := app.overlay.(*confirmOverlay)
-	if !ok {
-		t.Fatalf("d opened %T; want confirmation", app.overlay)
-	}
-	model, cmd := confirm.Update(syntheticKey("enter"))
-	if model != nil || cmd != nil || deleted {
-		t.Fatal("Enter on the default safe choice must cancel without deleting")
-	}
-
-	app.overlay = nil
-	app.routing.Update(syntheticKey("d"))
-	confirm = app.overlay.(*confirmOverlay)
-	_, _ = confirm.Update(syntheticKey("right"))
-	_, cmd = confirm.Update(syntheticKey("enter"))
-	if msg := runCmd(t, cmd); deleted {
-		if _, ok := msg.(doneMsg); !ok {
-			t.Fatalf("confirmed delete produced %T; want doneMsg", msg)
-		}
-	} else {
-		t.Fatal("confirmed delete never called DELETE /api/profiles/9")
-	}
-}
-
-func runCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
-	t.Helper()
-	if cmd == nil {
-		t.Fatal("expected a command, got nil")
-	}
-	return cmd()
-}
-
-// TestRoutingLoadRejectsRequiredReadFailure: profiles, active, presets and the
-// model catalogue are all required for a complete snapshot. If any one read
-// fails the whole refresh must carry an error (and report incomplete), so a
-// hole never silently overwrites a good loaded snapshot.
-func TestRoutingLoadRejectsRequiredReadFailure(t *testing.T) {
-	serve := func(fail string) *httptest.Server {
-		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == fail {
-				http.Error(w, "boom", http.StatusInternalServerError)
-				return
-			}
-			switch r.URL.Path {
-			case "/api/fallback/routing":
-				_ = json.NewEncoder(w).Encode(RoutingState{Strategy: "sequential"})
-			case "/api/profiles":
-				_ = json.NewEncoder(w).Encode([]Profile{{ID: 1, Name: "coding"}})
-			case "/api/profiles/active":
-				_ = json.NewEncoder(w).Encode(map[string]any{"activeProfileId": 1})
-			case "/api/profiles/presets":
-				_ = json.NewEncoder(w).Encode(map[string]any{"presets": []ChainPreset{}})
-			case "/api/models":
-				_ = json.NewEncoder(w).Encode([]ModelRow{{ID: 7, Platform: "openai", Available: true}})
-			default:
-				http.NotFound(w, r)
-			}
-		}))
-	}
-
-	for _, fail := range []string{"/api/profiles", "/api/profiles/active", "/api/profiles/presets", "/api/models"} {
-		t.Run(fail, func(t *testing.T) {
-			server := serve(fail)
-			defer server.Close()
-			app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-			msg, ok := app.routing.load()().(routingLoadedMsg)
-			if !ok {
-				t.Fatalf("load produced %T; want routingLoadedMsg", msg)
-			}
-			if msg.err == nil {
-				t.Fatalf("a failed %s read produced no error; a hole would overwrite good state", fail)
-			}
-			if msg.complete() {
-				t.Fatal("an incomplete snapshot must not report complete()")
-			}
-		})
-	}
-
-	// Every read succeeding yields a complete, error-free snapshot.
-	server := serve("")
-	defer server.Close()
-	app := New(&Client{BaseURL: server.URL, HTTP: server.Client()}, true, "test")
-	msg := app.routing.load()().(routingLoadedMsg)
-	if msg.err != nil || !msg.complete() {
-		t.Fatalf("a fully successful load must be complete and error-free; got err=%v complete=%v", msg.err, msg.complete())
-	}
-}
-
-// TestStaleSetEditResultDoesNotReopenEditor: after the operator leaves a set
-// editor with Escape, a set-membership re-read still in flight must not reopen
-// the editor - Escape cannot be undone by a stale edit result.
-func TestStaleSetEditResultDoesNotReopenEditor(t *testing.T) {
-	app := New(&Client{}, true, "test")
-	m := &app.routing
-	m.loaded = true
-	m.data.profiles = []Profile{{ID: 1, Name: "coding"}}
-	m.data.models = []ModelRow{{ID: 41, Platform: "anthropic", ModelID: "opus", DisplayName: "Opus", Available: true}}
-	m.buildRows()
-
-	// Open set 1 for editing (as openSetEdit records intent, then its load lands).
-	m.wantSetID = 1
-	m.Update(setEditLoadedMsg{id: 1, name: "coding", order: []int64{41}})
-	if m.setID != 1 || !m.editing() {
-		t.Fatalf("set editor did not open: setID=%d editing=%v", m.setID, m.editing())
-	}
-
-	// The operator leaves with Escape.
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.editing() || m.setID != 0 {
-		t.Fatalf("Escape did not leave the editor: setID=%d editing=%v", m.setID, m.editing())
-	}
-
-	// A late membership re-read for the same set arrives after Escape.
-	m.Update(setEditLoadedMsg{id: 1, name: "coding", order: []int64{41}})
-	if m.editing() || m.setID != 0 {
-		t.Fatal("a stale set-edit result reopened an editor the operator had left")
-	}
-
-	// A fresh open still works: intent is recorded again, and its result lands.
-	m.wantSetID = 1
-	m.Update(setEditLoadedMsg{id: 1, name: "coding", order: []int64{41}})
-	if m.setID != 1 || !m.editing() {
-		t.Fatal("a genuine reopen after leaving must still enter the editor")
+	if got := intelThreshold(nil, 0.5); got != 0 {
+		t.Fatalf("empty catalogue threshold = %d; want 0", got)
 	}
 }

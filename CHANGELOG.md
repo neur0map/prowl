@@ -7,6 +7,73 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- The console is reworked around the two things an operator actually does:
+  build routing sets and connect providers. A grouped sidebar replaces the
+  nine-tab strip (Home; Gateway: Routing, Providers, Activity; Workspace:
+  Projects, Setup, Toolkit), with `1`-`7` jumping to a section and six rows of
+  chrome instead of eleven. **Routing** opens on your sets - each with its
+  model count, its own strategy and whether it is active - and the presets
+  (Deep work, Coding, Quick chores, ...) that create a ready-made set in one
+  keystroke. Opening a set is where models are chosen: only models from
+  connected providers are offered, providers start collapsed, `space` takes a
+  model or a whole provider in or out, `f` filters by membership, provider,
+  access and tier, and `/` searches. Every set carries its own routing
+  strategy (`r`), and presets bring a fitting one (Quick chores is fastest
+  first, Deep work smartest first). The legacy global fallback chain is no
+  longer shown as a "built-in" set. **Providers** merges the old Providers,
+  Credentials and Accounts tabs: connected providers lead, the rest of the
+  directory follows, and `c` connects by API key, keyless enable or browser
+  sign-in according to the provider, `space` pauses or resumes, `d`
+  disconnects, and `enter` opens a manage panel with every credential, its
+  health and traffic, the account allowance, and per-credential check, reveal,
+  enable, cooldown and removal actions. Sign-in platforms without a routing
+  adapter (Copilot) are no longer listed as accounts. Keys live only in the
+  footer; there is no second control bar above a table.
+- Home leads with subscription capacity: one bar of remaining allowance
+  across the signed-in accounts (100% counting down), labelled with the token
+  total inferred LiteLLM-style from what this gateway routed against each
+  account's own used-percent, then each account's windows (Claude 5h/7d,
+  ChatGPT/Codex 5h/weekly from the same usage endpoint `codex status` reads,
+  Hyper credits) with mini bars and reset times. `GET /api/logins/usage` now
+  reports a ChatGPT (Codex) account and, per window, `windowSeconds` and
+  `tokensUsed`.
+- Keyless providers (Kilo Code, OVHcloud, AI Horde) take an optional key: `c`
+  opens the key form, an empty key enables the free tier and a real key
+  unlocks the provider's paid models. Destructive confirms default to the
+  action the operator chose, so `enter` disconnects instead of silently
+  keeping. The set editor gains `A` to select or clear every model shown.
+- Sets carry a per-set routing strategy: `profiles.strategy` (empty inherits
+  the console-wide default), `POST`/`PATCH /api/profiles` accept `strategy`,
+  preset rows advertise theirs, and `ResolveChain` orders a profile's chain by
+  the profile's own strategy for `auto` and `auto:<set>` requests.
+- Every table is a flat grid with a one-line search box, small-caps headers, a
+  range line and centred empty states; stat strips lost their boxes; pickers
+  and filter panels share one design. The help overlay documents the new verbs.
+- Home can rotate the unified inference key: `g` regenerates it behind a
+  confirm, the previous key stops authenticating the instant the new one is
+  stored, and the fresh key is revealed so it can be copied and re-injected.
+- Prowl is now released under the MIT License, with a `NOTICE.md` that credits
+  the projects it builds on: FreeLLMAPI (the gateway is a Go port of it),
+  LiteLLM (provider directory data), Oh My Pi (a supported harness), and Kilo
+  Code (a bundled keyless provider).
+
+### Fixed
+- Selecting or clearing every model in a large set no longer times out: the
+  set-write enables its member models inside the reorder transaction instead of
+  one HTTP request per model, so a bulk select over a catalogue of hundreds
+  completes in a single round trip.
+- A curated named set is no longer flooded with an account's whole catalogue on
+  every restart: newly enrolled login models auto-join only the Default
+  (auto-include) profile and the global fallback chain, never whichever
+  hand-picked set happens to be active.
+- `/api/models` no longer reports every keyless provider's models as available:
+  availability now matches the router (an adapter plus an enabled, non-errored
+  credential row, which a keyless provider gets when it is switched on) and
+  honours a retired row's `available` flag, so the Models page stops offering
+  models nothing can route to.
+- An install that enrolled a subscription before login models carried their
+  own endpoint scope listed every account model twice; the next authoritative
+  discovery now retires the legacy unscoped rows.
 - The canonical source repository and Go module are now
   `github.com/neur0map/prowl`; installer, release, badge, and plugin metadata use
   the same product identity while existing `prowl-agent` state directories stay

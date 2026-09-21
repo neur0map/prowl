@@ -2088,6 +2088,7 @@ func (s *Server) handlePenaltyInspectorClear(w http.ResponseWriter, _ *http.Requ
 type profileOut struct {
 	ID                   int64   `json:"id"`
 	Name                 string  `json:"name"`
+	Strategy             string  `json:"strategy"`
 	Emoji                string  `json:"emoji"`
 	Color                string  `json:"color"`
 	Type                 string  `json:"type"`
@@ -2100,10 +2101,11 @@ type profileOut struct {
 	CreatedAt            string  `json:"created_at"`
 }
 
-// profileToOut adapts this schema's minimal profile row (id, name, active,
+// profileToOut adapts this schema's minimal profile row (id, name, strategy,
 // created_at) to the shape the client renders, defaulting the cosmetic fields
-// the dashboard shows but this backend does not store.
-func profileToOut(id int64, name string, createdAt int64) profileOut {
+// the dashboard shows but this backend does not store. strategy is the raw
+// stored value ("" when the set inherits the operator's default).
+func profileToOut(id int64, name string, createdAt int64, strategy string) profileOut {
 	typ := "custom"
 	if strings.EqualFold(name, "default") {
 		typ = "default"
@@ -2111,6 +2113,7 @@ func profileToOut(id int64, name string, createdAt int64) profileOut {
 	return profileOut{
 		ID:                   id,
 		Name:                 name,
+		Strategy:             strategy,
 		Emoji:                "",
 		Color:                "#6366f1",
 		Type:                 typ,
@@ -2125,7 +2128,7 @@ func profileToOut(id int64, name string, createdAt int64) profileOut {
 
 func (s *Server) handleProfilesList(w http.ResponseWriter, _ *http.Request) {
 	rows, err := s.engine.DB().Query(`
-		SELECT p.id, p.name, p.created_at,
+		SELECT p.id, p.name, p.strategy, p.created_at,
 		       (SELECT COUNT(*) FROM profile_models pm WHERE pm.profile_id = p.id) AS model_count
 		FROM profiles p
 		ORDER BY (CASE WHEN LOWER(p.name) = 'default' THEN 1 ELSE 0 END) DESC, p.id ASC`)
@@ -2138,12 +2141,12 @@ func (s *Server) handleProfilesList(w http.ResponseWriter, _ *http.Request) {
 	for rows.Next() {
 		var id, createdAt int64
 		var modelCount int
-		var name string
-		if err := rows.Scan(&id, &name, &createdAt, &modelCount); err != nil {
+		var name, strategy string
+		if err := rows.Scan(&id, &name, &strategy, &createdAt, &modelCount); err != nil {
 			WriteError(w, http.StatusInternalServerError, TypeServer, "could not list profiles")
 			return
 		}
-		po := profileToOut(id, name, createdAt)
+		po := profileToOut(id, name, createdAt, strategy)
 		po.ModelCount = modelCount
 		out = append(out, po)
 	}
@@ -2272,6 +2275,11 @@ type createProfileBody struct {
 	Name            string `json:"name"`
 	SourceProfileID *int64 `json:"sourceProfileId"`
 	Empty           bool   `json:"empty"`
+	// Strategy is the set's own routing order, optional. Empty means the set
+	// inherits the operator's default; any other value must name a real
+	// strategy or the create is rejected, so a set can never store a value the
+	// engine would silently coerce.
+	Strategy string `json:"strategy"`
 }
 
 // handleProfileCreate creates a named chain. An empty request wins over a
@@ -2293,6 +2301,15 @@ func (s *Server) handleProfileCreate(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, TypeInvalidRequest, "This name is reserved by the system")
 		return
 	}
+	strategy := ""
+	if body.Strategy != "" {
+		valid, ok := validRoutingStrategy(body.Strategy)
+		if !ok {
+			WriteError(w, http.StatusBadRequest, TypeInvalidRequest, "unknown routing strategy")
+			return
+		}
+		strategy = string(valid)
+	}
 	db := s.engine.DB()
 	var dup int64
 	if err := db.QueryRow(`SELECT id FROM profiles WHERE LOWER(name) = LOWER(?)`, name).Scan(&dup); err == nil {
@@ -2306,7 +2323,7 @@ func (s *Server) handleProfileCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, err := tx.Exec(`INSERT INTO profiles (name, active, created_at) VALUES (?, 0, ?)`, name, time.Now().Unix())
+	res, err := tx.Exec(`INSERT INTO profiles (name, strategy, active, created_at) VALUES (?, ?, 0, ?)`, name, strategy, time.Now().Unix())
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, TypeServer, "could not create the profile")
 		return
@@ -2338,7 +2355,7 @@ func (s *Server) handleProfileCreate(w http.ResponseWriter, r *http.Request) {
 
 	var createdAt int64
 	_ = db.QueryRow(`SELECT created_at FROM profiles WHERE id = ?`, profileID).Scan(&createdAt)
-	WriteJSON(w, http.StatusCreated, profileToOut(profileID, name, createdAt))
+	WriteJSON(w, http.StatusCreated, profileToOut(profileID, name, createdAt, strategy))
 }
 
 // seedFromFallback copies the global chain's enabled members into a new profile
@@ -2431,6 +2448,25 @@ func (s *Server) handleProfileReorder(w http.ResponseWriter, r *http.Request) {
 		}
 		now[e.ModelDBID] = true
 	}
+	// Membership implies the model is a routing candidate: selecting a model
+	// into a set makes it usable, so a globally-disabled (⊘) model is enabled
+	// here in the same transaction rather than left inert. This honours the
+	// reorder payload, which marks every member enabled, and keeps a bulk
+	// select fast (one transaction) instead of a per-model round trip.
+	if len(now) > 0 {
+		enable, err := tx.Prepare(`UPDATE models SET enabled = 1 WHERE id = ?`)
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, TypeServer, "could not reorder the profile")
+			return
+		}
+		defer enable.Close()
+		for mid := range now {
+			if _, err := enable.Exec(mid); err != nil {
+				WriteError(w, http.StatusInternalServerError, TypeServer, "could not reorder the profile")
+				return
+			}
+		}
+	}
 	// Reconcile the exclusion ledger against the replacement membership: a model
 	// dropped by the reorder is a durable removal, a model kept or added lifts
 	// any prior exclusion. Only the Default profile is auto-included, but keeping
@@ -2469,57 +2505,80 @@ func (s *Server) handleProfileReorder(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
-type renameProfileBody struct {
-	Name string `json:"name"`
+type profilePatchBody struct {
+	// Pointers so an absent field is distinguishable from a cleared one: a
+	// PATCH that names only one field must leave the other exactly as stored,
+	// and "strategy":"" must be able to clear a set back to inheriting.
+	Name     *string `json:"name"`
+	Strategy *string `json:"strategy"`
 }
 
-// handleProfileRename renames a set. It applies the same name rules as create -
-// the shared regex, length and reserved-name checks - and refuses a name
-// already held by ANOTHER set, so two sets can never collide. Renaming a set to
-// its own current name is a no-op that succeeds, so re-saving an unchanged name
-// never trips the reserved-name guard.
+// handleProfileRename applies a partial update to a set. When Name is present it
+// obeys the same rules as create - the shared regex, length and reserved-name
+// checks, and a refusal of a name another set already holds - except that
+// renaming a set to its own current name stays a no-op that never trips the
+// reserved-name guard. When Strategy is present, "" clears it back to inheriting
+// the operator's default and any other value must name a real strategy. Both
+// fields are written in one UPDATE, and a body with neither field returns the
+// current row unchanged.
 func (s *Server) handleProfileRename(w http.ResponseWriter, r *http.Request) {
 	id, ok := routingPathID(w, r)
 	if !ok {
 		return
 	}
-	var body renameProfileBody
+	var body profilePatchBody
 	if !DecodeJSON(w, r, &body) {
 		return
 	}
 	db := s.engine.DB()
-	var current string
+	var current, currentStrategy string
 	var createdAt int64
-	if err := db.QueryRow(`SELECT name, created_at FROM profiles WHERE id = ?`, id).Scan(&current, &createdAt); err != nil {
+	if err := db.QueryRow(`SELECT name, strategy, created_at FROM profiles WHERE id = ?`, id).Scan(&current, &currentStrategy, &createdAt); err != nil {
 		WriteError(w, http.StatusNotFound, TypeNotFound, "Profile not found")
 		return
 	}
-	name := strings.TrimSpace(body.Name)
-	if name == current {
-		po := profileToOut(id, current, createdAt)
-		po.ModelCount = profileMemberCount(db, id)
-		WriteJSON(w, http.StatusOK, po)
+
+	newName := current
+	if body.Name != nil {
+		name := strings.TrimSpace(*body.Name)
+		if name != current {
+			if name == "" || len(name) > 20 || !profileNameRE.MatchString(name) {
+				WriteError(w, http.StatusBadRequest, TypeInvalidRequest,
+					"Only Latin letters, digits, hyphens (-) and underscores (_) are allowed, up to 20 characters")
+				return
+			}
+			if reservedProfileNames[strings.ToLower(name)] {
+				WriteError(w, http.StatusBadRequest, TypeInvalidRequest, "This name is reserved by the system")
+				return
+			}
+			var dup int64
+			if err := db.QueryRow(`SELECT id FROM profiles WHERE LOWER(name) = LOWER(?) AND id != ?`, name, id).Scan(&dup); err == nil {
+				WriteError(w, http.StatusConflict, TypeInvalidRequest, "Profile with name '"+name+"' already exists")
+				return
+			}
+		}
+		newName = name
+	}
+
+	newStrategy := currentStrategy
+	if body.Strategy != nil {
+		if *body.Strategy == "" {
+			newStrategy = ""
+		} else {
+			valid, ok := validRoutingStrategy(*body.Strategy)
+			if !ok {
+				WriteError(w, http.StatusBadRequest, TypeInvalidRequest, "unknown routing strategy")
+				return
+			}
+			newStrategy = string(valid)
+		}
+	}
+
+	if _, err := db.Exec(`UPDATE profiles SET name = ?, strategy = ? WHERE id = ?`, newName, newStrategy, id); err != nil {
+		WriteError(w, http.StatusInternalServerError, TypeServer, "could not update the profile")
 		return
 	}
-	if name == "" || len(name) > 20 || !profileNameRE.MatchString(name) {
-		WriteError(w, http.StatusBadRequest, TypeInvalidRequest,
-			"Only Latin letters, digits, hyphens (-) and underscores (_) are allowed, up to 20 characters")
-		return
-	}
-	if reservedProfileNames[strings.ToLower(name)] {
-		WriteError(w, http.StatusBadRequest, TypeInvalidRequest, "This name is reserved by the system")
-		return
-	}
-	var dup int64
-	if err := db.QueryRow(`SELECT id FROM profiles WHERE LOWER(name) = LOWER(?) AND id != ?`, name, id).Scan(&dup); err == nil {
-		WriteError(w, http.StatusConflict, TypeInvalidRequest, "Profile with name '"+name+"' already exists")
-		return
-	}
-	if _, err := db.Exec(`UPDATE profiles SET name = ? WHERE id = ?`, name, id); err != nil {
-		WriteError(w, http.StatusInternalServerError, TypeServer, "could not rename the profile")
-		return
-	}
-	po := profileToOut(id, name, createdAt)
+	po := profileToOut(id, newName, createdAt, newStrategy)
 	po.ModelCount = profileMemberCount(db, id)
 	WriteJSON(w, http.StatusOK, po)
 }
@@ -2621,7 +2680,7 @@ func (s *Server) handleModelsList(w http.ResponseWriter, _ *http.Request) {
 			m.source, m.key_id, m.endpoint_scope, ak.label,
 			pm.position,
 			CASE WHEN pm.model_db_id IS NOT NULL THEN 1 ELSE 0 END AS fallback_enabled,
-			m.paid_input_per_m, m.paid_output_per_m
+			m.paid_input_per_m, m.paid_output_per_m, m.available
 			FROM models m
 			LEFT JOIN profile_models pm ON pm.profile_id = ? AND pm.model_db_id = m.id
 			LEFT JOIN api_keys ak ON ak.id = m.key_id
@@ -2634,7 +2693,7 @@ func (s *Server) handleModelsList(w http.ResponseWriter, _ *http.Request) {
 			m.monthly_token_budget, m.context_window, m.enabled, m.supports_vision, m.supports_tools,
 			m.source, m.key_id, m.endpoint_scope, ak.label,
 			fc.position, COALESCE(fc.enabled, 0) AS fallback_enabled,
-			m.paid_input_per_m, m.paid_output_per_m
+			m.paid_input_per_m, m.paid_output_per_m, m.available
 			FROM models m
 			LEFT JOIN fallback_config fc ON fc.model_db_id = m.id
 			LEFT JOIN api_keys ak ON ak.id = m.key_id
@@ -2663,11 +2722,12 @@ func (s *Server) handleModelsList(w http.ResponseWriter, _ *http.Request) {
 			keyLabel           sql.NullString
 			rawSource          string
 			paidIn, paidOut    sql.NullFloat64
+			served             int
 		)
 		if err := rows.Scan(&m.ID, &m.Platform, &m.ModelID, &m.DisplayName, &m.IntelligenceRank,
 			&m.SpeedRank, &m.SizeLabel, &rpm, &rpd, &tpm, &tpd, &m.MonthlyBudget, &ctx,
 			&enabled, &vision, &tools, &rawSource, &keyID, &endpointScope, &keyLabel,
-			&pri, &fbEnabled, &paidIn, &paidOut); err != nil {
+			&pri, &fbEnabled, &paidIn, &paidOut, &served); err != nil {
 			WriteError(w, http.StatusInternalServerError, TypeServer, "could not list models")
 			return
 		}
@@ -2703,13 +2763,19 @@ func (s *Server) handleModelsList(w http.ResponseWriter, _ *http.Request) {
 			m.Keyless = p.Keyless()
 		}
 		m.KeyCount = keyCounts[m.Platform]
-		// A custom relay is bound to one endpoint's key, so its availability is
-		// that key's health - not the "custom" platform aggregate, which would
-		// let a working relay mask a sibling whose credential is dead.
+		// Availability is the router's own eligibility: an adapter plus an
+		// enabled, non-errored credential row for the platform. A keyless
+		// provider still needs its enabled sentinel row (key expansion drops a
+		// platform with no usable row), so the adapter's Keyless flag alone must
+		// not call it available - that showed models nobody had switched on as
+		// routable. A custom relay is bound to one endpoint's key, so its
+		// availability is that key's health, not the platform aggregate.
+		// A row the provider retired (models.available = 0) is never a
+		// candidate, whatever its credential looks like.
 		if rawSource == "custom" && keyID.Valid {
-			m.Available = m.HasProvider && usableKeyIDs[keyID.Int64]
+			m.Available = served != 0 && m.HasProvider && usableKeyIDs[keyID.Int64]
 		} else {
-			m.Available = m.HasProvider && (usableKeyCounts[m.Platform] > 0 || m.Keyless)
+			m.Available = served != 0 && m.HasProvider && usableKeyCounts[m.Platform] > 0
 		}
 		out = append(out, m)
 	}

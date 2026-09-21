@@ -346,6 +346,17 @@ func (v *LoginVault) persistRefresh(provider string, before, fresh *oauth.Token)
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	return v.persistRefreshLocked(provider, before, fresh)
+}
+
+// persistRefreshLocked is persistRefresh's body once both locks are held: the
+// caller MUST already hold the cross-process file lock and v.mu. It exists so
+// the refresh path can persist a rotation under the SAME file lock it held for
+// the network exchange. acquireFileLock uses gofrs/flock, which contends across
+// open file descriptions even within one process, so a second acquire from the
+// same goroutine would block until it timed out; callers not already under the
+// lock go through the persistRefresh wrapper instead.
+func (v *LoginVault) persistRefreshLocked(provider string, before, fresh *oauth.Token) (*oauth.Token, error) {
 	merged, err := v.loadStateLocked()
 	if err != nil {
 		return fresh, err
@@ -566,6 +577,22 @@ func (v *LoginVault) authoritativeLogin(provider string) (*oauth.Token, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	return v.authoritativeLoginLocked(provider)
+}
+
+// authoritativeLoginLocked is authoritativeLogin's reconcile body once both
+// locks are held: the caller MUST already hold the cross-process file lock and
+// v.mu. The refresh path uses it to re-read the shared state under the file lock
+// it already took for the exchange, without re-entering acquireFileLock (flock
+// is not re-entrant across open file descriptions, even in one process). A
+// dir-less vault has no shared state, so its in-memory copy is authoritative.
+func (v *LoginVault) authoritativeLoginLocked(provider string) (*oauth.Token, bool) {
+	if v.dir == "" {
+		if l, ok := v.logins[provider]; ok {
+			return l.Token, true
+		}
+		return nil, false
+	}
 	merged, err := v.loadStateLocked()
 	if err != nil {
 		// Fail closed: a reload failure cannot distinguish a live login from one
@@ -595,15 +622,21 @@ func (v *LoginVault) cachedToken(provider string) (*oauth.Token, bool) {
 	return nil, false
 }
 
-// liveToken returns a fresh, unexpired token, refreshing through the
-// platform's own endpoint when needed. It first reconciles against the
-// disk-authoritative shared state under the cross-process lock, so a login a
-// sibling process forgot is reported missing instead of served from this
-// process's stale cache. The single-flight guard is per provider: two
-// concurrent dispatches must not both rotate the same refresh token, because
-// providers that rotate on use invalidate the first token with the second
-// exchange.
+// liveToken returns a fresh, unexpired token, refreshing through the platform's
+// own endpoint when needed. The fast path reconciles against the
+// disk-authoritative shared state and serves an unexpired token cheaply. When a
+// refresh is required it serializes the WHOLE exchange - re-check, network
+// rotation, and persist - under the cross-process file lock, because a rotating
+// single-use refresh token (Charm Hyper) is invalidated by its first exchange:
+// two gateway processes sharing this vault must not both rotate the same grant,
+// or the loser's chain breaks until the user signs in again. The in-process
+// single-flight collapses same-process refreshers before they queue on the file
+// lock. v.mu is taken only for the two brief in-memory steps and is never held
+// across the network exchange, so other vault readers are not blocked for the
+// exchange timeout.
 func (v *LoginVault) liveToken(ctx context.Context, provider string) (*oauth.Token, error) {
+	// Fast path: reconcile against disk and serve an unexpired token without a
+	// refresh, keeping the common dispatch cost a single lock+reload.
 	tok, ok := v.authoritativeLogin(provider)
 	if !ok || tok == nil {
 		return nil, fmt.Errorf("no %s login is stored", provider)
@@ -612,38 +645,60 @@ func (v *LoginVault) liveToken(ctx context.Context, provider string) (*oauth.Tok
 		return tok, nil
 	}
 
+	// Slow path. Collapse same-process concurrent refreshers first so they queue
+	// here instead of all contending on the cross-process file lock.
 	flight := v.flightFor(provider)
 	flight.mu.Lock()
 	defer flight.mu.Unlock()
 
-	// Re-check against authoritative disk state under the flight lock: the
-	// previous holder may have refreshed it, or a sibling may have forgotten it.
-	tok, ok = v.authoritativeLogin(provider)
+	// Serialize the exchange across every process sharing this vault. Fail closed
+	// on a lock error: exchanging without the lock is exactly the concurrent
+	// double-rotation this guards against. The lock spans the re-check, the
+	// network exchange, and the persist below.
+	release, err := v.acquireFileLock()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	// (a) Re-read authoritative disk state under the lock. A sibling that
+	// refreshed while we waited for the lock has already written a fresh token;
+	// adopt it and skip the exchange entirely, never rotating a grant twice. Hold
+	// v.mu only for this in-memory step, releasing it before the network call.
+	v.mu.Lock()
+	tok, ok = v.authoritativeLoginLocked(provider)
 	if !ok || tok == nil {
+		v.mu.Unlock()
 		return nil, fmt.Errorf("no %s login is stored", provider)
 	}
-	if !tok.IsExpired() {
-		return tok, nil
+	before := tok
+	expired := tok.IsExpired()
+	v.mu.Unlock()
+	if !expired {
+		return before, nil
 	}
 
-	before := tok
+	// (b) Network exchange with NO v.mu held, but still under the file lock, so
+	// no sibling process can rotate the same grant concurrently.
 	fresh, err := v.refresh(ctx, provider, before)
 	if err != nil {
 		return nil, err
 	}
-	// A provider that does not rotate on refresh returns a token with no
-	// refresh grant (Hyper's /token/exchange omits it). Keep the working one
-	// so the next refresh still has a grant; a provider that does rotate
-	// supplies a new one that overrides it here.
+	// A provider that does not rotate on refresh returns a token with no refresh
+	// grant (Hyper's /token/exchange omits it). Keep the working one so the next
+	// refresh still has a grant; a provider that does rotate supplies a new one
+	// that overrides it here.
 	if fresh.RefreshToken == "" {
 		fresh.RefreshToken = before.RefreshToken
 	}
 	fresh.SetExpiresAt()
-	// Persist the rotation as a compare-and-swap against the credential we
-	// refreshed: memory is swapped only after a durable write, a newer sign-in
-	// that replaced the login is served and kept rather than clobbered, and a
-	// forgotten login is not resurrected.
-	token, err := v.persistRefresh(provider, before, fresh)
+
+	// (c) Persist the rotation as a compare-and-swap under the same file lock,
+	// re-taking v.mu only for the durable write. persistRefreshLocked does not
+	// re-acquire the file lock, which this goroutine already holds.
+	v.mu.Lock()
+	token, err := v.persistRefreshLocked(provider, before, fresh)
+	v.mu.Unlock()
 	if err != nil {
 		slog.Warn("Refreshed a login but could not persist it", "provider", provider, "error", err)
 	}

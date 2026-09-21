@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/neur0map/prowl/internal/gateway"
 	"github.com/neur0map/prowl/internal/gateway/logins/anthropic"
+	"github.com/neur0map/prowl/internal/gateway/logins/openai"
 )
 
 // fakeCredsource is a stand-in for the login vault: it reports which accounts
@@ -42,10 +44,12 @@ type usageEnvelope struct {
 		Provider string `json:"provider"`
 		Name     string `json:"name"`
 		Windows  []struct {
-			Key         string  `json:"key"`
-			Label       string  `json:"label"`
-			Utilization float64 `json:"utilization"`
-			ResetsAt    string  `json:"resetsAt"`
+			Key           string  `json:"key"`
+			Label         string  `json:"label"`
+			Utilization   float64 `json:"utilization"`
+			ResetsAt      string  `json:"resetsAt"`
+			WindowSeconds int64   `json:"windowSeconds"`
+			TokensUsed    int64   `json:"tokensUsed"`
 		} `json:"windows"`
 		Balance     *float64 `json:"balance"`
 		Unit        string   `json:"unit"`
@@ -318,4 +322,61 @@ func TestFetchHyperCreditsLiveDoesNotFollowRedirects(t *testing.T) {
 	_, err := fetchHyperCreditsLive(context.Background(), "sk-hyper-live")
 	require.Error(t, err, "a 302 must surface as an error, not a followed redirect")
 	require.False(t, leaked, "the bearer must never reach a redirect target")
+}
+
+func TestLoginsUsageReportsCodexWindowsAndTokens(t *testing.T) {
+	s, h := keyedServer(t)
+	s.engine.SetCredentialSource(&fakeCredsource{
+		linkable: []gateway.LinkableProvider{
+			{ID: "anthropic", Name: "Claude Pro / Max"},
+			{ID: "openai", Name: "ChatGPT (Codex)"},
+		},
+		tokens: map[string]string{"anthropic": "tok-a", "openai": "tok-o"},
+	})
+	swapUsageSeams(t,
+		func(context.Context, string) (*anthropic.Usage, error) {
+			return &anthropic.Usage{FiveHour: window(10, "")}, nil
+		},
+		func(context.Context, string) (hyperCredits, error) { return hyperCredits{}, nil },
+	)
+	prevO := fetchOpenAIUsage
+	fetchOpenAIUsage = func(context.Context, string) (openai.Usage, error) {
+		return openai.Usage{Primary: &openai.Window{UsedPercent: 95, LimitWindowSeconds: 604800}}, nil
+	}
+	t.Cleanup(func() { fetchOpenAIUsage = prevO })
+
+	db := s.engine.DB()
+	now := time.Now().Unix()
+	_, err := db.Exec(
+		`INSERT INTO requests (created_at, platform, model_id, outcome, input_tokens, output_tokens) VALUES (?, 'openai', 'gpt-5-codex', 'success', ?, ?)`,
+		now-3600, 1000, 500)
+	require.NoError(t, err)
+	// Eight days old: outside the 7d window, so its tokens must not be counted.
+	_, err = db.Exec(
+		`INSERT INTO requests (created_at, platform, model_id, outcome, input_tokens, output_tokens) VALUES (?, 'openai', 'gpt-5-codex', 'success', ?, ?)`,
+		now-8*24*3600, 999, 0)
+	require.NoError(t, err)
+
+	resp, body := do(t, s, http.MethodGet, "/api/logins/usage", "", h)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var env usageEnvelope
+	require.NoError(t, json.Unmarshal([]byte(body), &env))
+	byProvider := map[string]int{}
+	for i, a := range env.Accounts {
+		byProvider[a.Provider] = i
+	}
+
+	codex := env.Accounts[byProvider["openai"]]
+	require.Equal(t, "ChatGPT (Codex)", codex.Name)
+	require.Len(t, codex.Windows, 1)
+	require.Equal(t, "seven_day", codex.Windows[0].Key)
+	require.Equal(t, float64(95), codex.Windows[0].Utilization)
+	require.Equal(t, int64(604800), codex.Windows[0].WindowSeconds)
+	require.Equal(t, int64(1500), codex.Windows[0].TokensUsed, "only the request inside the window counts")
+
+	claude := env.Accounts[byProvider["anthropic"]]
+	require.Len(t, claude.Windows, 1)
+	require.Equal(t, "five_hour", claude.Windows[0].Key)
+	require.Equal(t, int64(18000), claude.Windows[0].WindowSeconds)
 }

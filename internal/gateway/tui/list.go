@@ -11,18 +11,31 @@ import (
 
 // row is one line in a data view. Cells render left to right; the first cell
 // carries the row's name. key is the opaque payload the owning screen reads.
+//
+// A header row opens a group: cells[0] is its title, summary its trailing
+// note, and every following row with the same group belongs to it until the
+// next header. Groups collapse and expand in place, so a long table reads as
+// sections rather than one wall of rows.
 type row struct {
-	cells  []string
-	styles []func(string) string
-	key    any
-	dim    bool
+	id      string
+	cells   []string
+	styles  []func(string) string
+	key     any
+	dim     bool
+	header  bool
+	group   string
+	summary string
 }
 
-// list is the shared cursor-first data view. It owns filtering, scrolling and
-// pointer geometry; screens retain their domain-specific actions.
+// list is the shared cursor-first data view. It owns filtering, grouping,
+// scrolling and pointer geometry; screens retain their domain-specific actions.
+//
+// It draws as a flat table - a search line, a small-caps header, the rows and
+// a range line - with no frame, so the page's own rules carry the structure.
 type list struct {
 	rows      []row
 	headers   []string
+	weights   []int
 	filter    string
 	searching bool
 	place     string
@@ -33,23 +46,60 @@ type list struct {
 	originX   int
 	originY   int
 	empty     string
+	emptyHint string
 	noMatch   string
+	collapsed map[string]bool
 }
 
 func newList(placeholder string) list {
-	return list{place: placeholder, noMatch: "No matches. Refine the search or press esc to clear it."}
+	return list{
+		place:     placeholder,
+		noMatch:   "No matches. Refine the search or press esc to clear it.",
+		collapsed: map[string]bool{},
+	}
 }
 
+// setHeaders names the columns; weights (optional) are the relative widths,
+// one per column, so a name column can be wide and a state column narrow.
 func (l *list) setHeaders(headers ...string) { l.headers = headers }
+func (l *list) setWeights(weights ...int)    { l.weights = weights }
 func (l *list) setOrigin(x, y int)           { l.originX, l.originY = x, y }
 
+// filtered returns the indices of the rows on screen: text-filtered, with the
+// children of a collapsed group hidden and a header shown only while at least
+// one of its children matches the search.
 func (l *list) filtered() []int {
 	q := strings.ToLower(strings.TrimSpace(l.filter))
 	out := make([]int, 0, len(l.rows))
-	for i := range l.rows {
-		if q == "" || rowMatches(&l.rows[i], q) {
-			out = append(out, i)
+	for i := 0; i < len(l.rows); i++ {
+		r := &l.rows[i]
+		if !r.header {
+			if q == "" || rowMatches(r, q) {
+				out = append(out, i)
+			}
+			continue
 		}
+		// A header: gather its children, decide visibility, then either emit
+		// the children (expanded) or skip them (collapsed or unmatched).
+		end := i + 1
+		for end < len(l.rows) && !l.rows[end].header {
+			end++
+		}
+		children := make([]int, 0, end-i-1)
+		for j := i + 1; j < end; j++ {
+			if q == "" || rowMatches(&l.rows[j], q) {
+				children = append(children, j)
+			}
+		}
+		if q == "" || len(children) > 0 {
+			out = append(out, i)
+			// A live search reveals matches wherever they are: a collapsed
+			// group is folded for browsing, not for hiding a hit from a query.
+			if q != "" || !l.collapsed[r.group] {
+				out = append(out, children...)
+			}
+		}
+		i = end - 1
 	}
 	return out
 }
@@ -61,6 +111,23 @@ func rowMatches(r *row, q string) bool {
 		}
 	}
 	return false
+}
+
+// groupSize reports how many rows a group holds and how many the search keeps
+// visible, for the summary a header shows while collapsed or filtered.
+func (l *list) groupSize(group string) (total, matching int) {
+	q := strings.ToLower(strings.TrimSpace(l.filter))
+	for i := range l.rows {
+		r := &l.rows[i]
+		if r.header || r.group != group {
+			continue
+		}
+		total++
+		if q == "" || rowMatches(r, q) {
+			matching++
+		}
+	}
+	return total, matching
 }
 
 func (l *list) selected() *row {
@@ -81,13 +148,51 @@ func (l *list) selectRow(k any) {
 	}
 }
 
+// selectID moves the cursor to the row with this id when it is visible.
+func (l *list) selectID(id string) bool {
+	if id == "" {
+		return false
+	}
+	for i, idx := range l.filtered() {
+		if l.rows[idx].id == id {
+			l.cursor = i
+			l.clamp()
+			return true
+		}
+	}
+	return false
+}
+
+// setRows replaces the rows and keeps the cursor on the same row when it is
+// still there (by id), so a rebuild after a toggle does not jump the
+// selection to wherever the old index now lands.
 func (l *list) setRows(rows []row) {
+	keep := ""
+	if cur := l.selected(); cur != nil {
+		keep = cur.id
+	}
 	l.rows = rows
+	if l.selectID(keep) {
+		return
+	}
 	vis := l.filtered()
 	if l.cursor >= len(vis) {
 		l.cursor = max(0, len(vis)-1)
 	}
 	l.clamp()
+}
+
+// toggleGroup collapses or expands the group under the cursor (or the group
+// the selected row belongs to) and keeps the cursor on that header.
+func (l *list) toggleGroup() bool {
+	cur := l.selected()
+	if cur == nil || cur.group == "" {
+		return false
+	}
+	group := cur.group
+	l.collapsed[group] = !l.collapsed[group]
+	l.selectID("group:" + group)
+	return true
 }
 
 func (l *list) move(delta int) {
@@ -115,7 +220,7 @@ func (l *list) bot() {
 }
 
 func (l *list) chromeRows() int {
-	rows := 3 // rounded top, search row, rounded bottom
+	rows := 2 // search line, range line
 	if len(l.headers) > 0 {
 		rows++
 	}
@@ -127,6 +232,12 @@ func (l *list) viewportRows() int {
 }
 
 func (l *list) clamp() {
+	if l.height == 0 {
+		// Not laid out yet: a one-row viewport would scroll the top rows
+		// away before the first render sizes the list. Leave the offset alone.
+		l.offset = max(min(l.offset, l.cursor), 0)
+		return
+	}
 	per := l.viewportRows()
 	if l.cursor < l.offset {
 		l.offset = l.cursor
@@ -162,23 +273,47 @@ func (l *list) typeFilter(k tea.KeyPressMsg) bool {
 		} else {
 			l.searching = false
 		}
-		l.cursor = 0
-		l.clamp()
+		l.firstMatch()
+		return true
+	case "up", "down":
+		// Moving while typing keeps the search open: the cursor walks the
+		// matches without leaving the box.
+		if s == "up" {
+			l.move(-1)
+		} else {
+			l.move(1)
+		}
 		return true
 	default:
 		if len(s) == 1 && s[0] >= 32 && s[0] <= 126 {
 			l.filter += s
-			l.cursor = 0
-			l.clamp()
+			l.firstMatch()
 			return true
 		}
 	}
 	return false
 }
 
+// firstMatch puts the cursor on the first row a search kept, skipping the
+// group header above it so enter or space acts on the match, not the group.
+func (l *list) firstMatch() {
+	l.cursor, l.offset = 0, 0
+	vis := l.filtered()
+	if len(vis) > 1 && l.rows[vis[0]].header && strings.TrimSpace(l.filter) != "" {
+		l.cursor = 1
+	}
+	l.clamp()
+}
+
 func (l *list) startSearch()      { l.searching = true }
 func (l *list) isSearching() bool { return l.searching }
-func (l *list) rowStartY() int    { return l.originY + 2 + boolInt(len(l.headers) > 0) }
+func (l *list) filtering() bool   { return l.searching || strings.TrimSpace(l.filter) != "" }
+func (l *list) clearSearch() {
+	l.searching = false
+	l.filter = ""
+	l.cursor, l.offset = 0, 0
+}
+func (l *list) rowStartY() int { return l.originY + 1 + boolInt(len(l.headers) > 0) }
 func boolInt(v bool) int {
 	if v {
 		return 1
@@ -219,7 +354,7 @@ func (l *list) mouse(msg tea.Msg) (handled, activate bool) {
 		if !l.containsX(m.X) || !l.containsY(m.Y) {
 			return false, false
 		}
-		if m.Y == l.originY+1 {
+		if m.Y == l.originY {
 			l.startSearch()
 			return true, false
 		}
@@ -245,43 +380,36 @@ func (l *list) mouse(msg tea.Msg) (handled, activate bool) {
 func (l *list) render() string {
 	vis := l.filtered()
 	width := max(l.width, 8)
-	inner := width - 2
-	title := strings.TrimSpace(strings.TrimPrefix(l.place, "Search "))
-	if title == "" {
-		title = "Items"
+	subject := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(l.place, "Search ")))
+	if subject == "" {
+		subject = "rows"
 	}
-	title = strings.ToUpper(title[:1]) + title[1:]
-	topLabel := " " + title + " "
-	top := stFaint.Render("╭─") + brandText(topLabel, l.cursor) +
-		stFaint.Render(strings.Repeat("─", max(width-3-lipgloss.Width(topLabel), 0))+"╮")
 
 	var search, hint string
-	if l.searching {
+	switch {
+	case l.searching:
 		search = stCursor.Render("⌕") + " " +
-			stHead.Render(truncate(l.filter, max(inner-22, 1))) +
-			stCursor.Render("│")
+			stHead.Render(truncate(l.filter, max(width-26, 1))) +
+			stCursor.Render("▏")
 		hint = stFaint.Render("esc clear · enter keep")
-	} else if l.filter != "" {
+	case l.filter != "":
 		search = stFaint.Render("⌕") + " " +
-			stHead.Render(truncate(l.filter, max(inner-22, 1)))
+			stHead.Render(truncate(l.filter, max(width-26, 1)))
 		hint = stFaint.Render("/ edit · esc clear")
-	} else {
-		subject := strings.ToLower(title[:1]) + title[1:]
+	default:
 		search = stFaint.Render("⌕") + " " +
-			stSubtle.Render(truncate("Type / to filter "+subject, max(inner-18, 1)))
+			stFaint.Render(truncate("Type / to search "+subject, max(width-14, 1)))
 		hint = stFaint.Render("↑↓ move")
 	}
-	search = joinEdges(" "+search, hint+" ", inner)
-
-	lines := []string{top, frameRow(search, inner)}
+	lines := []string{joinEdges(" "+search, hint+" ", width)}
 	if len(l.headers) > 0 {
-		lines = append(lines, frameRow(" "+l.renderHeader()+" ", inner))
+		lines = append(lines, l.renderHeader())
 	}
 
 	per := l.viewportRows()
 	end := min(l.offset+per, len(vis))
 	if len(vis) == 0 {
-		msg := l.empty
+		msg, hint := l.empty, l.emptyHint
 		if msg == "" {
 			if len(l.rows) > 0 {
 				msg = l.noMatch
@@ -289,41 +417,59 @@ func (l *list) render() string {
 				msg = "Nothing here yet."
 			}
 		}
-		lines = append(lines, frameRow("  "+stFaint.Render(truncate(msg, max(inner-4, 1))), inner))
-		for i := 1; i < per; i++ {
-			lines = append(lines, frameRow("", inner))
+		placeholder := strings.Split(emptyState(msg, hint, width), "\n")
+		for i := range per {
+			if i < len(placeholder) {
+				lines = append(lines, truncate(placeholder[i], width))
+				continue
+			}
+			lines = append(lines, "")
 		}
 	} else {
 		for i := l.offset; i < end; i++ {
-			lines = append(lines, frameRow(l.renderRow(&l.rows[vis[i]], i == l.cursor), inner))
+			lines = append(lines, l.renderRow(&l.rows[vis[i]], i == l.cursor))
 		}
 		for i := end - l.offset; i < per; i++ {
-			lines = append(lines, frameRow("", inner))
+			lines = append(lines, "")
 		}
 	}
 
-	rangeText := " 0 items "
+	rangeText := "no rows"
 	if len(vis) > 0 {
-		rangeText = fmt.Sprintf(" %d-%d of %d ", l.offset+1, end, len(vis))
+		rangeText = fmt.Sprintf("%d-%d of %d", l.offset+1, end, len(vis))
 	}
-	bottom := stFaint.Render("╰─") + stSubtle.Render(rangeText) +
-		stFaint.Render(strings.Repeat("─", max(width-3-lipgloss.Width(rangeText), 0))+"╯")
-	lines = append(lines, bottom)
+	lines = append(lines, " "+stFaint.Render(rangeText))
 	return strings.Join(lines, "\n")
 }
 
+// colWidths splits the content width across the columns. With weights the
+// split is proportional; otherwise the name column takes a third and the rest
+// share what remains.
 func (l *list) colWidths(n int) []int {
-	inner := max(l.width-6, 8)
+	inner := max(l.width-4, 8)
 	if n <= 1 {
 		return []int{inner}
 	}
-	first := inner * 32 / 100
+	widths := make([]int, n)
+	if len(l.weights) == n {
+		total := 0
+		for _, w := range l.weights {
+			total += max(w, 1)
+		}
+		used := 0
+		for i := 1; i < n; i++ {
+			widths[i] = max(inner*max(l.weights[i], 1)/total, 5)
+			used += widths[i]
+		}
+		widths[0] = max(inner-used, 8)
+		return widths
+	}
+	first := inner * 34 / 100
 	rest := (inner - first) / (n - 1)
 	if rest < 7 {
 		first = max(inner-rest*(n-1), 8)
 		rest = max((inner-first)/(n-1), 4)
 	}
-	widths := make([]int, n)
 	widths[0] = first
 	for i := 1; i < n; i++ {
 		widths[i] = rest
@@ -335,29 +481,50 @@ func (l *list) renderHeader() string {
 	widths := l.colWidths(len(l.headers))
 	cells := make([]string, 0, len(l.headers))
 	for i, h := range l.headers {
-		cells = append(cells, stFaint.Render(padRight(truncate(h, widths[i]), widths[i])))
+		cells = append(cells, stFaint.Render(padRight(truncate(strings.ToUpper(h), widths[i]-1), widths[i])))
 	}
-	return padRight("  "+strings.Join(cells, ""), max(l.width-4, 1))
+	return padRight("   "+strings.Join(cells, ""), max(l.width, 1))
 }
 
 func (l *list) renderRow(r *row, selected bool) string {
+	contentW := max(l.width-4, 1)
+	if r.header {
+		marker := stSubtle.Render("▾")
+		if l.collapsed[r.group] {
+			marker = stSubtle.Render("▸")
+		}
+		title := r.cells[0]
+		summary := r.summary
+		if total, matching := l.groupSize(r.group); l.filter != "" && matching != total {
+			summary = fmt.Sprintf("%d of %d match", matching, total)
+		}
+		line := groupRule(marker, title, summary, contentW)
+		if selected {
+			return " " + brandText("◆", l.cursor) + " " + line + " "
+		}
+		return "   " + line + " "
+	}
+
 	widths := l.colWidths(len(r.cells))
 	cells := make([]string, 0, len(r.cells))
 	for i, c := range r.cells {
-		t := truncate(c, widths[i])
+		// Style the whole value first: value-keyed styles (a pill that colours
+		// "healthy") must see the full word, not a truncated stub.
+		var styled string
 		if i < len(r.styles) && r.styles[i] != nil {
-			cells = append(cells, r.styles[i](t)+strings.Repeat(" ", max(widths[i]-lipgloss.Width(t), 0)))
-			continue
+			styled = r.styles[i](c)
+		} else {
+			style := lipgloss.NewStyle().Foreground(colorMoon)
+			if r.dim {
+				style = style.Foreground(colorShadow)
+			} else if i > 0 {
+				style = style.Foreground(colorMist)
+			}
+			styled = style.Render(c)
 		}
-		style := lipgloss.NewStyle().Foreground(colorMoon)
-		if r.dim {
-			style = style.Foreground(colorShadow)
-		} else if i > 0 {
-			style = style.Foreground(colorMist)
-		}
-		cells = append(cells, style.Render(padRight(t, widths[i])))
+		t := truncate(styled, widths[i]-1)
+		cells = append(cells, t+strings.Repeat(" ", max(widths[i]-lipgloss.Width(t), 0)))
 	}
-	contentW := max(l.width-6, 1)
 	if selected {
 		body := stSelected.Render(padRight(strings.Join(stripStyles(cells), ""), contentW))
 		return " " + brandText("◆", l.cursor) + " " + body + " "

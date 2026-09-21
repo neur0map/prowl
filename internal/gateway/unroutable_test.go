@@ -30,7 +30,7 @@ func TestAnUnroutableListNamesTheMissingProvider(t *testing.T) {
 	reason := ExplainUnroutableChain(db, "auto:subs")
 	require.Contains(t, reason, "anthropic")
 	require.Contains(t, reason, "hyper")
-	require.Contains(t, reason, "Keys page", "the reason must say where the fix lives")
+	require.Contains(t, reason, "Providers page", "the reason must say where the fix lives")
 	require.NotContains(t, reason, "no provider keys configured",
 		"an install with models but no matching key must not be told it has no keys")
 }

@@ -49,31 +49,36 @@ prowl init --no-input --integrations cursor,vscode
 
 ## The unified console
 
-The console has nine tabs:
+The console is a sidebar of seven sections. `1`-`7` jump straight to one,
+`Tab` / `Shift+Tab` step through them:
 
-- **Overview** -- combined estimated token savings across every indexed project,
-  gateway readiness, model capacity, recent activity, and next actions.
-- **Projects** -- every registered local project with files, symbols, edges,
-  semantic progress, last-index time, and estimated token savings. `Enter`
-  opens the full status report.
-- **Providers** -- production-wired providers only. Filter by access or
-  readiness, press `Enter` for details, or `o` for signup.
-- **Credentials** -- individual API keys, health, cooldown, and traffic state.
-- **Accounts** -- browser/device OAuth for ChatGPT, Claude, Charm Hyper, and
-  Copilot, with connection, routing, and published allowance state kept
-  separate. Routable accounts add their models automatically after sign-in.
-- **Models** -- a compact list of default and named model sets, grouped
-  task/access templates, provider checkboxes, full-catalogue search, live
-  health, and routing strategy.
-- **Activity** -- full-height request and token charts, provider/model usage,
-  exact or estimated cost, latency, outcome, route class, and failover attempts.
-  Exact, estimated (`~`), and unavailable (`-`) usage remain visibly distinct.
-- **Toolkit** - Prowl's major functions with copyable commands.
-- **Setup** - safe injection into supported coding harnesses.
+- **Home** -- subscription capacity first: one bar of remaining allowance
+  across your signed-in accounts with the inferred token total, then each
+  account's windows (Claude 5h/7d, ChatGPT/Codex weekly, Hyper credits);
+  below it, estimated token savings, readiness, and the last 24h of traffic.
+- **Routing** (Gateway) -- your model sets and their presets. A set is the
+  models a request may use plus the strategy that orders them; open one to
+  pick its models provider by provider. This is where routing is shaped.
+- **Providers** (Gateway) -- connected providers first, then the rest of the
+  directory. API keys, keyless endpoints and browser sign-ins are all
+  connected, paused and disconnected here with the same verbs. A keyless
+  provider's key is optional: leave it empty for the free tier, paste one to
+  unlock its paid models.
+- **Activity** (Gateway) -- full-height request and token charts,
+  provider/model usage, exact or estimated cost, latency, outcome, route class,
+  and failover attempts. Exact, estimated (`~`), and unavailable (`-`) usage
+  remain visibly distinct.
+- **Projects** (Workspace) -- every registered local project with files,
+  symbols, edges, semantic progress, last-index time, and estimated token
+  savings. `Enter` opens the full status report.
+- **Setup** (Workspace) -- safe injection into supported coding harnesses.
+- **Toolkit** (Workspace) -- Prowl's major functions with copyable commands.
 
-Use `Tab` / `Shift+Tab` to move between tabs, arrows or `j`/`k` to move, `/` to
-search, and `?` for the complete key guide. The first launch shows a short tip;
-each tab supplies one contextual hint without blocking work.
+Every table works the same way: arrows or `j`/`k` move, `/` searches, `f`
+opens a filter panel, `Enter` opens or manages the row, `Space` toggles it,
+`d` removes, and `Esc` backs out. `?` shows the complete key guide. The first
+launch shows a short tip; each section supplies one contextual hint without
+blocking work.
 
 The console leaves terminal mouse capture disabled. Drag normally to select and
 copy any rendered text with the terminal's native behavior; no `Shift` bypass is
@@ -95,12 +100,13 @@ client pins that request to that model.
 A **route** decides which eligible model is tried first and how failover is
 ordered:
 
-- `auto` uses the active set and the strategy selected in Prowl.
+- `auto` uses the active set, ordered by that set's own strategy (or the
+  console-wide default when the set has none).
 - `auto:smart`, `auto:fast`, `auto:cheap`, `auto:reliable`, and
   `auto:balanced` are explicit per-request overrides. They order the whole
   enabled catalogue by that axis instead of using the active set and strategy.
-- `auto:<set>` explicitly uses that named set instead of the active set, while
-  retaining the strategy selected in Prowl.
+- `auto:<set>` explicitly uses that named set instead of the active set, with
+  that set's strategy.
 
 Sets answer **which models may be tried**. The strategy answers **which eligible
 model should be tried first for this prompt**. Provider/key health, quota,
@@ -108,28 +114,42 @@ cooldowns, and context limits remain hard gates. User choices remain canonical:
 smart routing never silently enables a disabled model or escapes the selected
 set.
 
-On **Models**, `Enter` edits a set and `Space` activates a set or toggles a
-model's membership, depending on context. A populated set initially shows only
-its selected models; an empty set opens directly in add mode. Press `a` to
-switch between selected models and candidates to add, or `/` to search the
-complete catalogue. `n` opens grouped templates, `s` opens routing strategies,
-and `p` opens a checkbox provider picker.
+**Routing** opens on your sets, not on the catalogue. Each row is a set with
+its model count, its strategy and whether it is active; below them sit the
+presets - task-shaped sets such as Deep work, Coding or Quick chores that
+`Enter` creates in one step (each preset brings a fitting strategy). `Space`
+activates a set, `r` picks the strategy for the selected set, `n` starts a
+blank one, `x` renames and `d` deletes.
+
+`Enter` on a set opens it for model selection. Only models from connected
+providers are offered - a model the router could not try is never listed -
+and providers start collapsed, so you expand the one you want (`→`, `Enter`)
+and `Space` a model in or out; `Space` on a provider header takes or clears
+the whole provider, and `A` takes or clears everything shown. The marker shows membership (`●` in the set, `○` not,
+`⊘` excluded from all routing). `f` filters by membership, provider, access
+and intelligence tier, `/` searches, `a` activates the set you are editing,
+and `Esc` returns to your sets.
 
 ## Subscription accounts and multiple models
 
-Open **Accounts**, select a provider, and press `Enter`. Prowl starts the OAuth
-flow and opens the browser automatically. While it is pending:
+Subscription accounts are providers like any other. On **Providers**, select
+ChatGPT, Claude or Charm Hyper and press `c`: Prowl starts the OAuth flow and
+opens the browser automatically. While it is pending:
 
 - `o` reopens the browser;
 - `u` copies the authorization URL;
 - `c` copies the device code when one exists, otherwise the URL;
 - `Esc` cancels the flow.
 
-After sign-in, compatible account models are added to routing automatically.
-`Space` then pauses or resumes that durable routing permission; it is not a
-second enrollment step. The console reports connection, routing, and allowance
-independently, so an allowance-service outage is not presented as a broken
-credential and an expired credential explicitly asks for another sign-in.
+After sign-in the provider moves to the Connected section and its account
+models are added to routing automatically. `Space` then pauses or resumes that
+durable routing permission; it is not a second enrollment step. `Enter` opens
+the manage panel with the signed-in identity, routing state and published
+allowance windows, plus any API key added beside the login. The console
+reports connection, routing, and allowance independently, so an
+allowance-service outage is not presented as a broken credential and an
+expired credential explicitly asks for another sign-in. A sign-in platform
+with no routing adapter is not offered.
 
 Model enrollment is not a one-model alias:
 
@@ -240,8 +260,11 @@ The Setup tab configures selected harnesses without displaying credentials.
 `prowl gateway` opens the same console as bare `prowl`. On Home, press `d` to
 switch **Keep running** on or off. When enabled, closing the console hands the
 in-process gateway to a tracked daemon; when disabled, closing a console
-attached to that daemon shuts it down safely. `up`, `down`, `status`, and
-`restart` remain scriptable lifecycle commands.
+attached to that daemon shuts it down safely. Home also owns the unified
+inference key harnesses authenticate with: `v` reveals it and `g` regenerates
+it, after which the old key stops working immediately and Setup re-injects the
+new one. `up`, `down`, `status`, and `restart` remain scriptable lifecycle
+commands.
 
 ### Harness files and portable skills
 
@@ -370,3 +393,32 @@ bash scripts/onboarding-smoke.sh
 Plain `go test ./...` is not the project gate because it omits SQLite FTS5.
 See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 and [BENCHMARKS.md](BENCHMARKS.md) for implementation and measurement details.
+
+## Credits
+
+Prowl stands on the work of several open-source projects, and is grateful to
+each of them:
+
+- **[FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi)** (MIT) - Prowl's
+  AI gateway is a Go port of FreeLLMAPI's server: the provider contract, the
+  OpenAI- and Anthropic-compatible inference wires, the embeddings and media
+  surfaces, the credential vault and health model, the provider directory seed,
+  and the unified inference key format all derive from it. Ported files name the
+  exact FreeLLMAPI source they follow.
+- **[LiteLLM](https://github.com/BerriAI/litellm)** (MIT) - Prowl's provider
+  directory is merged from FreeLLMAPI, Prowl's own set, and LiteLLM's provider
+  database, which supplies provider identities, base URLs, and documentation
+  links for a large share of the catalogue.
+- **[Oh My Pi](https://github.com/can1357/oh-my-pi)** - a first-class coding
+  harness Prowl injects its gateway into and installs portable skills for.
+- **[Kilo Code](https://github.com/Kilo-Org/kilocode)** - its gateway ships in
+  Prowl's provider directory as a keyless provider, routable out of the box.
+
+Full attribution details are in [NOTICE.md](NOTICE.md). Each upstream project
+remains under its own license.
+
+## License
+
+Prowl is released under the [MIT License](LICENSE). Ported and integrated
+third-party work is attributed in [NOTICE.md](NOTICE.md) and remains under the
+licenses of its respective projects.

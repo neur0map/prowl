@@ -843,7 +843,12 @@ func ResolveChain(db *sql.DB, modelString string, configured RoutingStrategy) (*
 			return nil, err
 		}
 		preferConcreteModel(chain, lower)
-		return &ResolvedChain{Chain: chain, StrategyKey: strategyKey, OrderBy: configured}, nil
+		// A set carries its own ordering: the active set's strategy is part of
+		// what the set means ("quick chores" is fastest-first, "deep work" is
+		// smartest-first), so it orders its own chain rather than deferring to
+		// the operator's global default. activeOrderBy falls back to `configured`
+		// for a set that stores no strategy, matching the prior behaviour.
+		return &ResolvedChain{Chain: chain, StrategyKey: strategyKey, OrderBy: activeOrderBy(db, configured)}, nil
 	}
 
 	suffix := strings.TrimSpace(lower[len("auto:"):])
@@ -852,7 +857,7 @@ func ResolveChain(db *sql.DB, modelString string, configured RoutingStrategy) (*
 		if err != nil {
 			return nil, err
 		}
-		return &ResolvedChain{Chain: chain, StrategyKey: strategyKey, OrderBy: configured}, nil
+		return &ResolvedChain{Chain: chain, StrategyKey: strategyKey, OrderBy: activeOrderBy(db, configured)}, nil
 	}
 
 	if axis, ok := globalSortAliases[suffix]; ok {
@@ -866,7 +871,7 @@ func ResolveChain(db *sql.DB, modelString string, configured RoutingStrategy) (*
 		return &ResolvedChain{Chain: chain, StrategyKey: strategyKey, OrderBy: aliasStrategy(axis)}, nil
 	}
 
-	chain, found, err := profileChainByName(db, suffix)
+	chain, profileID, found, err := profileChainByName(db, suffix)
 	if err != nil {
 		return nil, err
 	}
@@ -878,7 +883,13 @@ func ResolveChain(db *sql.DB, modelString string, configured RoutingStrategy) (*
 		// an empty list from one whose platforms have no key.
 		return nil, &ChainError{Status: 400, Message: ExplainUnroutableChain(db, "auto:"+suffix)}
 	}
-	return &ResolvedChain{Chain: chain, StrategyKey: strategyKey, OrderBy: configured}, nil
+	// auto:<name> orders by that named set's own strategy when it has one, the
+	// same reasoning as the active set above; a set with no strategy inherits.
+	orderBy := configured
+	if s, ok := profileStrategy(db, profileID); ok {
+		orderBy = s
+	}
+	return &ResolvedChain{Chain: chain, StrategyKey: strategyKey, OrderBy: orderBy}, nil
 }
 
 // preferConcreteModel honours an explicitly requested model ahead of the active
@@ -978,6 +989,43 @@ func activeProfileID(db *sql.DB) (int64, bool, error) {
 		return 0, false, err
 	}
 	return id, true, nil
+}
+
+// profileStrategy reads a set's own routing strategy. ok is false for a set
+// that stores no strategy (the empty default) or a value that no longer names a
+// real one, so such a set inherits the operator's default rather than silently
+// being forced onto balanced. A stored value only orders the set when it round
+// trips through ParseRoutingStrategy unchanged - anything the parser has to
+// coerce back to the default was not a persistable strategy in the first place.
+func profileStrategy(db *sql.DB, profileID int64) (RoutingStrategy, bool) {
+	var raw string
+	err := db.QueryRow("SELECT strategy FROM profiles WHERE id = ?", profileID).Scan(&raw)
+	if err != nil {
+		return "", false
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", false
+	}
+	s := ParseRoutingStrategy(raw)
+	if string(s) != raw {
+		return "", false
+	}
+	return s, true
+}
+
+// activeOrderBy is the strategy the active set's chain orders by: the set's own
+// strategy when it has one, else the operator's configured default. A legacy
+// install with no active set keeps `configured` as before.
+func activeOrderBy(db *sql.DB, configured RoutingStrategy) RoutingStrategy {
+	id, active, err := activeProfileID(db)
+	if err != nil || !active {
+		return configured
+	}
+	if s, ok := profileStrategy(db, id); ok {
+		return s
+	}
+	return configured
 }
 
 func profileName(db *sql.DB, id int64) (string, error) {
@@ -1107,20 +1155,23 @@ func profileChain(db *sql.DB, profileID int64) ([]ChainEntry, error) {
 	return scanChain(db, rows)
 }
 
-func profileChainByName(db *sql.DB, name string) ([]ChainEntry, bool, error) {
+// profileChainByName returns the named set's chain and its id, so the caller
+// can order the chain by that set's own strategy. found is false when no set
+// carries the name.
+func profileChainByName(db *sql.DB, name string) ([]ChainEntry, int64, bool, error) {
 	var id int64
 	err := db.QueryRow("SELECT id FROM profiles WHERE LOWER(name) = ?", strings.ToLower(name)).Scan(&id)
 	if err == sql.ErrNoRows {
-		return nil, false, nil
+		return nil, 0, false, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, 0, false, err
 	}
 	chain, err := profileChain(db, id)
 	if err != nil {
-		return nil, false, err
+		return nil, 0, false, err
 	}
-	return chain, true, nil
+	return chain, id, true, nil
 }
 
 func fallbackChain(db *sql.DB) ([]ChainEntry, error) {

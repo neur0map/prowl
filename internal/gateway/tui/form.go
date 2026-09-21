@@ -12,6 +12,7 @@ import (
 // pointer clicks move focus, and the action row is identical everywhere.
 type formOverlay struct {
 	title      string
+	subtitle   string
 	fields     []formField
 	cursor     int
 	width      int
@@ -65,6 +66,13 @@ func (f *formOverlay) secret(i int) *formOverlay {
 
 func (f *formOverlay) optional(i int) *formOverlay {
 	f.fields[i].optional = true
+	return f
+}
+
+// hint replaces the form's default subtitle with a one-line note, used where a
+// field needs context its label cannot carry (an optional secret, say).
+func (f *formOverlay) hint(s string) *formOverlay {
+	f.subtitle = s
 	return f
 }
 
@@ -195,7 +203,11 @@ func (f *formOverlay) boxWidth() int {
 func (f *formOverlay) View() tea.View {
 	var body strings.Builder
 	body.WriteString(brandText(f.title, 0) + "\n")
-	body.WriteString(stSubtle.Render("Complete the fields, then apply the change.") + "\n\n")
+	subtitle := f.subtitle
+	if subtitle == "" {
+		subtitle = "Complete the fields, then apply the change."
+	}
+	body.WriteString(stSubtle.Render(subtitle) + "\n\n")
 
 	fieldW := max(f.boxWidth()-8, 24)
 	for i := range f.fields {

@@ -638,6 +638,63 @@ func TestProfileRenameValidatesAndPersists(t *testing.T) {
 	require.Equal(t, string(TypeInvalidRequest), errorType(t, body))
 }
 
+// TestProfileStrategyPatchAndList proves a set carries its own routing strategy
+// through create, list and partial PATCH: a valid strategy round-trips, a
+// strategy-only PATCH leaves the name, a bogus strategy is refused without
+// changing the stored value, an empty strategy clears the set back to
+// inheriting, and a name-only PATCH leaves the strategy alone.
+func TestProfileStrategyPatchAndList(t *testing.T) {
+	t.Parallel()
+	s, auth := routingServer(t)
+	db := s.engine.DB()
+
+	type profRow struct {
+		ID       int64  `json:"id"`
+		Name     string `json:"name"`
+		Strategy string `json:"strategy"`
+	}
+
+	resp, body := do(t, s, http.MethodPost, "/api/profiles", `{"name":"chores","strategy":"fastest","empty":true}`, auth)
+	require.Equal(t, http.StatusCreated, resp.StatusCode, "body was %q", body)
+	var created profRow
+	require.NoError(t, json.Unmarshal([]byte(body), &created))
+	require.Equal(t, "fastest", created.Strategy)
+	id := created.ID
+
+	_, body = do(t, s, http.MethodGet, "/api/profiles", "", auth)
+	var list []profRow
+	require.NoError(t, json.Unmarshal([]byte(body), &list))
+	byID := map[int64]profRow{}
+	for _, p := range list {
+		byID[p.ID] = p
+	}
+	require.Equal(t, "fastest", byID[id].Strategy, "the list must report the stored strategy")
+
+	resp, body = do(t, s, http.MethodPatch, fmt.Sprintf("/api/profiles/%d", id), `{"strategy":"reliable"}`, auth)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "body was %q", body)
+	var patched profRow
+	require.NoError(t, json.Unmarshal([]byte(body), &patched))
+	require.Equal(t, "reliable", patched.Strategy)
+	require.Equal(t, "chores", patched.Name, "a strategy-only PATCH must not touch the name")
+
+	resp, _ = do(t, s, http.MethodPatch, fmt.Sprintf("/api/profiles/%d", id), `{"strategy":"bogus"}`, auth)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	var stored string
+	require.NoError(t, db.QueryRow(`SELECT strategy FROM profiles WHERE id = ?`, id).Scan(&stored))
+	require.Equal(t, "reliable", stored, "a rejected strategy must not change the stored value")
+
+	resp, body = do(t, s, http.MethodPatch, fmt.Sprintf("/api/profiles/%d", id), `{"strategy":""}`, auth)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "body was %q", body)
+	require.NoError(t, json.Unmarshal([]byte(body), &patched))
+	require.Equal(t, "", patched.Strategy, "an empty strategy clears the set back to inheriting")
+
+	resp, body = do(t, s, http.MethodPatch, fmt.Sprintf("/api/profiles/%d", id), `{"name":"renamed"}`, auth)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "body was %q", body)
+	require.NoError(t, json.Unmarshal([]byte(body), &patched))
+	require.Equal(t, "renamed", patched.Name)
+	require.Equal(t, "", patched.Strategy, "a name-only PATCH must not change the strategy")
+}
+
 // TestModelsListAccessClassification: access is subscription for a login-sourced
 // model (even without a price), paid for a priced model, and free otherwise.
 func TestModelsListAccessClassification(t *testing.T) {
@@ -892,6 +949,51 @@ func TestModelsListAvailabilityFollowsCustomRelayKey(t *testing.T) {
 	}
 	require.True(t, avail[idA], "relay A with a healthy key must be available")
 	require.False(t, avail[idB], "relay B must be unavailable when its own key is dead, not masked by relay A")
+}
+
+// TestModelsListKeylessNeedsEnabledRow proves a keyless provider's models are
+// available only once its sentinel row exists and is enabled, matching the
+// router (which drops a platform with no usable row): a keyless adapter nobody
+// switched on must not report its catalogue as routable.
+func TestModelsListKeylessNeedsEnabledRow(t *testing.T) {
+	t.Parallel()
+	s, auth := routingServer(t)
+	db := s.engine.DB()
+
+	res, err := db.Exec(
+		`INSERT INTO models (platform, model_id, display_name, size_label, enabled) VALUES ('ovh', 'm', 'M', 'medium', 1)`)
+	require.NoError(t, err)
+	id, err := res.LastInsertId()
+	require.NoError(t, err)
+
+	available := func() bool {
+		_, body := do(t, s, http.MethodGet, "/api/models", "", auth)
+		var models []struct {
+			ID        int64 `json:"id"`
+			Keyless   bool  `json:"keyless"`
+			Available bool  `json:"available"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &models))
+		for _, m := range models {
+			if m.ID == id {
+				require.True(t, m.Keyless, "ovh must be registered keyless for this test to mean anything")
+				return m.Available
+			}
+		}
+		t.Fatalf("model %d missing from /api/models", id)
+		return false
+	}
+	require.False(t, available(), "a keyless provider with no sentinel row is not routable")
+
+	_, err = db.Exec(`
+		INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled, created_at)
+		VALUES ('ovh', '', 'x', 'y', 'z', 'unknown', 1, 0)`)
+	require.NoError(t, err)
+	require.True(t, available(), "an enabled sentinel row makes the keyless provider available")
+
+	_, err = db.Exec(`UPDATE api_keys SET enabled = 0 WHERE platform = 'ovh'`)
+	require.NoError(t, err)
+	require.False(t, available(), "disabling the sentinel row withdraws the provider")
 }
 
 // TestPeakAdjustmentReachesDashboardWeights proves the peak-hour control reaches

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"github.com/neur0map/prowl/internal/gateway"
 	"github.com/neur0map/prowl/internal/gateway/logins/anthropic"
 	"github.com/neur0map/prowl/internal/gateway/logins/hyper"
+	"github.com/neur0map/prowl/internal/gateway/logins/openai"
 )
 
 // The Accounts screen shows how much of each connected subscription is left.
@@ -24,10 +26,12 @@ import (
 // percentage and ResetsAt the wall clock the bucket refills, when the provider
 // publishes one.
 type usageWindow struct {
-	Key         string  `json:"key"`
-	Label       string  `json:"label"`
-	Utilization float64 `json:"utilization"`
-	ResetsAt    string  `json:"resetsAt,omitempty"`
+	Key           string  `json:"key"`
+	Label         string  `json:"label"`
+	Utilization   float64 `json:"utilization"`
+	ResetsAt      string  `json:"resetsAt,omitempty"`
+	WindowSeconds int64   `json:"windowSeconds"`
+	TokensUsed    int64   `json:"tokensUsed"`
 }
 
 // accountUsage is one connected account's allowance. A rate-windowed account
@@ -50,7 +54,7 @@ type accountUsage struct {
 // usageProviders is the ordered set of accounts that publish an allowance the
 // gateway can read. Other logins (ChatGPT, Copilot) expose no such surface, so
 // they are simply absent rather than shown with a fabricated allowance.
-var usageProviders = []string{"anthropic", "hyper"}
+var usageProviders = []string{"anthropic", "openai", "hyper"}
 
 // hyperCredits is the parsed Hyper credit balance.
 type hyperCredits struct {
@@ -62,6 +66,7 @@ type hyperCredits struct {
 // a network.
 var (
 	fetchAnthropicUsage = anthropic.FetchUsage
+	fetchOpenAIUsage    = openai.FetchUsage
 	fetchHyperCredits   = fetchHyperCreditsLive
 )
 
@@ -99,12 +104,15 @@ func (s *Server) handleLoginsUsage(w http.ResponseWriter, r *http.Request) {
 			switch id {
 			case "anthropic":
 				accounts[i] = anthropicUsage(ctx, src, p)
+			case "openai":
+				accounts[i] = openaiUsage(ctx, src, p)
 			case "hyper":
 				accounts[i] = hyperUsage(ctx, src, p)
 			}
 		}(i, id)
 	}
 	wg.Wait()
+	fillWindowTokens(ctx, s.engine.DB(), accounts)
 	WriteJSON(w, http.StatusOK, map[string]any{"accounts": accounts})
 }
 
@@ -124,20 +132,98 @@ func anthropicUsage(ctx context.Context, src gateway.CredentialSource, p gateway
 	}
 	if w := usage.Session5h(); w != nil {
 		out.Windows = append(out.Windows, usageWindow{
-			Key: "five_hour", Label: "5h session", Utilization: w.Utilization, ResetsAt: w.ResetsAt,
+			Key: "five_hour", Label: "5h session", Utilization: w.Utilization, ResetsAt: w.ResetsAt, WindowSeconds: 18000,
 		})
 	}
 	if w := usage.Weekly(); w != nil {
 		out.Windows = append(out.Windows, usageWindow{
-			Key: "seven_day", Label: "7d all models", Utilization: w.Utilization, ResetsAt: w.ResetsAt,
+			Key: "seven_day", Label: "7d all models", Utilization: w.Utilization, ResetsAt: w.ResetsAt, WindowSeconds: 604800,
 		})
 	}
 	for _, s := range usage.ScopedWeekly() {
 		out.Windows = append(out.Windows, usageWindow{
-			Key: "weekly_scoped", Label: "7d " + s.Label, Utilization: s.Utilization, ResetsAt: s.ResetsAt,
+			Key: "weekly_scoped", Label: "7d " + s.Label, Utilization: s.Utilization, ResetsAt: s.ResetsAt, WindowSeconds: 604800,
 		})
 	}
 	return out
+}
+
+func openaiUsage(ctx context.Context, src gateway.CredentialSource, p gateway.LinkableProvider) accountUsage {
+	out := accountUsage{Provider: "openai", Name: providerDisplayName(p, "ChatGPT (Codex)")}
+	token, _, err := src.Credential(ctx, "openai")
+	if err != nil {
+		out.NeedsSignIn = true
+		out.Error = err.Error()
+		return out
+	}
+	usage, err := fetchOpenAIUsage(ctx, token)
+	if err != nil {
+		out.NeedsSignIn = authenticationFailure(err)
+		out.Error = redactSecret(err.Error(), token)
+		return out
+	}
+	out.Windows = codexWindows(usage)
+	return out
+}
+
+// codexWindows maps the Codex rate-limit report onto the normalized windows the
+// Accounts screen renders. Each window's Key follows Contract 1 (five_hour for a
+// window <=6h, else seven_day). When the backend reports two windows that both
+// resolve to the same Key it is publishing the 5h and weekly buckets, so the
+// primary is pinned to the 5h window and the secondary to the weekly one rather
+// than showing two identical keys.
+func codexWindows(usage openai.Usage) []usageWindow {
+	entries := make([]usageWindow, 0, 2)
+	if usage.Primary != nil {
+		entries = append(entries, codexWindow(usage.Primary))
+	}
+	if usage.Secondary != nil {
+		entries = append(entries, codexWindow(usage.Secondary))
+	}
+	if len(entries) == 2 && entries[0].Key == entries[1].Key {
+		entries[0].Key, entries[0].Label, entries[0].WindowSeconds = "five_hour", "5h session", 18000
+		entries[1].Key, entries[1].Label, entries[1].WindowSeconds = "seven_day", "weekly", 604800
+	}
+	return entries
+}
+
+func codexWindow(w *openai.Window) usageWindow {
+	key, label, windowSeconds := "seven_day", "7d all models", int64(604800)
+	if w.LimitWindowSeconds <= 21600 {
+		key, label, windowSeconds = "five_hour", "5h session", 18000
+	}
+	out := usageWindow{Key: key, Label: label, Utilization: w.UsedPercent, WindowSeconds: windowSeconds}
+	if !w.ResetAt.IsZero() {
+		out.ResetsAt = w.ResetAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+// fillWindowTokens annotates every rate-limit window with the tokens this
+// gateway actually routed to that account's platform inside the window, read
+// from the requests ledger. It is best-effort: a query error leaves the count
+// at 0 so the screen degrades to "not measured" rather than failing whole.
+func fillWindowTokens(ctx context.Context, db *sql.DB, accounts []accountUsage) {
+	if db == nil {
+		return
+	}
+	now := time.Now().Unix()
+	for ai := range accounts {
+		platform := accounts[ai].Provider
+		for wi := range accounts[ai].Windows {
+			w := &accounts[ai].Windows[wi]
+			if w.WindowSeconds <= 0 {
+				continue
+			}
+			var tokens int64
+			if err := db.QueryRowContext(ctx,
+				`SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM requests WHERE platform = ? AND created_at >= ?`,
+				platform, now-w.WindowSeconds).Scan(&tokens); err != nil {
+				continue
+			}
+			w.TokensUsed = tokens
+		}
+	}
 }
 
 func hyperUsage(ctx context.Context, src gateway.CredentialSource, p gateway.LinkableProvider) accountUsage {

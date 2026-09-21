@@ -29,10 +29,10 @@ func ExplainUnroutableChain(db *sql.DB, strategyKey string) string {
 	case len(platforms) == 0:
 		// Models and keys both exist, so the loss happened elsewhere (every
 		// key scoped away from these models, for instance).
-		return "no key is allowed to serve the models in this list - check each key's model scope on the Keys page"
+		return "no key is allowed to serve the models in this list - check each key's model scope on the Providers page"
 	}
 
-	return fmt.Sprintf("no key serves %s, which is what this list routes to - add one on the Keys page",
+	return fmt.Sprintf("no key serves %s, which is what this list routes to - connect one on the Providers page",
 		joinAnd(platforms))
 }
 

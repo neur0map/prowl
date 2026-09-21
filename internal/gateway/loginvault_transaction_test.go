@@ -329,30 +329,32 @@ func TestRefreshPersistFailureRollsBackToPriorToken(t *testing.T) {
 
 // TestStaleRefreshDoesNotClobberNewerSignIn proves a refresh that finishes after
 // a newer sign-in replaced the same provider serves and keeps the newer login,
-// never overwriting it with the stale refreshed token.
+// never overwriting it with the stale refreshed token. Cross-process
+// serialization now holds the file lock across the whole exchange, so a sign-in
+// can no longer interleave mid-exchange; the compare-and-swap that guards the
+// rotation is exercised directly through persistRefresh, the path liveToken uses
+// under that lock.
 func TestStaleRefreshDoesNotClobberNewerSignIn(t *testing.T) {
 	vault, err := OpenLoginVault(t.TempDir())
 	require.NoError(t, err)
+	before := &oauth.Token{AccessToken: "access-old", RefreshToken: "refresh-old"}
+	_, err = vault.commitLogin("anthropic", before, "acct-old")
+	require.NoError(t, err)
+
+	// A newer sign-in for the same provider lands and persists while a refresh
+	// started from access-old is still in flight.
 	_, err = vault.commitLogin("anthropic", &oauth.Token{
-		AccessToken: "access-old", RefreshToken: "refresh-old",
-		ExpiresAt: time.Now().Add(-time.Hour).Unix(),
-	}, "acct-old")
+		AccessToken: "access-new", RefreshToken: "refresh-new",
+	}, "acct-new")
 	require.NoError(t, err)
 
-	// Model a slow refresh: a newer sign-in for the same provider lands (and
-	// persists) before the refresh returns its now-stale token.
-	var replaced error
-	vault.refresh = func(_ context.Context, provider string, _ *oauth.Token) (*oauth.Token, error) {
-		_, replaced = vault.commitLogin(provider, &oauth.Token{
-			AccessToken: "access-new", RefreshToken: "refresh-new",
-		}, "acct-new")
-		return &oauth.Token{AccessToken: "access-stale", RefreshToken: "refresh-stale"}, nil
-	}
-
-	got, err := vault.liveAccessToken(context.Background(), "anthropic")
+	// The stale refresh persists last. Its compare-and-swap against the
+	// credential it started from must adopt the newer login, not clobber it.
+	got, err := vault.persistRefresh("anthropic", before, &oauth.Token{
+		AccessToken: "access-stale", RefreshToken: "refresh-stale",
+	})
 	require.NoError(t, err)
-	require.NoError(t, replaced)
-	require.Equal(t, "access-new", got, "a superseded refresh must serve the newer login's token")
+	require.Equal(t, "access-new", got.AccessToken, "a superseded refresh must serve the newer login's token")
 
 	stored, ok := vault.Get("anthropic")
 	require.True(t, ok)
@@ -405,51 +407,47 @@ func TestLiveTokenRefusesTokenForgottenBySibling(t *testing.T) {
 }
 
 // TestConcurrentRefreshAndForgetDoesNotResurrect proves a refresh that races a
-// sibling's forget never resurrects the login: the forget stays authoritative
-// on disk, and neither process serves the credential on the next read.
+// forget never resurrects the login: the forget stays authoritative on disk and
+// the next read reports the login missing. Cross-process serialization now holds
+// the file lock across the whole exchange, so a forget can no longer interleave
+// mid-exchange; the compare-and-swap that must not resurrect a forgotten login
+// is exercised directly through persistRefresh, the path liveToken uses under
+// that lock.
 func TestConcurrentRefreshAndForgetDoesNotResurrect(t *testing.T) {
 	dir := t.TempDir()
-	daemonA, err := OpenLoginVault(dir)
+	vault, err := OpenLoginVault(dir)
 	require.NoError(t, err)
 
-	// An expired token so the read drives the refresh path.
-	_, err = daemonA.commitLogin("hyper", &oauth.Token{
-		AccessToken: "hyper-old", RefreshToken: "refresh-old",
-		ExpiresAt: time.Now().Add(-time.Hour).Unix(),
-	}, "acct-a")
+	before := &oauth.Token{AccessToken: "hyper-old", RefreshToken: "refresh-old"}
+	_, err = vault.commitLogin("hyper", before, "acct-a")
 	require.NoError(t, err)
 
-	daemonB, err := OpenLoginVault(dir)
+	// The login is forgotten and the deletion persisted while a refresh started
+	// from hyper-old is still in flight.
+	forgotten, err := vault.Forget("hyper")
 	require.NoError(t, err)
-
-	// Model the race: the forget lands (and persists) while the refresh is in
-	// flight, before it returns its freshly minted token.
-	var forgotten bool
-	var forgetErr error
-	daemonA.refresh = func(_ context.Context, provider string, _ *oauth.Token) (*oauth.Token, error) {
-		forgotten, forgetErr = daemonB.Forget(provider)
-		return &oauth.Token{AccessToken: "hyper-new", RefreshToken: "refresh-new"}, nil
-	}
-
-	// The in-flight request still receives its freshly minted token, but the
-	// persist is a no-op that must not re-add the forgotten login.
-	got, err := daemonA.liveAccessToken(context.Background(), "hyper")
-	require.NoError(t, err)
-	require.NoError(t, forgetErr)
 	require.True(t, forgotten)
-	require.Equal(t, "hyper-new", got)
 
-	// The forget stays authoritative on disk.
+	// The in-flight refresh persists last. Its compare-and-swap finds the login
+	// gone and must not re-add it, while still serving the freshly minted token
+	// to the request that triggered the refresh.
+	got, err := vault.persistRefresh("hyper", before, &oauth.Token{
+		AccessToken: "hyper-new", RefreshToken: "refresh-new",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "hyper-new", got.AccessToken)
+
+	// The forget stays authoritative in memory and on disk.
+	_, revived := vault.Get("hyper")
+	require.False(t, revived, "a concurrent refresh must not resurrect a forgotten login in memory")
 	onDisk, err := OpenLoginVault(dir)
 	require.NoError(t, err)
-	_, revived := onDisk.Get("hyper")
-	require.False(t, revived, "a concurrent refresh must not resurrect a forgotten login on disk")
+	_, revivedDisk := onDisk.Get("hyper")
+	require.False(t, revivedDisk, "a concurrent refresh must not resurrect a forgotten login on disk")
 
-	// And neither process serves it on the next read.
-	_, err = daemonA.liveAccessToken(context.Background(), "hyper")
+	// And the next read reports it missing.
+	_, err = vault.liveAccessToken(context.Background(), "hyper")
 	require.Error(t, err, "the refreshing process must not serve a login a sibling forgot")
-	_, err = daemonB.liveAccessToken(context.Background(), "hyper")
-	require.Error(t, err)
 }
 
 // TestLiveTokenFailsClosedWhenSharedStateUnreadable proves a disk-backed vault
