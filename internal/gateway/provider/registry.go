@@ -616,7 +616,19 @@ func newSSEStream(resp *http.Response, cancel context.CancelFunc, verify bool, r
 func (s *sseStream) Recv() (*ChatChunk, error) {
 	for s.scan.Scan() {
 		line := strings.TrimSpace(s.scan.Text())
-		if line == "" || !strings.HasPrefix(line, "data:") {
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			// An SSE comment line is a heartbeat: OpenRouter sends
+			// ": OPENROUTER PROCESSING" (others ": keep-alive") to hold the
+			// connection open during a long thinking phase, when no data frame
+			// is on the wire for tens of seconds. Surface it as a liveness frame
+			// so the relay's post-commit idle guard sees the upstream is alive
+			// and does not kill a healthy stream as "sent no content".
+			return &ChatChunk{Keepalive: true}, nil
+		}
+		if !strings.HasPrefix(line, "data:") {
 			continue
 		}
 		data := strings.TrimSpace(line[len("data:"):])

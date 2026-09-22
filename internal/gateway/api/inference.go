@@ -869,6 +869,21 @@ func (c *chatRelay) stream(ctx context.Context, prov provider.Provider, apiKey s
 			}, estimatedOutputBytes, usageReported)
 		}
 
+		// A provider keepalive (Anthropic `ping`) proves the upstream is alive
+		// and still working -- a long thinking or tool-argument phase sends
+		// these between content frames with nothing else on the wire. It carries
+		// no client-visible content, so it never commits or writes. Post-commit
+		// it resets the idle guard so a healthy stream is not killed as stalled;
+		// pre-commit it is ignored, because the first-content deadline must not
+		// be extended by content-free frames (a provider that only pings and
+		// never produces content must still fail over).
+		if chunk.Keepalive {
+			if wroteHeader {
+				keepAlive()
+			}
+			continue
+		}
+
 		// A provider may report a failure INSIDE a 200 stream rather than as
 		// an HTTP status: NVIDIA sends "service temporarily overloaded" this
 		// way. Treating that frame as content would commit the response and

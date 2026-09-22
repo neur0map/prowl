@@ -391,6 +391,79 @@ func TestDripFedEmptyFramesDoNotHoldTheRequestOpen(t *testing.T) {
 	require.Contains(t, body, " answer")
 }
 
+// newHeartbeatAfterContentUpstream commits one real content frame, then sends
+// only SSE comment heartbeats (": PROCESSING") for longer than the idle guard
+// before finishing. This is what a provider does during a long thinking or
+// tool-argument phase: the connection stays alive with keepalives but no data
+// frame is on the wire.
+func newHeartbeatAfterContentUpstream(t *testing.T, beats int, gap time.Duration) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flush := func() {
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+		open, _ := json.Marshal(map[string]any{
+			"id": "chatcmpl-hb", "object": "chat.completion.chunk", "model": "m",
+			"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"content": "partial"}}},
+		})
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", open)
+		flush()
+		for i := 0; i < beats; i++ {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(gap):
+			}
+			// An SSE comment heartbeat, not a data frame.
+			if _, err := fmt.Fprint(w, ": PROCESSING\n\n"); err != nil {
+				return
+			}
+			flush()
+		}
+		final, _ := json.Marshal(map[string]any{
+			"id": "chatcmpl-hb", "object": "chat.completion.chunk", "model": "m",
+			"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"content": " answer"}, "finish_reason": "stop"}},
+			"usage":   map[string]int{"prompt_tokens": 5, "completion_tokens": 3},
+		})
+		_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", final)
+		flush()
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestHeartbeatsAfterContentKeepStreamAlive is the regression for the "sent no
+// content" stall a live run hit on long reasoning turns: after the response
+// committed, the upstream sent only keepalive heartbeats during a long thinking
+// phase. The parser swallowed them, so the post-commit idle guard saw no frames
+// and killed a healthy stream. A heartbeat must reset the idle guard so the
+// finished answer reaches the caller.
+func TestHeartbeatsAfterContentKeepStreamAlive(t *testing.T) {
+	// Not parallel: this test temporarily overrides a package-level timeout.
+
+	s := testServer(t, Options{MachineKey: compatMachineKey})
+	// Six 40ms heartbeats span 240ms, well past the 60ms idle guard: without
+	// the keepalive reset the guard fires long before the answer arrives.
+	upstream := newHeartbeatAfterContentUpstream(t, 6, 40*time.Millisecond)
+	seedRoute(t, s, "beats", upstream.URL, "test-model", 1)
+	usePriorityOrder(t, s)
+
+	restore := streamIdleTimeoutForTest(60 * time.Millisecond)
+	t.Cleanup(restore)
+
+	resp, body := postCompat(t, s, "/v1/chat/completions",
+		`{"model":"auto","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, body, "partial", "the committed opener must reach the caller")
+	require.Contains(t, body, " answer", "the answer after the heartbeats must reach the caller")
+	require.NotContains(t, body, "sent no content", "heartbeats must reset the idle guard")
+}
+
 // TestUnmodelledDeltaFieldCountsAsContent keeps the gateway from swallowing a
 // stream whose shape it does not recognise. Reasoning text arrives under
 // several different keys across providers, and enumerating the known ones

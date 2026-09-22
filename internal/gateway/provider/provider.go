@@ -157,6 +157,12 @@ type ChatChunk struct {
 	// is not OpenAI-shaped (and is usually empty). The OpenAI surface marshals
 	// the normalised chunk for these instead of relaying Raw.
 	Native bool `json:"-"`
+
+	// Keepalive marks a liveness-only frame (an Anthropic `ping`) that carries
+	// no client-visible content. It proves the upstream is still alive during a
+	// long thinking or tool-argument phase, so the relay can reset its idle
+	// guard on it without committing or writing anything.
+	Keepalive bool `json:"-"`
 }
 
 // ChunkChoice is one delta in a streamed frame.

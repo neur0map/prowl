@@ -223,6 +223,17 @@ func anthropicRequest(request *ChatRequest, stream bool) (map[string]any, error)
 			delete(body, "tools")
 		} else if converted != nil {
 			body["tool_choice"] = converted
+			// Anthropic rejects extended thinking when tool_choice forces tool
+			// use ("Thinking may not be enabled when tool_choice forces tool
+			// use."): a forced-tool turn with reasoning_effort would 400 the
+			// whole request. "auto" is fine with thinking; only "any" (from
+			// "required") and a named tool force it, so drop thinking there and
+			// let the tool call proceed rather than failing the turn.
+			if m, isMap := converted.(map[string]any); isMap {
+				if t, _ := m["type"].(string); t == "any" || t == "tool" {
+					delete(body, "thinking")
+				}
+			}
 		}
 	}
 	return body, nil
@@ -695,6 +706,14 @@ func (s *anthropicStream) Recv() (*ChatChunk, error) {
 		case "message_stop":
 			s.stopped = true
 			return nil, io.EOF
+		case "ping":
+			// Anthropic sends periodic `ping` keepalives during a long thinking
+			// or tool-argument phase, when no content frame is on the wire for
+			// tens of seconds. Surfacing it as a liveness frame lets the relay's
+			// post-commit idle guard see the upstream is alive and working, so a
+			// healthy stream is not killed as stalled. It carries no content, so
+			// the relay never commits or writes on it.
+			return &ChatChunk{Keepalive: true}, nil
 		}
 	}
 	if err := s.scanner.Err(); err != nil {

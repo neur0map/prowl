@@ -187,6 +187,79 @@ func TestAnthropicStreamMapsTextToolArgumentsAndFinish(t *testing.T) {
 	require.Equal(t, "tool_calls", *chunks[3].Choices[0].FinishReason)
 }
 
+// TestAnthropicPingSurfacesKeepalive proves a `ping` keepalive is surfaced as a
+// liveness frame rather than silently swallowed inside Recv. Swallowing it let a
+// long thinking phase (only pings on the wire for tens of seconds) trip the
+// relay's idle guard and kill a healthy stream as "sent no content".
+func TestAnthropicPingSurfacesKeepalive(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"type":"message_start","message":{"id":"msg_3","model":"claude-opus-4-8"}}`,
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}`,
+		`data: {"type":"ping"}`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}`,
+		`data: {"type":"message_stop"}`,
+		"",
+	}, "\n\n")
+	stream := newAnthropicStream(&http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}, func() {}, "fallback")
+
+	var keepalives, content int
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		if chunk.Keepalive {
+			keepalives++
+			require.Empty(t, chunk.Choices, "keepalive frame must carry no content")
+			continue
+		}
+		content++
+	}
+	require.Equal(t, 1, keepalives, "the ping must surface exactly one keepalive frame")
+	require.Equal(t, 2, content, "the text delta and finish frame must still be delivered")
+}
+
+// TestAnthropicForcedToolChoiceDropsThinking proves reasoning is disabled when
+// tool_choice forces tool use, since Anthropic 400s that combination
+// ("Thinking may not be enabled when tool_choice forces tool use."). "auto"
+// does not force a tool, so thinking is preserved there.
+func TestAnthropicForcedToolChoiceDropsThinking(t *testing.T) {
+	tools := []any{map[string]any{"type": "function", "function": map[string]any{
+		"name": "read_file", "parameters": map[string]any{"type": "object"},
+	}}}
+	cases := []struct {
+		name       string
+		toolChoice any
+		wantThink  bool
+	}{
+		{"required forces any", "required", false},
+		{"named tool forces it", map[string]any{"type": "function", "function": map[string]any{"name": "read_file"}}, false},
+		{"auto does not force", "auto", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			body, err := anthropicRequest(&ChatRequest{
+				Model:    "anthropic/claude-opus-4-8",
+				Messages: []map[string]any{{"role": "user", "content": "hi"}},
+				Params: map[string]any{
+					"reasoning_effort":      "high",
+					"max_completion_tokens": float64(16000),
+					"tools":                 tools,
+					"tool_choice":           c.toolChoice,
+				},
+			}, false)
+			require.NoError(t, err)
+			_, hasThinking := body["thinking"]
+			require.Equal(t, c.wantThink, hasThinking)
+		})
+	}
+}
+
 func TestRegistryUsesNativeAnthropicAdapter(t *testing.T) {
 	registered, ok := NewRegistry().Get("anthropic")
 	require.True(t, ok)
