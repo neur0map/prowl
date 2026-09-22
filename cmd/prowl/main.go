@@ -12,7 +12,7 @@ import (
 	versionpkg "github.com/neur0map/prowl/internal/version"
 )
 
-var version = "v0.16.6" // stamped; also fed to internal/version
+var version = "v0.16.7" // stamped; also fed to internal/version
 
 // commit is the full 40-hex source commit, stamped in release builds
 // (-ldflags "-X main.commit=<sha>"). It is empty for a local or downloaded
