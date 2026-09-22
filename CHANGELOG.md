@@ -7,6 +7,18 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Multi-dimensional model categorization. Every model now carries per-axis
+  capability scores - text intelligence, coding, tool/agentic, math, vision,
+  writing and planning - so the router matches a task to a model's real
+  strength instead of a coarse tier. Scores come live from Artificial Analysis
+  for the axes it publishes (intelligence/coding/agentic) and from a cited,
+  normalized Sept-2026 offline seed for the rest (vision/writing/planning/math,
+  which AA does not serve), so categorization works even without an
+  `ARTIFICIAL_ANALYSIS_API_KEY`. The scorer reads the writing axis for writing
+  tasks, blends planning into reasoning/agentic tasks, and weights vision when a
+  request carries an image; an unmeasured axis falls back to overall
+  intelligence, never to zero. `model_benchmarks` gains vision/writing/planning
+  columns and a live AA refresh never clobbers a seeded axis it cannot source.
 - New **Errors** console section (Gateway group): a debugging log of failed
   requests with the provider/model, error kind, HTTP status, routing context and
   the upstream's verbatim message. `enter` reads the full detail, `c` copies it,

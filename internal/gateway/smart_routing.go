@@ -32,6 +32,7 @@ type PromptProfile struct {
 	Confidence float64
 	UsesTools  bool
 	HasCode    bool
+	HasImages  bool
 	Reason     string
 }
 
@@ -188,6 +189,7 @@ func ClassifyPrompt(messages []map[string]any, params map[string]any) PromptProf
 	profile := PromptProfile{
 		Domain: domain, Complexity: complexity, Stakes: stakes,
 		Confidence: confidence, UsesTools: usesTools, HasCode: coding > 0,
+		HasImages: messagesHaveImages(messages),
 	}
 	profile.Reason = string(profile.Domain) + " · " + profile.ComplexityLabel()
 	if profile.Stakes >= 0.35 {
@@ -303,6 +305,29 @@ func estimatedTextTokens(bytes int) int {
 	return max((bytes+3)/4, 1)
 }
 
+// messagesHaveImages reports whether any message carries image content in the
+// OpenAI multi-part shape (an image_url/input_image part), so the scorer can
+// weight the vision axis for a request that a text-only model would fail.
+func messagesHaveImages(messages []map[string]any) bool {
+	for _, m := range messages {
+		parts, ok := m["content"].([]any)
+		if !ok {
+			continue
+		}
+		for _, p := range parts {
+			part, ok := p.(map[string]any)
+			if !ok {
+				continue
+			}
+			switch part["type"] {
+			case "image_url", "input_image", "image":
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func appendPromptContent(builder *strings.Builder, value any, limit int) {
 	appendText := func(text string) {
 		remaining := limit - builder.Len()
@@ -339,8 +364,15 @@ type BenchmarkScores struct {
 	Agentic      float64
 	Math         float64
 	Multilingual float64
-	Fresh        bool
-	Source       string
+	// Vision, Writing and Planning are the task-specific axes: image
+	// understanding, creative/instruction-following quality, and long-horizon
+	// strategy/planning. Zero means unmeasured; the scorer falls back to overall
+	// intelligence for that model rather than treating absence as incompetence.
+	Vision   float64
+	Writing  float64
+	Planning float64
+	Fresh    bool
+	Source   string
 }
 
 // SmartScore is the explainable score attached to one smart-routing candidate.
@@ -479,25 +511,37 @@ func promptCapability(entry ChainEntry, profile PromptProfile, score BenchmarkSc
 	agentic := valueOr(score.Agentic, general)
 	mathScore := valueOr(score.Math, general)
 	multilingual := valueOr(score.Multilingual, general)
+	// Task-specific axes fall back to the overall prior when unmeasured, so a
+	// model with no writing/planning/vision number is judged on its general
+	// intelligence rather than scored as if it were incompetent at that task.
+	writing := valueOr(score.Writing, general)
+	planning := valueOr(score.Planning, general)
+	vision := valueOr(score.Vision, general)
 
 	var capability float64
 	switch profile.Domain {
 	case DomainCoding:
 		capability = 0.65*coding + 0.20*agentic + 0.15*general
 	case DomainAgentic:
-		capability = 0.60*agentic + 0.25*coding + 0.15*general
+		capability = 0.55*agentic + 0.20*coding + 0.15*general + 0.10*planning
 	case DomainMath:
 		capability = 0.70*mathScore + 0.30*general
 	case DomainReasoning:
-		capability = general
+		capability = 0.70*general + 0.30*planning
 	case DomainResearch:
-		capability = 0.80*general + 0.20*multilingual
+		capability = 0.70*general + 0.15*planning + 0.15*multilingual
 	case DomainWriting:
-		capability = 0.75*general + 0.25*multilingual
+		capability = 0.70*writing + 0.30*general
 	case DomainExtraction:
 		capability = 0.70*general + 0.30*agentic
 	default:
 		capability = general
+	}
+	// An image request needs vision whatever the text domain: a model that
+	// cannot see is the wrong pick even if it is the strongest coder, so the
+	// vision axis is blended in when the prompt carries an image.
+	if profile.HasImages {
+		capability = 0.55*vision + 0.45*capability
 	}
 	modelName := strings.ToLower(entry.ModelID + " " + entry.DisplayName)
 	if profile.Domain == DomainCoding && containsCodeModelCue(modelName) {

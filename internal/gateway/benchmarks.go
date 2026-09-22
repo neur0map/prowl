@@ -154,6 +154,7 @@ func LoadBenchmarkScores(ctx context.Context, db *sql.DB, entries []ChainEntry) 
 	rows, err := db.QueryContext(ctx, `
 		SELECT model_db_id, COALESCE(intelligence, 0), COALESCE(coding, 0),
 		       COALESCE(agentic, 0), COALESCE(math, 0), COALESCE(multilingual, 0),
+		       COALESCE(vision, 0), COALESCE(writing, 0), COALESCE(planning, 0),
 		       source, refreshed_at
 		  FROM model_benchmarks
 		 WHERE model_db_id IN (`+strings.Join(ids, ",")+`)`)
@@ -165,7 +166,8 @@ func LoadBenchmarkScores(ctx context.Context, db *sql.DB, entries []ChainEntry) 
 		var id, refreshed int64
 		var score BenchmarkScores
 		if rows.Scan(&id, &score.Intelligence, &score.Coding, &score.Agentic,
-			&score.Math, &score.Multilingual, &score.Source, &refreshed) != nil {
+			&score.Math, &score.Multilingual, &score.Vision, &score.Writing,
+			&score.Planning, &score.Source, &refreshed) != nil {
 			continue
 		}
 		score.Fresh = time.Since(time.Unix(refreshed, 0)) <= 7*24*time.Hour

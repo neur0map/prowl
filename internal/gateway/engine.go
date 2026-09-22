@@ -158,6 +158,14 @@ func OpenEngine(ctx context.Context, dir string, opts EngineOptions) (*Engine, e
 		} else if added > 0 {
 			slog.Info("Gateway default profile updated", "models_added", added)
 		}
+		// Seed the offline multi-axis capability priors so the router can
+		// match a task to a model's real strength without an AA key. Live AA
+		// rows are never clobbered (the upsert is gated to seed rows).
+		if seeded, err := SeedBenchmarks(ctx, st.DB()); err != nil {
+			slog.Error("Gateway benchmark seed failed", "error", err)
+		} else if seeded > 0 {
+			slog.Info("Gateway benchmark priors seeded", "models", seeded)
+		}
 	}
 
 	return e, nil

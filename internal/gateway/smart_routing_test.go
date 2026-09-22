@@ -277,3 +277,23 @@ func TestCapChainToComplexityBandExcludesOverTierWithFallback(t *testing.T) {
 	require.Len(t, got, 1, "band cap must never empty the chain")
 	require.Equal(t, int64(9), got[0].ModelDBID)
 }
+
+// TestPromptCapabilityUsesTaskSpecificAxes proves the multi-axis scores steer
+// capability: a writing task rewards the writing axis, and an image request
+// rewards the vision axis whatever the text domain, so a strong-but-blind model
+// loses an image task to a weaker-but-sighted one.
+func TestPromptCapabilityUsesTaskSpecificAxes(t *testing.T) {
+	var entry ChainEntry
+
+	strongWriter := BenchmarkScores{Intelligence: 0.5, Writing: 0.95, Source: "seed"}
+	weakWriter := BenchmarkScores{Intelligence: 0.5, Writing: 0.20, Source: "seed"}
+	strongCap, _ := promptCapability(entry, PromptProfile{Domain: DomainWriting}, strongWriter, true, 0.5)
+	weakCap, _ := promptCapability(entry, PromptProfile{Domain: DomainWriting}, weakWriter, true, 0.5)
+	require.Greater(t, strongCap, weakCap, "a writing task must reward the writing axis")
+
+	sighted := BenchmarkScores{Intelligence: 0.5, Vision: 0.90, Source: "seed"}
+	blind := BenchmarkScores{Intelligence: 0.9, Vision: 0.05, Source: "seed"}
+	sightedCap, _ := promptCapability(entry, PromptProfile{Domain: DomainCoding, HasImages: true}, sighted, true, 0.5)
+	blindCap, _ := promptCapability(entry, PromptProfile{Domain: DomainCoding, HasImages: true}, blind, true, 0.5)
+	require.Greater(t, sightedCap, blindCap, "an image request must reward the vision axis over raw intelligence")
+}
