@@ -241,12 +241,19 @@ func (s *Server) handleUsageRequests(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Sscanf(r.URL.Query().Get("limit"), "%d", &n); err == nil && n > 0 && n <= 200 {
 		limit = n
 	}
+	where := ""
+	if r.URL.Query().Get("failures") == "1" {
+		// The Errors console pulls only failed calls, so debugging a broken run
+		// is not diluted by successful traffic. A row with an error message but a
+		// committed-stream outcome (a mid-stream break) still counts as a failure.
+		where = ` WHERE outcome = 'error' OR (error_message IS NOT NULL AND error_message != '')`
+	}
 	rows, err := s.engine.DB().QueryContext(r.Context(), `
 		SELECT id, created_at, platform, model_id, outcome, status,
 		       input_tokens, output_tokens, estimated, usage_quality,
 		       cost_usd, cost_known, latency_ms, attempts,
 		       routed_from, class, effort, error_kind, error_message
-		  FROM requests ORDER BY id DESC LIMIT ?`, limit)
+		  FROM requests`+where+` ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, TypeServer, "could not read the request trail")
 		return

@@ -7,6 +7,10 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- New **Errors** console section (Gateway group): a debugging log of failed
+  requests with the provider/model, error kind, HTTP status, routing context and
+  the upstream's verbatim message. `enter` reads the full detail, `c` copies it,
+  `/` searches. Backed by `GET /api/usage/requests?failures=1`.
 - New **Efficient** routing strategy: it classifies each prompt and caps the
   candidate pool at the capability tier the difficulty warrants (high stakes
   lift the cap one tier), then orders within the cap like Smartest. A simple

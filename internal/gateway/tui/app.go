@@ -22,6 +22,7 @@ const (
 	TabProjects
 	TabSetup
 	TabToolkit
+	TabErrors
 )
 
 // tabMeta is what the sidebar and page heading show for a section. group is
@@ -41,6 +42,7 @@ var tabsMeta = []tabMeta{
 	{"Projects", "Every indexed project, its coverage and freshness.", "▦", "Workspace"},
 	{"Setup", "Connect coding harnesses to Prowl safely.", "△", "Workspace"},
 	{"Toolkit", "Every Prowl function and its copyable command.", "◫", "Workspace"},
+	{"Errors", "Failed requests with the upstream's own message, for debugging.", "⚠", "Gateway"},
 }
 
 func (t Tab) name() string { return tabsMeta[t].name }
@@ -168,6 +170,7 @@ type App struct {
 	projects  projectsModel
 	setup     setupModel
 	toolkit   toolkitModel
+	errors    errorsModel
 
 	spinner spinner.Model
 	overlay tea.Model
@@ -190,7 +193,7 @@ func New(client *Client, owned bool, version string) *App {
 		Owned:            owned,
 		DaemonManageable: owned,
 		Version:          version,
-		tabs:             []Tab{TabOverview, TabRouting, TabProviders, TabUsage, TabProjects, TabSetup, TabToolkit},
+		tabs:             []Tab{TabOverview, TabRouting, TabProviders, TabUsage, TabErrors, TabProjects, TabSetup, TabToolkit},
 		visited:          map[Tab]bool{TabOverview: true},
 		spinner: spinner.New(
 			spinner.WithSpinner(spinner.Line),
@@ -205,6 +208,8 @@ func New(client *Client, owned bool, version string) *App {
 	a.projects.list.setHeaders("Project", "Index", "Files", "Symbols", "Edges", "Est. saved", "Updated")
 	a.toolkit = newToolkitModel(a)
 	a.setup = setupModel{app: a, list: newList("Search harnesses")}
+	a.errors = errorsModel{app: a, list: newList("Search failures")}
+	a.errors.list.setHeaders("When", "Provider / Model", "Kind", "Message")
 	return a
 }
 
@@ -238,6 +243,8 @@ func (a *App) screenFor(tab Tab) tea.Model {
 		return &a.setup
 	case TabToolkit:
 		return &a.toolkit
+	case TabErrors:
+		return &a.errors
 	}
 	return nil
 }
@@ -256,6 +263,8 @@ func (a *App) screenLoading(tab Tab) bool {
 		return !a.projects.loaded
 	case TabSetup:
 		return !a.setup.loaded
+	case TabErrors:
+		return !a.errors.loaded
 	default:
 		return false
 	}
