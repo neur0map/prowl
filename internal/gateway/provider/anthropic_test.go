@@ -125,6 +125,33 @@ func TestAnthropicReasoningBecomesThinking(t *testing.T) {
 	require.NotContains(t, captured, "output_config")
 }
 
+// TestAnthropicDropsDeprecatedSamplingParams proves temperature/top_p/top_k are
+// never forwarded to Claude even when the request carries no reasoning, since
+// newer Claude models (opus-4-8, sonnet-5, 5.x) 400 on them as deprecated.
+func TestAnthropicDropsDeprecatedSamplingParams(t *testing.T) {
+	var captured map[string]any
+	client := &http.Client{Transport: captureTransport(func(req *http.Request) (*http.Response, error) {
+		require.NoError(t, json.NewDecoder(req.Body).Decode(&captured))
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(`{"id":"m","type":"message","role":"assistant","model":"claude-opus-4-8",
+				"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)),
+		}, nil
+	})}
+	p := &anthropicProvider{client: client}
+	_, err := p.ChatCompletion(context.Background(), "sk-ant-api-test", &ChatRequest{
+		Model:    "anthropic/claude-opus-4-8",
+		Messages: []map[string]any{{"role": "user", "content": "hi"}},
+		Params:   map[string]any{"temperature": 0.7, "top_p": 0.9, "top_k": 40},
+	})
+	require.NoError(t, err)
+	require.NotContains(t, captured, "temperature")
+	require.NotContains(t, captured, "top_p")
+	require.NotContains(t, captured, "top_k")
+	require.NotContains(t, captured, "thinking", "no reasoning_effort means no thinking block")
+}
+
 func TestAnthropicStreamMapsTextToolArgumentsAndFinish(t *testing.T) {
 	body := strings.Join([]string{
 		`data: {"type":"message_start","message":{"id":"msg_2","model":"claude-opus-5"}}`,

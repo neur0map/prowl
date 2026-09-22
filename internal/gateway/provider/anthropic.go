@@ -169,7 +169,14 @@ func anthropicRequest(request *ChatRequest, stream bool) (map[string]any, error)
 	}
 	body["messages"] = messages
 
-	for _, key := range []string{"temperature", "top_p", "top_k", "metadata", "thinking", "service_tier"} {
+	// Sampling params (temperature/top_p/top_k) are deliberately NOT forwarded:
+	// newer Claude models (opus-4.7+/sonnet-5/5.x) deprecate them and answer a
+	// request that carries one with a 400 ("temperature is deprecated for this
+	// model"), and extended thinking rejects a non-default temperature outright.
+	// Claude routes on its own defaults, so forwarding a harness's sampling knob
+	// only breaks the call - dropping it keeps the request working, which is what
+	// the harness actually needs. metadata/thinking/service_tier still pass.
+	for _, key := range []string{"metadata", "thinking", "service_tier"} {
 		if value, ok := request.Params[key]; ok {
 			body[key] = value
 		}
@@ -200,14 +207,6 @@ func anthropicRequest(request *ChatRequest, stream bool) (map[string]any, error)
 				body["thinking"] = map[string]any{"type": "enabled", "budget_tokens": budget}
 			}
 		}
-	}
-	// Extended thinking constrains sampling: Anthropic rejects temperature != 1
-	// (and limits top_p/top_k) once thinking is on, so drop the client's sampling
-	// params rather than 400 on them.
-	if _, thinking := body["thinking"]; thinking {
-		delete(body, "temperature")
-		delete(body, "top_p")
-		delete(body, "top_k")
 	}
 	if tools, ok := request.Params["tools"]; ok {
 		converted, err := anthropicTools(toAnySlice(tools))
