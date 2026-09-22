@@ -357,16 +357,20 @@ func anthropicThinkingBudget(effort string, maxTokens int) (int, bool) {
 	var want int
 	switch strings.ToLower(strings.TrimSpace(effort)) {
 	case "minimal", "low":
-		want = 2048
+		want = 1024
 	case "medium":
-		want = 6144
+		want = 2048
 	case "high":
-		want = 12288
+		want = 4096
 	case "xhigh", "max":
-		want = 24576
+		want = 8192
 	default:
 		return 0, false
 	}
+	// A coding harness sends a fixed effort on every call, so an oversized
+	// budget would make even a trivial turn think for tens of seconds and burn
+	// premium allowance. These budgets keep reasoning strong while holding
+	// time-to-first-token and cost in check.
 	// Reserve room for the answer: at least 4096 tokens, or half the window when
 	// it is small. The floor of 1024 is Anthropic's minimum thinking budget.
 	reserve := 4096

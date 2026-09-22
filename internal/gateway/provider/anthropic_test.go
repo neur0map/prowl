@@ -83,10 +83,10 @@ func TestAnthropicReasoningBecomesThinking(t *testing.T) {
 		want      int
 		on        bool
 	}{
-		{"low", 16000, 2048, true},
-		{"medium", 16000, 6144, true},
-		{"high", 16000, 11904, true}, // 12288 capped to maxTokens-4096
-		{"xhigh", 16000, 11904, true},
+		{"low", 16000, 1024, true},
+		{"medium", 16000, 2048, true},
+		{"high", 16000, 4096, true},
+		{"xhigh", 16000, 8192, true},
 		{"high", 3000, 1500, true}, // small window: reserve halves to 1500
 		{"high", 1500, 0, false},   // no room to think meaningfully
 		{"bogus", 16000, 0, false},
@@ -120,7 +120,7 @@ func TestAnthropicReasoningBecomesThinking(t *testing.T) {
 	thinking, ok := captured["thinking"].(map[string]any)
 	require.True(t, ok, "reasoning_effort must enable extended thinking")
 	require.Equal(t, "enabled", thinking["type"])
-	require.Equal(t, float64(11904), thinking["budget_tokens"])
+	require.Equal(t, float64(4096), thinking["budget_tokens"])
 	require.NotContains(t, captured, "temperature", "temperature must be dropped when thinking is on")
 	require.NotContains(t, captured, "output_config")
 }

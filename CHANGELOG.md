@@ -92,6 +92,16 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- Streamed Claude requests with reasoning no longer fail with "the provider
+  accepted the request and then sent no content". Extended thinking on a large
+  prompt pushes time-to-first-token past the old 25s first-content deadline (a
+  big prefill plus the thinking phase starts before any token streams), so a
+  harness that sends a high effort on 50k-plus-token turns saw repeated stalls.
+  The first-content deadline is now 45s (still inside the harness's minute), and
+  the thinking budgets are moderated (low 1024, medium 2048, high 4096, xhigh
+  8192) so a fixed high effort on every call does not make each turn think for
+  tens of seconds or burn premium allowance. Thinking already streams as
+  reasoning_content, which the stall guard counts as content.
 - Claude models routed through the gateway are no longer far weaker than calling
   them directly. A client's `reasoning_effort` now becomes Claude **extended
   thinking** (`thinking` with a budget scaled to the effort and capped below

@@ -981,9 +981,14 @@ func (c *chatRelay) stream(ctx context.Context, prov provider.Provider, apiKey s
 
 // streamFirstContentTimeout bounds how long an accepted stream may stay silent
 // before the attempt is abandoned. It must be comfortably inside the harness's
-// own one-minute patience so the gateway reroutes rather than letting the
-// caller time out, and comfortably beyond a slow model's first token.
-var streamFirstContentTimeout = 25 * time.Second
+// own one-minute patience so the gateway reroutes rather than letting the caller
+// time out, and comfortably beyond a slow model's first token. Extended
+// thinking on a large prompt pushes time-to-first-token well past twenty
+// seconds (a big prefill plus the thinking phase begins before any token
+// streams), so this sits at forty-five seconds: long enough that a reasoning
+// model on a 100k-token prompt is not killed mid-think, short enough to still
+// act before the harness gives up.
+var streamFirstContentTimeout = 45 * time.Second
 
 // streamStallTimeout reads the guard through one accessor so a test can drive
 // it without waiting the production interval.
