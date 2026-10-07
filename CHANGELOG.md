@@ -115,6 +115,11 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- Re-running `prowl init` after an upgrade refreshes the project's integration
+  files. The setup replay key covered only which files to touch, so an
+  identical selection replayed the old result and kept legacy `prowl-agent`
+  MCP entries forever; it now also fingerprints the rendered content and the
+  binary, while a retry on the same binary still replays without writing.
 - Claude Code routed through the gateway works. Injection pointed
   `ANTHROPIC_BASE_URL` at `/v1`, but the client appends `/v1/messages` itself,
   so every turn hit a 404 and Claude reported a problem with the `auto` model.

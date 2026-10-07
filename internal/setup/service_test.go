@@ -101,14 +101,163 @@ func TestSetupApplyIdempotencyConflictAndAuditRedaction(t *testing.T) {
 	if !reflect.DeepEqual(first, second) || !first.Verified || len(first.RollbackManifest) != 1 {
 		t.Fatalf("replay outcome = %+v, want durable verified original", second)
 	}
-	if _, err := service.Apply(context.Background(), ApplyRequest{Integrations: []string{IntegrationAgents}, PlanHash: plan.Hash, ExpectedProjectConfigVersion: plan.ProjectConfigVersion, Approved: true, IdempotencyKey: request.IdempotencyKey}); err == nil {
-		t.Fatal("mismatched replay succeeded")
+	if _, err := service.Apply(context.Background(), ApplyRequest{Integrations: []string{IntegrationAgents}, PlanHash: plan.Hash, ExpectedProjectConfigVersion: plan.ProjectConfigVersion, Approved: true, IdempotencyKey: request.IdempotencyKey}); !errors.Is(err, ErrPlanConflict) {
+		t.Fatalf("mismatched replay error = %v, want ErrPlanConflict", err)
 	}
 	for _, value := range append([]string{root, "secret-token"}, flattenOutcome(first)...) {
 		if strings.Contains(strings.Join(flattenOutcome(first), "\n"), root) || strings.Contains(strings.Join(flattenOutcome(first), "\n"), "secret-token") {
 			t.Fatalf("unsafe outcome value %q: %+v", value, first)
 		}
 	}
+}
+
+func TestSetupApplyReplaysIdenticalPlanWithoutWriting(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := service.Plan(context.Background(), []string{IntegrationGeneric})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := ApplyRequest{
+		Integrations: plan.Integrations, PlanHash: plan.Hash,
+		ExpectedProjectConfigVersion: plan.ProjectConfigVersion, Approved: true, IdempotencyKey: "cli:" + plan.Hash,
+	}
+	first, err := service.Apply(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement := `{"mcpServers":{"user-owned":{"command":"leave-this-alone"}}}`
+	configPath := filepath.Join(root, ".mcp.json")
+	if err := os.WriteFile(configPath, []byte(replacement), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	replayPlan, err := service.Plan(context.Background(), []string{IntegrationGeneric})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayPlan.Hash != plan.Hash {
+		t.Fatalf("same binary changed the plan identity: first=%s second=%s", plan.Hash, replayPlan.Hash)
+	}
+	request = ApplyRequest{
+		Integrations: replayPlan.Integrations, PlanHash: replayPlan.Hash,
+		ExpectedProjectConfigVersion: replayPlan.ProjectConfigVersion, Approved: true, IdempotencyKey: "cli:" + replayPlan.Hash,
+	}
+	second, err := service.Apply(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("replayed outcome changed: first=%+v second=%+v", first, second)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != replacement {
+		t.Fatalf("replayed apply wrote setup destination: got %q, want %q", data, replacement)
+	}
+}
+
+func TestSetupApplyRefreshesLegacyReplayAfterContentFingerprintChange(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	root := t.TempDir()
+	configPath := filepath.Join(root, ".omp", "mcp.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacyConfig := `{"mcpServers":{"prowl-agent":{"command":"prowl-agent","args":["serve"]},"user-owned":{"command":"custom","args":["--keep"]}}}`
+	if err := os.WriteFile(configPath, []byte(legacyConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := service.Plan(context.Background(), []string{IntegrationOMP})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyHash := legacySetupPlanHash(plan)
+	if plan.Hash == legacyHash {
+		t.Fatal("setup content fingerprint did not change the legacy plan identity")
+	}
+	legacyKey := "cli:" + legacyHash
+	legacyRequest := ApplyRequest{
+		Integrations: plan.Integrations, PlanHash: legacyHash,
+		ExpectedProjectConfigVersion: plan.ProjectConfigVersion, Approved: true, IdempotencyKey: legacyKey,
+	}
+	legacyOutcome := ApplyOutcome{
+		PlanHash: legacyHash, ProjectConfigVersion: plan.ProjectConfigVersion,
+		IdempotencyKey: legacyKey, Verified: true,
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".prowl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	projectRoot, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := saveReplaysInRoot(projectRoot, map[string]replayRecord{
+		legacyKey: {Request: legacyRequest, Outcome: legacyOutcome},
+	}); err != nil {
+		projectRoot.Close()
+		t.Fatal(err)
+	}
+	if err := projectRoot.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Apply(context.Background(), ApplyRequest{
+		Integrations: plan.Integrations, PlanHash: plan.Hash,
+		ExpectedProjectConfigVersion: plan.ProjectConfigVersion, Approved: true, IdempotencyKey: "cli:" + plan.Hash,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := config.MCPServers["prowl-agent"]; exists {
+		t.Fatalf("legacy MCP server survived refresh: %s", data)
+	}
+	var current mcpServer
+	if err := json.Unmarshal(config.MCPServers["prowl"], &current); err != nil {
+		t.Fatalf("decode current MCP server: %v", err)
+	}
+	if current.Command != "prowl" || current.Type != "stdio" ||
+		!reflect.DeepEqual(current.Args, []string{"serve", "--mcp-surface", "core"}) {
+		t.Fatalf("current MCP server = %+v", current)
+	}
+	var userOwned struct {
+		Command string   `json:"command"`
+		Args    []string `json:"args"`
+	}
+	if err := json.Unmarshal(config.MCPServers["user-owned"], &userOwned); err != nil {
+		t.Fatalf("decode user-owned MCP server: %v", err)
+	}
+	if userOwned.Command != "custom" || !reflect.DeepEqual(userOwned.Args, []string{"--keep"}) {
+		t.Fatalf("user-owned MCP server changed: %+v", userOwned)
+	}
+}
+
+func legacySetupPlanHash(plan Plan) string {
+	canonical := struct {
+		Integrations         []string        `json:"integrations"`
+		Actions              []Action        `json:"actions"`
+		Blocked              []BlockedAction `json:"blocked"`
+		ProjectConfigVersion string          `json:"project_config_version"`
+	}{plan.Integrations, plan.Actions, plan.Blocked, plan.ProjectConfigVersion}
+	data, _ := json.Marshal(canonical)
+	return digest(data)
 }
 
 func TestSetupApplyReplaysCompletedRequestAfterConfigChanges(t *testing.T) {

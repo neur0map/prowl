@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/neur0map/prowl/internal/version"
 	"github.com/neur0map/prowl/skills"
 )
 
@@ -521,13 +522,71 @@ func partitionActions(root *os.Root, actions []Action) ([]Action, []BlockedActio
 
 func planHash(plan Plan) string {
 	canonical := struct {
-		Integrations         []string        `json:"integrations"`
-		Actions              []Action        `json:"actions"`
-		Blocked              []BlockedAction `json:"blocked"`
-		ProjectConfigVersion string          `json:"project_config_version"`
-	}{plan.Integrations, plan.Actions, plan.Blocked, plan.ProjectConfigVersion}
+		Integrations            []string        `json:"integrations"`
+		Actions                 []Action        `json:"actions"`
+		Blocked                 []BlockedAction `json:"blocked"`
+		ProjectConfigVersion    string          `json:"project_config_version"`
+		SetupContentFingerprint string          `json:"setup_content_fingerprint"`
+		BinaryVersion           string          `json:"binary_version"`
+		BinaryCommit            string          `json:"binary_commit"`
+	}{
+		plan.Integrations,
+		plan.Actions,
+		plan.Blocked,
+		plan.ProjectConfigVersion,
+		setupContentFingerprint(plan.Actions),
+		version.Version,
+		version.Commit,
+	}
 	data, _ := json.Marshal(canonical)
 	return digest(data)
+}
+
+func setupContentFingerprint(actions []Action) string {
+	type renderedAction struct {
+		Integration string `json:"integration"`
+		Path        string `json:"path"`
+		Content     string `json:"content"`
+	}
+	rendered := make([]renderedAction, 0, len(actions))
+	for _, action := range actions {
+		rendered = append(rendered, renderedAction{
+			Integration: action.Integration,
+			Path:        action.Path,
+			Content:     setupActionContent(action),
+		})
+	}
+	data, _ := json.Marshal(rendered)
+	return digest(data)
+}
+
+func setupActionContent(action Action) string {
+	switch action.Integration {
+	case IntegrationAgents:
+		return agentsBlock
+	case IntegrationGeneric, IntegrationCursor, IntegrationOMP, IntegrationFactory, IntegrationVSCode:
+		data, _ := json.Marshal(prowlMCPServer())
+		return string(data)
+	case IntegrationOpenCode:
+		data, _ := json.Marshal(prowlOpenCodeMCPServer())
+		return string(data)
+	case IntegrationNeovim:
+		return nvimConfig
+	case IntegrationHelix:
+		return helixConfig()
+	case integrationSkill:
+		content, _ := skillContent(skillNameFromPath(action.Path))
+		return content
+	case integrationRules:
+		return rulesBlock
+	case integrationAgent:
+		return ompScoutAgent
+	case integrationLegacySkill:
+		legacy, _ := skills.Legacy(skillNameFromPath(action.Path))
+		return legacy.Content
+	default:
+		return ""
+	}
 }
 
 func digest(data []byte) string {
@@ -1351,6 +1410,22 @@ type mcpServer struct {
 	Args    []string `json:"args"`
 }
 
+func prowlMCPServer() mcpServer {
+	return mcpServer{
+		Type:    "stdio",
+		Command: "prowl",
+		Args:    []string{"serve", "--mcp-surface", "core"},
+	}
+}
+
+func prowlOpenCodeMCPServer() map[string]any {
+	return map[string]any{
+		"type":    "local",
+		"command": []string{"prowl", "serve", "--mcp-surface", "core"},
+		"enabled": true,
+	}
+}
+
 func mergeMCPConfig(root *os.Root, rel, key string) error {
 	doc := map[string]any{}
 	if data, err := readRootFile(root, rel); err == nil {
@@ -1365,7 +1440,7 @@ func mergeMCPConfig(root *os.Root, rel, key string) error {
 		servers = map[string]any{}
 	}
 	delete(servers, "prowl-agent")
-	servers["prowl"] = mcpServer{Type: "stdio", Command: "prowl", Args: []string{"serve", "--mcp-surface", "core"}}
+	servers["prowl"] = prowlMCPServer()
 	doc[key] = servers
 	return writeJSON(root, rel, doc)
 }
@@ -1387,7 +1462,7 @@ func mergeOpenCode(root *os.Root, rel string) error {
 		mcp = map[string]any{}
 	}
 	delete(mcp, "prowl-agent")
-	mcp["prowl"] = map[string]any{"type": "local", "command": []string{"prowl", "serve", "--mcp-surface", "core"}, "enabled": true}
+	mcp["prowl"] = prowlOpenCodeMCPServer()
 	doc["mcp"] = mcp
 	return writeJSON(root, rel, doc)
 }
