@@ -9,8 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/neur0map/prowl/internal/projectstatus"
 	"github.com/neur0map/prowl/internal/query"
-	"github.com/neur0map/prowl/internal/store"
 	"github.com/neur0map/prowl/internal/workspace"
 )
 
@@ -46,7 +46,7 @@ func (m *projectsModel) setSize(w, h int) {
 
 func (m *projectsModel) load() tea.Cmd {
 	return func() tea.Msg {
-		entries, err := workspace.List()
+		projects, err := projectstatus.Load()
 		if err != nil {
 			return projectsLoadedMsg{err: err}
 		}
@@ -56,35 +56,15 @@ func (m *projectsModel) load() tea.Cmd {
 				current = ws.Root
 			}
 		}
-		rows := make([]projectRow, 0, len(entries))
-		for _, entry := range entries {
-			row := projectRow{root: entry.Root, current: entry.Root == current, state: "not indexed"}
-			ws, resolveErr := workspace.Resolve(entry.Root)
-			if resolveErr != nil {
-				row.err = resolveErr
-				rows = append(rows, row)
-				continue
-			}
-			if _, statErr := os.Stat(ws.DB); statErr != nil {
-				row.err = statErr
-				rows = append(rows, row)
-				continue
-			}
-			db, openErr := store.Open(ws.DB)
-			if openErr != nil {
-				row.err = openErr
-				rows = append(rows, row)
-				continue
-			}
-			row.status, row.err = query.New(db).Status()
-			_ = db.Close()
-			if row.err == nil {
-				row.state = "ready"
-				if row.status.Semantic.Remaining > 0 {
-					row.state = "semantic building"
-				}
-			}
-			rows = append(rows, row)
+		rows := make([]projectRow, 0, len(projects))
+		for _, project := range projects {
+			rows = append(rows, projectRow{
+				root:    project.Root,
+				current: project.Root == current,
+				status:  project.Status,
+				state:   project.State,
+				err:     project.Err,
+			})
 		}
 		return projectsLoadedMsg{projects: rows}
 	}

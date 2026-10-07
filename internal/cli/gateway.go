@@ -105,6 +105,7 @@ Skills and rules for repo navigation are a separate, existing step:
 		RunE: runGatewayInject,
 	}
 	injectCmd.Flags().Bool("remove", false, "revert a previous injection instead of applying")
+	injectCmd.Flags().Bool("activate", false, "make Prowl auto the harness default model")
 	injectCmd.Flags().Bool("all", false, "every supported harness detected on this machine")
 	injectCmd.Flags().Int("port", gateway.DefaultPort, "port the gateway listens on (harnesses are pointed here)")
 
@@ -281,6 +282,7 @@ func runGatewayProviders(cmd *cobra.Command, _ []string) error {
 func runGatewayInject(cmd *cobra.Command, args []string) error {
 	remove, _ := cmd.Flags().GetBool("remove")
 	all, _ := cmd.Flags().GetBool("all")
+	activate, _ := cmd.Flags().GetBool("activate")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -328,7 +330,7 @@ func runGatewayInject(cmd *cobra.Command, args []string) error {
 	failures := 0
 	configured := 0
 	for _, h := range targets {
-		t, err := inject.Apply(inject.Options{Home: home, BaseURL: baseURL, Token: token, Models: models}, h)
+		t, err := inject.Apply(inject.Options{Home: home, BaseURL: baseURL, Token: token, Models: models, Activate: activate}, h)
 		if err != nil {
 			failures++
 			fmt.Fprintf(cmd.ErrOrStderr(), "%s: %v\n", h, err)
@@ -341,7 +343,11 @@ func runGatewayInject(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if configured > 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "\nstart the gateway (`prowl gateway up`) and select Prowl's auto model in the harness.")
+		if activate {
+			fmt.Fprintln(cmd.OutOrStdout(), "\nstart the gateway (`prowl gateway up`); Prowl auto is now the harness default where supported.")
+		} else {
+			fmt.Fprintln(cmd.OutOrStdout(), "\nstart the gateway (`prowl gateway up`) and select Prowl's auto model in the harness.")
+		}
 	}
 	if failures > 0 {
 		return fmt.Errorf("gateway injection failed for %d of %d requested harnesses", failures, len(targets))

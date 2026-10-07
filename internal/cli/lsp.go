@@ -19,7 +19,7 @@ import (
 
 func openLSPProject(ctx context.Context) (*application.Project, error) {
 	return application.OpenProject(ctx, ".", application.Options{
-		EnableAI: true, InferencerProvider: maybeInferencer, VectorProgress: semanticBuildReporter(os.Stderr),
+		EnableAI: true, InferencerProvider: application.DefaultInferencer, VectorProgress: semanticBuildReporter(os.Stderr),
 	})
 }
 

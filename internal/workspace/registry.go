@@ -92,6 +92,49 @@ func Register(root string, ai bool) error {
 	})
 }
 
+// Remove unregisters an absolute project root without touching project files.
+func Remove(root string) (bool, error) {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return false, err
+	}
+	target := filepath.Clean(abs)
+	if canonical, evalErr := filepath.EvalSymlinks(target); evalErr == nil {
+		target = canonical
+	}
+	p, err := registryPath()
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	removed := false
+	err = withRegistryLock(p, func() error {
+		entries, err := loadEntries(p)
+		if err != nil {
+			return err
+		}
+		kept := entries[:0]
+		for _, entry := range entries {
+			candidate := filepath.Clean(entry.Root)
+			if canonical, evalErr := filepath.EvalSymlinks(candidate); evalErr == nil {
+				candidate = canonical
+			}
+			if candidate == target {
+				removed = true
+				continue
+			}
+			kept = append(kept, entry)
+		}
+		if !removed {
+			return nil
+		}
+		return writeRegistry(p, kept)
+	})
+	return removed, err
+}
+
 // List returns registered projects whose indexes still exist. It also compacts
 // stale and duplicate entries so temporary projects do not accumulate forever.
 func List() ([]Entry, error) {

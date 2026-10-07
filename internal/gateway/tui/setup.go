@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/neur0map/prowl/internal/gateway/inject"
+	"github.com/neur0map/prowl/internal/gateway/setupstate"
 	"github.com/neur0map/prowl/internal/setup"
 )
 
@@ -56,33 +57,22 @@ func (m *setupModel) setSize(w, h int) {
 func (m *setupModel) load() tea.Cmd {
 	home := m.app.Client.Home
 	return func() tea.Msg {
-		var out setupLoadedMsg
-		out.supported = inject.Supported()
-		out.installed = map[string]bool{}
-		for _, h := range inject.Installed(home) {
-			out.installed[h] = true
+		state := setupstate.Load(home, m.app.Version)
+		out := setupLoadedMsg{
+			supported: state.Supported,
+			installed: state.Installed,
+			targets:   state.Targets,
+			skills:    map[string]setup.UserActionKind{},
+			skillsErr: state.SkillsErr,
 		}
-		out.targets = map[string]inject.Target{}
-		for _, t := range inject.Targets(home) {
-			out.targets[t.Harness] = t
-		}
-		// Skills plan: reuse the same machinery `prowl skills` uses, so Setup
-		// and the standalone command never disagree about what's current. The
-		// plan lists one action per asset (sorted by destination), so a harness
-		// is summarized by aggregating every action and conflict - not by the
-		// last-sorted asset, which would let a trailing unchanged asset mask an
-		// earlier install/update/conflict and show a false "current" state.
-		out.skills = map[string]setup.UserActionKind{}
-		clients := setup.DetectInstalledHarnesses()
-		if len(clients) > 0 {
-			plan, err := setup.PlanUserSkills(setup.UserInstallOptions{Home: home, Version: m.app.Version, Clients: clients})
-			if err != nil {
-				// A planning failure with harnesses present is a real fault, not
-				// "nothing to do": carry it so the row surfaces it actionably
-				// instead of masquerading as "no skill-capable harness".
-				out.skillsErr = err
-			} else {
-				out.skills = aggregateSkillStatus(plan)
+		for client, status := range state.Skills {
+			switch status {
+			case setupstate.SkillsCurrent:
+				out.skills[client] = setup.UserActionUnchanged
+			case setupstate.SkillsInstall:
+				out.skills[client] = setup.UserActionInstall
+			default:
+				out.skills[client] = setup.UserActionUpdate
 			}
 		}
 		return out

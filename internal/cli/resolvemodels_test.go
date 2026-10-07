@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/neur0map/prowl/internal/application"
 	"github.com/neur0map/prowl/internal/assist"
 	"github.com/neur0map/prowl/internal/config"
 	"github.com/neur0map/prowl/internal/embed"
@@ -75,9 +76,9 @@ func (fakeEmbedder) EmbedModelID() string                                 { retu
 // stubEmbedder swaps the package embedder loader for the duration of a test.
 func stubEmbedder(t *testing.T, emb assist.Embedder, err error) {
 	t.Helper()
-	prev := loadEmbedder
-	loadEmbedder = func(context.Context) (assist.Embedder, error) { return emb, err }
-	t.Cleanup(func() { loadEmbedder = prev })
+	prev := application.LoadEmbedder
+	application.LoadEmbedder = func(context.Context) (assist.Embedder, error) { return emb, err }
+	t.Cleanup(func() { application.LoadEmbedder = prev })
 }
 
 // The bundled in-process embedder is the embedding backend, always. A local
@@ -89,9 +90,9 @@ func TestMaybeInferencerAlwaysEmbedsWithBundledModel(t *testing.T) {
 	t.Setenv("PATH", t.TempDir()) // hide any claude/codex/omp
 	srv := tagsServer(t, `{"models":[{"name":"embeddinggemma:latest"},{"name":"nomic-embed-text:latest"},{"name":"bge-m3:latest"}]}`)
 	cfg := config.Config{AI: config.AI{Enabled: true, OllamaURL: srv.URL}}
-	c, ok := maybeInferencer(context.Background(), cfg).(assist.Composite)
+	c, ok := application.DefaultInferencer(context.Background(), cfg).(assist.Composite)
 	if !ok {
-		t.Fatalf("backend = %T, want assist.Composite carrying the bundled embedder", maybeInferencer(context.Background(), cfg))
+		t.Fatalf("backend = %T, want assist.Composite carrying the bundled embedder", application.DefaultInferencer(context.Background(), cfg))
 	}
 	if _, isOllama := c.Emb.(*assist.Ollama); isOllama {
 		t.Fatal("embeddings were routed to Ollama")
@@ -105,7 +106,7 @@ func TestMaybeInferencerAlwaysEmbedsWithBundledModel(t *testing.T) {
 // daemon, and no cache: it loads with an empty PATH and no network.
 func TestBundledEmbedderLoadsWithNoNetworkOrPath(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	m, err := loadEmbedder(context.Background())
+	m, err := application.LoadEmbedder(context.Background())
 	if err != nil {
 		t.Fatalf("bundled embedder failed to load: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestMaybeInferencerUsesOllamaForAssistOnly(t *testing.T) {
 	stubEmbedder(t, fakeEmbedder{}, nil)
 	srv := tagsServer(t, `{"models":[{"name":"gemma3:1b"}]}`)
 	cfg := config.Config{AI: config.AI{Enabled: true, AssistModel: "gemma3:1b", OllamaURL: srv.URL}}
-	c, ok := maybeInferencer(context.Background(), cfg).(assist.Composite)
+	c, ok := application.DefaultInferencer(context.Background(), cfg).(assist.Composite)
 	if !ok {
 		t.Fatal("want assist.Composite")
 	}
@@ -142,7 +143,7 @@ func TestMaybeInferencerStaticWhenNoAssistModel(t *testing.T) {
 	stubEmbedder(t, fakeEmbedder{}, nil)
 	srv := tagsServer(t, `{"models":[{"name":"some-other-model:latest"}]}`)
 	cfg := config.Config{AI: config.AI{Enabled: true, AssistModel: "gemma3:1b", OllamaURL: srv.URL}}
-	c, ok := maybeInferencer(context.Background(), cfg).(assist.Composite)
+	c, ok := application.DefaultInferencer(context.Background(), cfg).(assist.Composite)
 	if !ok {
 		t.Fatal("want assist.Composite (bundled embeddings) when no Ollama assist model")
 	}
@@ -157,7 +158,7 @@ func TestMaybeInferencerStaticPlusAgent(t *testing.T) {
 	stubEmbedder(t, fakeEmbedder{}, nil)
 	srv := tagsServer(t, `{"models":[{"name":"some-other-model:latest"}]}`)
 	cfg := config.Config{AI: config.AI{Enabled: true, OllamaURL: srv.URL, AgentCommand: "go"}}
-	c, ok := maybeInferencer(context.Background(), cfg).(assist.Composite)
+	c, ok := application.DefaultInferencer(context.Background(), cfg).(assist.Composite)
 	if !ok {
 		t.Fatal("want assist.Composite")
 	}
@@ -172,7 +173,7 @@ func TestMaybeInferencerAgentOnlyWhenEmbedderUnavailable(t *testing.T) {
 	stubEmbedder(t, nil, fmt.Errorf("offline"))
 	srv := tagsServer(t, `{"models":[{"name":"some-other-model:latest"}]}`)
 	cfg := config.Config{AI: config.AI{Enabled: true, OllamaURL: srv.URL, AgentCommand: "go"}}
-	if _, ok := maybeInferencer(context.Background(), cfg).(*assist.AgentCLI); !ok {
+	if _, ok := application.DefaultInferencer(context.Background(), cfg).(*assist.AgentCLI); !ok {
 		t.Fatal("want *assist.AgentCLI when embedder unavailable but agent present")
 	}
 }
@@ -183,7 +184,7 @@ func TestMaybeInferencerStructuralWhenNothing(t *testing.T) {
 	stubEmbedder(t, nil, fmt.Errorf("offline"))
 	srv := tagsServer(t, `{"models":[{"name":"some-other-model:latest"}]}`)
 	cfg := config.Config{AI: config.AI{Enabled: true, OllamaURL: srv.URL}}
-	if inf := maybeInferencer(context.Background(), cfg); inf != nil {
+	if inf := application.DefaultInferencer(context.Background(), cfg); inf != nil {
 		t.Fatalf("want nil (structural), got %T", inf)
 	}
 }

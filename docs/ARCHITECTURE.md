@@ -1,15 +1,16 @@
 # Architecture
 
 Prowl is a single Go binary with two independent planes. The code-intelligence
-plane indexes a project into per-folder SQLite and answers from the same index
+plane indexes projects into per-folder SQLite and answers from the same index
 through read-only shell commands, an MCP stdio server, and an LSP stdio server.
-Those queries run in-process; no daemon or network service is required. The
-optional model-gateway plane is a loopback HTTP service whose inference and
-control routes require a bearer credential. Its minimal public `/api/ping`
-route returns liveness metadata and a port-bound challenge proof, allowing
-clients to authenticate the listener before sending a token. Bare `prowl`
-starts the gateway only for the lifetime of the unified TUI unless a persistent
-`prowl gateway up` daemon already exists.
+Those queries run in-process; no daemon or network service is required. When the
+model gateway is running, its authenticated `/api/code/*` routes expose the same
+JSON answers and `/api/projects` manages the registered indexes. The model-gateway
+plane is a loopback HTTP service whose inference and control routes require a
+bearer credential. Its public `/api/ping` route returns liveness metadata and a
+port-bound challenge proof, allowing clients to authenticate the listener before
+sending a token. Bare `prowl` starts the gateway only for the lifetime of the
+unified TUI unless a persistent `prowl gateway up` daemon already exists.
 
 Shell commands are the recommended code-intelligence path: an agent runs
 `prowl find foo` (or `overview`, `impact`, `changed`, ...) and gets a cited,
@@ -39,7 +40,7 @@ internal/workspace   .prowl/ workspace, global registry, gitignore wiring
 internal/embed       in-process static embedder: bundled model2vec model + WordPiece tokenizer (semantic search, no setup)
 internal/assist      optional Ollama / coding-agent inferencer (higher-quality embeddings, query rewrite, rerank)
 internal/gateway     model catalogue, encrypted credential/login vaults, routing, quota/health, benchmark refresh, and lifecycle
-internal/gateway/api authenticated local control plane plus OpenAI/Anthropic/Responses-compatible inference routes
+internal/gateway/api authenticated code, project, control, and OpenAI/Anthropic/Responses-compatible inference routes
 internal/gateway/provider outbound native and OpenAI-compatible provider adapters
 internal/gateway/tui unified terminal console over the same loopback API used by daemon clients
 ```

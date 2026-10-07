@@ -19,7 +19,7 @@ func newRestartCmd(string) *cobra.Command {
 		Short: "Rebuild the index from scratch and restart running MCP/LSP servers",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			project, err := application.OpenProject(cmd.Context(), ".", application.Options{
-				EnableAI: true, InferencerProvider: maybeInferencer,
+				EnableAI: true, InferencerProvider: application.DefaultInferencer,
 			})
 			if err != nil {
 				return err

@@ -437,11 +437,21 @@ type writtenEntry struct {
 	// same restore-while-intact, else-conflict discipline.
 	TomlAuthored string `json:"toml_authored,omitempty"`
 	TomlPrior    string `json:"toml_prior,omitempty"`
-	// TomlTop names a top-level TOML key we prepended (codex model_provider)
-	// and the raw TOML value we wrote for it; removal deletes the line only
-	// while its value is still ours.
-	TomlTop string `json:"toml_top,omitempty"`
-	TomlVal string `json:"toml_val,omitempty"`
+	// TomlTop names a top-level TOML key and the raw value Apply wrote.
+	// TomlTopPrior is the complete line replaced during activation.
+	TomlTop      string `json:"toml_top,omitempty"`
+	TomlVal      string `json:"toml_val,omitempty"`
+	TomlTopPrior string `json:"toml_top_prior,omitempty"`
+	// YamlParent and YamlKey identify one direct child scalar used for active
+	// model selection. The exact prior block is restored only while the
+	// authored line remains unchanged.
+	YamlParent       string `json:"yaml_parent,omitempty"`
+	YamlKey          string `json:"yaml_key,omitempty"`
+	YamlValue        string `json:"yaml_value,omitempty"`
+	YamlParentPrior  string `json:"yaml_parent_prior,omitempty"`
+	YamlParentWasNew bool   `json:"yaml_parent_was_new,omitempty"`
+	// Activation distinguishes default-model ownership from provider entries.
+	Activation bool `json:"activation,omitempty"`
 	// Container is the top-level map key holding nested (when set).
 	Container string `json:"container,omitempty"`
 	// ContainerWasNew records that Apply created the container mapping;
@@ -458,7 +468,8 @@ type writtenEntry struct {
 	// replaced it wholesale; removal restores it verbatim while our injected
 	// object is still there.
 	ContainerReplaced string            `json:"container_replaced,omitempty"`
-	Single            map[string]string `json:"single,omitempty"` // top key -> JSON value
+	Single            map[string]string `json:"single,omitempty"`       // top key -> JSON value
+	SinglePrior       map[string]string `json:"single_prior,omitempty"` // top key -> prior JSON value
 	// EnvFile marks a sourceable credential env file this apply wrote (Codex).
 	// CreatedContent holds exactly what we wrote; on removal, while the file
 	// still holds that, we delete it when EnvCreated (we authored it from
@@ -578,7 +589,7 @@ func removeWritten(entries []writtenEntry) (undone, conflicts []string, err erro
 				if rerr != nil {
 					return undone, conflicts, rerr
 				}
-				if out, removed := removeTomlTopLine(string(raw), e.TomlTop, e.TomlVal); removed {
+				if out, removed := removeTomlTopLine(string(raw), e.TomlTop, e.TomlVal, e.TomlTopPrior); removed {
 					if werr := writeFile(e.Path, out, credentialMode(e.Path)); werr != nil {
 						return undone, conflicts, werr
 					}
@@ -636,8 +647,13 @@ func removeWritten(entries []writtenEntry) (undone, conflicts []string, err erro
 		}
 		for k, want := range e.Single {
 			if cur, ok := obj.get(k); ok && jsonEq(cur, json.RawMessage(want)) {
-				obj.del(k)
-				undone = append(undone, filepath.Base(e.Path)+":"+k)
+				if prior, has := e.SinglePrior[k]; has {
+					obj.setRaw(k, json.RawMessage(prior))
+					undone = append(undone, filepath.Base(e.Path)+":"+k+" (restored)")
+				} else {
+					obj.del(k)
+					undone = append(undone, filepath.Base(e.Path)+":"+k)
+				}
 				touched = true
 			}
 		}
@@ -652,9 +668,10 @@ func removeWritten(entries []writtenEntry) (undone, conflicts []string, err erro
 	return undone, conflicts, nil
 }
 
-// removeTomlTopLine drops one top-level `key = value` line, and only while the
-// value still matches what we wrote - a key the user repointed stays.
-func removeTomlTopLine(text, key, want string) ([]byte, bool) {
+// removeTomlTopLine reverts one top-level `key = value` line only while the
+// value still matches what Apply wrote. An activation restores its exact prior
+// line; an additive default removes the line.
+func removeTomlTopLine(text, key, want, prior string) ([]byte, bool) {
 	lines := strings.Split(text, "\n")
 	out := make([]string, 0, len(lines))
 	removed := false
@@ -668,6 +685,9 @@ func removeTomlTopLine(text, key, want string) ([]byte, bool) {
 			if k, v, found := strings.Cut(body, "="); found && strings.TrimSpace(k) == key {
 				if strings.TrimSpace(v) == want {
 					removed = true
+					if prior != "" {
+						out = append(out, prior)
+					}
 					continue
 				}
 			}

@@ -81,9 +81,10 @@ type Target struct {
 
 // Options carries what to write.
 type Options struct {
-	Home    string
-	BaseURL string // e.g. http://127.0.0.1:8788/v1
-	Token   string // the unified key or local token (both authenticate)
+	Home     string
+	BaseURL  string // e.g. http://127.0.0.1:8788/v1
+	Token    string // the unified key or local token (both authenticate)
+	Activate bool   // also select prowl/auto as the harness default
 	// Models are picker entries; normally the single RoutingModels() result.
 	Models []Model
 	// tx captures the immediate pre-apply bytes of every file this apply
@@ -142,6 +143,18 @@ func Apply(o Options, harness string) (Target, error) {
 			tx.rollback()
 			return aerr
 		}
+		if o.Activate {
+			activeEntries, activeFiles, note, activateErr := applyActivation(o, harness)
+			if activateErr != nil {
+				tx.rollback()
+				return activateErr
+			}
+			t.Ledger = append(t.Ledger, activeEntries...)
+			t.Files = appendUnique(t.Files, activeFiles...)
+			if note != "" {
+				t.Note = note
+			}
+		}
 		if serr := saveRecord(o.Home, t, tx); serr != nil {
 			// The mutation is on disk but unrecorded, so it could never be
 			// cleanly removed. Undo it to the pre-apply state rather than
@@ -167,6 +180,17 @@ func Remove(home, harness string) (Target, error) {
 	}
 	var t Target
 	err = withInjectLock(home, func() error {
+		loaded, lerr := loadRecord(home)
+		if lerr != nil {
+			return lerr
+		}
+		if rec, ok := loaded.Targets[harness]; ok {
+			if !createdTargetIntact(rec.Ledger) {
+				if rerr := removeActivation(rec.Ledger); rerr != nil {
+					return rerr
+				}
+			}
+		}
 		var rerr error
 		t, rerr = w.remove(home, harness)
 		if rerr != nil {
@@ -329,7 +353,8 @@ func carryOwnership(led []writtenEntry, prev []writtenEntry, tx *applyTx) {
 // isFileLevel reports whether an entry describes ownership of a file (a
 // container, block or table), as opposed to a lone prepended top-level key.
 func isFileLevel(e writtenEntry) bool {
-	return e.Container != "" || e.YamlBlock != "" || e.TomlTable != "" || e.CreatedFile
+	return e.Container != "" || e.YamlBlock != "" || e.YamlParent != "" ||
+		e.TomlTable != "" || e.CreatedFile
 }
 
 func carryRestoreInfo(ne *writtenEntry, pe writtenEntry) {
@@ -337,6 +362,26 @@ func carryRestoreInfo(ne *writtenEntry, pe writtenEntry) {
 		ne.EnvCreated = pe.EnvCreated
 		ne.EnvPrior = pe.EnvPrior
 		return
+	}
+	if ne.Activation && pe.Activation {
+		if ne.TomlTop != "" && ne.TomlTop == pe.TomlTop {
+			ne.TomlTopPrior = pe.TomlTopPrior
+		}
+		if ne.YamlParent == pe.YamlParent && ne.YamlKey == pe.YamlKey {
+			ne.YamlPrior = pe.YamlPrior
+			ne.YamlParentPrior = pe.YamlParentPrior
+			ne.YamlParentWasNew = pe.YamlParentWasNew
+		}
+		for k := range ne.Single {
+			if prior, ok := pe.SinglePrior[k]; ok {
+				if ne.SinglePrior == nil {
+					ne.SinglePrior = map[string]string{}
+				}
+				ne.SinglePrior[k] = prior
+			} else if _, injected := pe.Single[k]; injected {
+				delete(ne.SinglePrior, k)
+			}
+		}
 	}
 	// A YAML provider block or TOML table this apply replaced belonged to the
 	// prior injection, not the user: the block/table currently under our key is

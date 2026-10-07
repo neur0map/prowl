@@ -46,6 +46,14 @@ type Server struct {
 
 	limiter *rateLimiter
 
+	codeMu    sync.Mutex
+	codeRepos map[string]*codeRepo
+
+	projectJobsMu      sync.Mutex
+	projectJobs        map[string]*runningProjectJob
+	projectJobsContext context.Context
+	cancelProjectJobs  context.CancelFunc
+
 	// stats caches the aggregated request trail the scorer reads. It is on
 	// the server rather than per request so a week of rows is re-read once a
 	// minute instead of once a request.
@@ -73,14 +81,19 @@ type Options struct {
 
 // NewServer builds the surface over an assembled engine.
 func NewServer(engine *gateway.Engine, opts Options) (*Server, error) {
+	jobsContext, cancelJobs := context.WithCancel(context.Background())
 	s := &Server{
-		engine:     engine,
-		mux:        http.NewServeMux(),
-		machineKey: opts.MachineKey,
-		localToken: opts.LocalToken,
-		limiter:    newRateLimiter(),
+		engine:             engine,
+		mux:                http.NewServeMux(),
+		machineKey:         opts.MachineKey,
+		localToken:         opts.LocalToken,
+		limiter:            newRateLimiter(),
+		projectJobs:        make(map[string]*runningProjectJob),
+		projectJobsContext: jobsContext,
+		cancelProjectJobs:  cancelJobs,
 	}
 	if err := s.routes(); err != nil {
+		cancelJobs()
 		return nil, err
 	}
 	return s, nil
@@ -128,12 +141,15 @@ func (s *Server) routes() error {
 	s.registerStatusRoutes()
 	s.registerUsageRoutes()
 	s.registerStatusV1Routes()
+	s.registerSetupRoutes()
 
 	s.registerDirectoryRoutes()
 	s.registerLoginRoutes()
 	s.registerKeyActivityRoutes()
 	s.registerChainPresetRoutes()
 	s.registerCatalogBrowseRoutes()
+	s.registerCodeRoutes()
+	s.registerProjectsRoutes()
 
 	// An unmatched API or inference path must answer in JSON: this surface
 	// serves no HTML, and a 200 with a body no client asked for is the worst
@@ -336,9 +352,49 @@ func secureEqual(got, want string) bool {
 	return diff == 0
 }
 
-// Shutdown is a placeholder for symmetry with the engine's lifecycle; the
-// surface itself holds no resources beyond the engine.
-func (s *Server) Shutdown(context.Context) error { return nil }
+// Shutdown cancels indexing jobs, waits for them to finish, and closes every
+// lazily opened project store.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.cancelProjectJobs()
+
+	s.projectJobsMu.Lock()
+	done := make([]<-chan struct{}, 0, len(s.projectJobs))
+	for _, job := range s.projectJobs {
+		if job.running {
+			done = append(done, job.done)
+		}
+	}
+	s.projectJobsMu.Unlock()
+	var first error
+waitForJobs:
+	for _, finished := range done {
+		select {
+		case <-finished:
+		case <-ctx.Done():
+			first = ctx.Err()
+			break waitForJobs
+		}
+	}
+
+	s.codeMu.Lock()
+	repos := make([]*codeRepo, 0, len(s.codeRepos))
+	for _, repo := range s.codeRepos {
+		repos = append(repos, repo)
+	}
+	clear(s.codeRepos)
+	s.codeMu.Unlock()
+	for _, repo := range repos {
+		repo.mu.Lock()
+		if repo.project != nil {
+			if err := repo.project.Close(); err != nil && first == nil {
+				first = err
+			}
+			repo.project = nil
+		}
+		repo.mu.Unlock()
+	}
+	return first
+}
 
 // UnifiedAPIKey returns the current machine credential in plaintext, minting
 // it on first use. The TUI's overview and the harness injector are the only

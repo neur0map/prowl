@@ -33,9 +33,6 @@ func Register(root *cobra.Command, version string, managedBy string, opts ...Opt
 		newBriefCmd(), newDocsCmd(), newSketchCmd(), newGraphCmd(), newBenchCmd(),
 		newSpanCmd(),
 		newHistoryCmd(),
-		// The local HTTP API: the same read-only answers as the commands above,
-		// for programs that should not shell out a process per question.
-		newAPICmd(),
 	)
 }
 

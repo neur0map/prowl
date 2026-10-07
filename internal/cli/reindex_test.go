@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/neur0map/prowl/internal/application"
 	"github.com/neur0map/prowl/internal/config"
 	"github.com/neur0map/prowl/internal/workspace"
 )
@@ -47,7 +48,7 @@ func TestReindexer(t *testing.T) {
 }
 
 func TestMaybeInferencerDisabled(t *testing.T) {
-	if inf := maybeInferencer(context.Background(), config.Config{}); inf != nil {
+	if inf := application.DefaultInferencer(context.Background(), config.Config{}); inf != nil {
 		t.Fatal("inferencer should be nil when AI is disabled")
 	}
 }

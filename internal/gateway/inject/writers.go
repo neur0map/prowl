@@ -12,11 +12,10 @@ import (
 //
 // Codex reads custom providers from the `[model_providers.<id>]` table in
 // ~/.codex/config.toml and authenticates with a key taken from the environment
-// variable named by env_key - it cannot store the key itself, so injection
-// also writes a sourceable env file and says so. The top-level `model_provider`
-// and `model` keys are set only when the user has not pinned their own:
-// silently replacing someone's default model is exactly the overreach the
-// ledger discipline exists to prevent.
+// variable named by env_key. Injection also writes a sourceable env file.
+// The top-level `model_provider` and `model` keys are additive by default.
+// Options.Activate is the explicit exception: activation replaces those two
+// defaults and the ledger restores their prior values on removal.
 
 type codexWriter struct{}
 

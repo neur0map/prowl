@@ -7,21 +7,18 @@ import (
 	"sync"
 )
 
-// DefaultPort is where the gateway listens: 8788, deliberately adjacent to
-// (not equal to) Prowl's 8787, so a machine can run both gateways side by
-// side and neither silently shadows the other. It binds loopback only: the
-// process holds every provider key the user owns, so it must not be reachable
-// from the network.
+// DefaultPort is where the gateway listens. It binds loopback only because the
+// process holds every provider key the user owns and must not be reachable from
+// the network.
 const DefaultPort = 8788
 
 // ListenLoopback binds the gateway's port on both loopback families without
 // serving, so a caller can learn the address before traffic starts.
 //
-// Both families are bound. On a host where `localhost` resolves to ::1 first
-// -- which is the default on this distro -- an IPv4-only bind means a browser
-// typing localhost:8787 is refused while 127.0.0.1:8787 works, and the
-// dashboard looks broken for no visible reason. The IPv6 bind is optional: a
-// kernel with IPv6 disabled still gets a working gateway.
+// Both families are bound. On a host where `localhost` resolves to ::1 first,
+// an IPv4-only bind means localhost can be refused while 127.0.0.1 works, and
+// the gateway looks broken for no visible reason. The IPv6 bind is optional:
+// a kernel with IPv6 disabled still gets a working gateway.
 func ListenLoopback(port int) (net.Listener, error) {
 	if port == 0 {
 		port = DefaultPort

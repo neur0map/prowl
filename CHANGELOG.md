@@ -7,6 +7,29 @@ All notable changes are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- The gateway answers code-intelligence questions for every registered
+  project at `GET /api/code/{repos,status,overview,find,def,outline,references,
+  impact,search,peek,history,doctor}`, picking the project with `?repo=` (an
+  absolute root or a unique folder name). A local GUI such as Ryoku's Rashin
+  console reads the same JSON the CLI prints from the one daemon it already
+  talks to, instead of spawning a second server.
+- Projects can be managed over the API: `GET /api/projects` lists every
+  registered project with its index state, counts, semantic coverage and
+  embedding model; `POST /api/projects` registers and indexes a folder in the
+  background (the same path as `prowl init`), `POST /api/projects/reindex`
+  refreshes one, and `DELETE /api/projects?root=` unregisters it without
+  touching its files or `.prowl/`.
+- Harness setup is reachable over the API: `GET /api/setup/harnesses` reports
+  each coding harness as detected, injected and active, plus whether `auto` can
+  route right now; `POST`/`DELETE /api/setup/harnesses/{id}` inject or revert the
+  gateway with the machine token, and `POST /api/setup/skills` installs the
+  agent skills. The terminal Setup page and the API share one implementation.
+- `prowl gateway inject --activate` (and `"activate": true` on the setup route)
+  also makes `prowl/auto` the harness's default model for Claude Code, Codex,
+  OpenCode, Hermes and OMP, recording the previous choice so a revert restores
+  it. Activation through the API refuses with `not_routable` while no
+  connected provider can serve `auto`, so a harness is never pointed at an
+  empty gateway.
 - Multi-dimensional model categorization. Every model now carries per-axis
   capability scores - text intelligence, coding, tool/agentic, math, vision,
   writing and planning - so the router matches a task to a model's real

@@ -59,133 +59,25 @@ type InitOptions struct {
 // injects agent config, wires .gitignore, and registers the project. It is the
 // testable core behind the interactive `init` command.
 func RunInit(opt InitOptions) (index.Summary, error) {
-	root := opt.Root
-	if root == "" {
-		root, _ = os.Getwd()
-	}
-	ws, err := workspace.Create(root)
-	if err != nil {
-		return index.Summary{}, err
-	}
-
-	// Was this project already initialized? A re-init must preserve the saved AI
-	// choice rather than reset it (the historic ai=false-on-reinit bug).
-	existed := false
-	if _, statErr := os.Stat(filepath.Join(ws.Path, "config.toml")); statErr == nil {
-		existed = true
-	}
-
-	// Base config is the project's existing config when present, else defaults,
-	// so a re-init preserves user-edited ignore/languages and the prior AI value.
-	cfg, err := config.Load(ws.Path)
-	if err != nil {
-		return index.Summary{}, fmt.Errorf("read existing config: %w", err)
-	}
-	g, _ := config.LoadGlobal()
-
-	// Semantic assist is always on; init never disables it. A fresh project and
-	// a re-init both land on enabled=true, healing any legacy config written
-	// back when AI could be skipped.
-	cfg.AI.Enabled = true
-
-	tier := firstNonEmpty(opt.Tier, g.Tier, config.DefaultTier)
-	switch {
-	case opt.Tier != "":
-		p := config.PresetByName(opt.Tier)
-		cfg.AI.AssistModel = p.AssistModel
-	case !existed:
-		p := config.PresetByName(tier)
-		cfg.AI.AssistModel = firstNonEmpty(g.AssistModel, p.AssistModel)
-	}
-	if opt.AssistModel != "" {
-		cfg.AI.AssistModel = opt.AssistModel
-	}
-	if opt.Provider != "" {
-		cfg.AI.Provider = opt.Provider
-	}
-	if opt.AgentCommand != "" {
-		cfg.AI.AgentCommand = opt.AgentCommand
-	}
-	if opt.LanguagesSet {
-		cfg.Languages = opt.Languages
-	}
-
-	if err := config.Save(ws.Path, cfg); err != nil {
-		return index.Summary{}, err
-	}
-	// Remember tier/models binary-wide so future inits inherit them, but only on
-	// a brand-new project or an explicit tier choice: a plain re-index of an
-	// existing project must not silently change the global default.
-	if opt.Tier != "" || !existed {
-		_ = config.SaveGlobal(config.GlobalConfig{
-			AIEnabled:   true,
-			Tier:        tier,
-			AssistModel: cfg.AI.AssistModel,
-		})
-	}
-
-	// Write starter rules only when absent, so a re-init keeps user-edited rules.
-	if _, statErr := os.Stat(filepath.Join(ws.Path, "rules.toml")); os.IsNotExist(statErr) {
-		if err := config.SaveRules(ws.Path, config.DefaultRules()); err != nil {
-			return index.Summary{}, err
-		}
-	}
-	// Open with AI so init builds the semantic index it reports as ready. Without
-	// an inferencer, init printed "semantic search ready" while embedding nothing.
-	project, err := application.OpenProject(context.Background(), root, application.Options{
-		EnableAI: cfg.AI.Enabled, InferencerProvider: maybeInferencer,
+	return application.InitializeProject(context.Background(), application.InitOptions{
+		Root:               opt.Root,
+		Tier:               opt.Tier,
+		AssistModel:        opt.AssistModel,
+		Provider:           opt.Provider,
+		AgentCommand:       opt.AgentCommand,
+		Integrations:       opt.Integrations,
+		IntegrationsSet:    opt.IntegrationsSet,
+		Languages:          opt.Languages,
+		LanguagesSet:       opt.LanguagesSet,
+		EmbedProgress:      opt.EmbedProgress,
+		OnBlocked:          opt.OnBlocked,
+		InferencerProvider: application.DefaultInferencer,
+		AfterSetup: func(project *application.Project) {
+			if overview, err := project.Query.Overview(); err == nil {
+				_ = refreshAgentsMap(project.Workspace.Root, overview)
+			}
+		},
 	})
-	if err != nil {
-		return index.Summary{}, err
-	}
-	defer project.Close()
-	sum := project.InitialRefresh.Summary
-	if sum.Indexed == 0 {
-		// A current re-init reports the existing index totals (files, symbols,
-		// edges) without forcing another mutation pass, so the summary reflects
-		// what is indexed rather than an empty no-change delta.
-		if status, statusErr := project.Query.Status(); statusErr == nil {
-			sum.Indexed = status.Counts.Files
-			sum.Symbols = status.Counts.Symbols
-			sum.Edges = status.Counts.Edges
-		}
-	}
-
-	// init is the explicit setup step, so it drains the embedding backlog rather
-	// than leaving the semantic index it advertises half-built.
-	var embedProgress func(index.VectorPass)
-	if opt.EmbedProgress != nil {
-		embedProgress = func(pass index.VectorPass) { opt.EmbedProgress(pass.Embedded, pass.Remaining) }
-	}
-	if _, embedErr := project.BuildSemanticIndex(context.Background(), embedProgress); embedErr != nil {
-		return sum, embedErr
-	}
-	integrations := append([]string(nil), allIntegrations...)
-	if opt.IntegrationsSet {
-		integrations = opt.Integrations
-	}
-	plan, err := BuildSetupPlan(root, integrations)
-	if err != nil {
-		return sum, err
-	}
-	if opt.OnBlocked != nil && len(plan.Blocked) > 0 {
-		opt.OnBlocked(plan.Blocked)
-	}
-	if err := ApplySetupPlan(plan); err != nil {
-		return sum, err
-	}
-	// Seed the always-on Prowl map now that setup has written the AGENTS.md
-	// guidance block; best-effort, never fails init.
-	if ov, ovErr := project.Query.Overview(); ovErr == nil {
-		_ = refreshAgentsMap(root, ov)
-	}
-	if err := workspace.EnsureDerivedIgnored(root); err != nil {
-		return sum, err
-	}
-	if err := workspace.Register(root, true); err != nil {
-		return sum, err
-	}
-	return sum, nil
 }
 
 // firstNonEmpty returns the first non-empty string, or "" when all are empty.
@@ -395,7 +287,7 @@ func newInitCmd(version string) *cobra.Command {
 				}
 			}
 			if provider == "" {
-				detected := detectAgentCLI()
+				detected := application.DetectAgentCLI()
 				_, ollamaErr := exec.LookPath("ollama")
 				ollamaInstalled := ollamaErr == nil
 				interactive := !nonInteractive && !yes && (reconfigure || !remembered)
@@ -417,7 +309,7 @@ func newInitCmd(version string) *cobra.Command {
 				}
 			}
 			if provider == "agent" && agentCommand == "" {
-				if agentCommand = detectAgentCLI(); agentCommand == "" {
+				if agentCommand = application.DetectAgentCLI(); agentCommand == "" {
 					uiLog.Warnf("--ai-provider agent but no coding-agent CLI (claude/omp/codex) on PATH; rewrite+rerank off, semantic search still on via the built-in embedder")
 				}
 			}
@@ -720,22 +612,4 @@ func initPickerNames(selected []string) []string {
 		}
 	}
 	return names
-}
-
-// detectAgentCLI returns a headless completion command for the first installed
-// coding-agent CLI, or "" when none is found. Reranking is a lightweight
-// ordering task, not coding, so each command pins the agent's cheapest/fastest
-// model tier -- prowl is a support tool and the spawn must stay cheap. The
-// command is fully overridable via --ai-command / config for a different model.
-func detectAgentCLI() string {
-	for _, cand := range []struct{ bin, command string }{
-		{"claude", "claude -p --model haiku"},
-		{"omp", "omp -p --model haiku"},
-		{"codex", "codex exec -m gpt-5-mini"},
-	} {
-		if _, err := exec.LookPath(cand.bin); err == nil {
-			return cand.command
-		}
-	}
-	return ""
 }

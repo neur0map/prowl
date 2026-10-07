@@ -241,9 +241,10 @@ the clients you use:
 ```sh
 prowl gateway up
 prowl gateway status
-prowl gateway inject omp pi claude codex opencode hermes openclaw prowl-legacy
+prowl gateway inject --activate omp claude codex opencode hermes
+prowl gateway inject pi openclaw prowl-legacy
 
-# Revert only entries Prowl owns.
+# Revert only entries Prowl owns, including an activated default that is unchanged.
 prowl gateway inject --remove omp pi claude codex opencode hermes openclaw prowl-legacy
 prowl gateway down
 ```
@@ -256,6 +257,11 @@ is the sole unauthenticated
 route; it exposes liveness metadata and an optional port-bound proof that lets a
 credential-holding client verify the listener before transmitting its token.
 The Setup tab configures selected harnesses without displaying credentials.
+The authenticated setup API exposes the same operations to local clients:
+`GET /api/setup/harnesses`, `POST` and `DELETE /api/setup/harnesses/{id}`, and
+`POST /api/setup/skills`. Activation is refused while `auto` has no routable
+model unless the caller explicitly sends `force: true`.
+
 
 `prowl gateway` opens the same console as bare `prowl`. On Home, press `d` to
 switch **Keep running** on or off. When enabled, closing the console hands the
@@ -268,11 +274,14 @@ commands.
 
 ### Harness files and portable skills
 
-Gateway injection and skill installation are separate, ledger-backed writes:
+Gateway injection and skill installation are separate, ledger-backed writes.
+Pass `--activate` when the selected harness should also use `prowl/auto` as its
+default. Removal restores the prior default only while it still holds the value
+Prowl wrote, so a later user selection is retained.
 
 ```sh
-prowl gateway inject pi hermes openclaw prowl-legacy
-prowl skills --clients pi,hermes,openclaw,prowl-legacy
+prowl gateway inject --activate hermes
+prowl skills --clients hermes
 ```
 
 The custom harness paths are:

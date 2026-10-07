@@ -135,7 +135,7 @@ func capSlice(out any, limit int) any {
 // pass false to skip the Ollama probe and stay fast.
 func openQuerier(ctx context.Context, needsAI bool) (*query.Querier, *workspace.Workspace, *store.Store, func() error, error) {
 	project, err := application.OpenProject(ctx, ".", application.Options{
-		EnableAI: needsAI, InferencerProvider: maybeInferencer,
+		EnableAI: needsAI, InferencerProvider: application.DefaultInferencer,
 		VectorProgress: semanticBuildReporter(os.Stderr),
 	})
 	if err != nil {
