@@ -10,12 +10,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/neur0map/prowl/internal/gateway/inject"
 	"github.com/neur0map/prowl/internal/version"
 )
 
@@ -37,7 +40,7 @@ func (s *Server) registerSettingsRoutes() {
 	s.mux.HandleFunc("GET /api/settings/update-check", s.RequireKey(store.handleGetUpdateCheck))
 	s.mux.HandleFunc("PUT /api/settings/update-check", s.RequireKey(store.handlePutUpdateCheck))
 	s.mux.HandleFunc("GET /api/settings/api-key", s.RequireKey(store.handleGetAPIKey))
-	s.mux.HandleFunc("POST /api/settings/api-key/regenerate", s.RequireKey(store.handleRegenerateAPIKey))
+	s.mux.HandleFunc("POST /api/settings/api-key/regenerate", s.RequireKey(s.handleRegenerateAPIKey))
 
 	s.mux.HandleFunc("GET /api/update/release", s.RequireKey(update.handleRelease))
 	s.mux.HandleFunc("GET /api/update/check", s.RequireKey(update.handleCheck))
@@ -324,13 +327,42 @@ func (st *settingsStore) handleGetAPIKey(w http.ResponseWriter, r *http.Request)
 	WriteJSON(w, http.StatusOK, map[string]any{"apiKey": key.Reveal()})
 }
 
-func (st *settingsStore) handleRegenerateAPIKey(w http.ResponseWriter, r *http.Request) {
-	key, err := st.regenerateUnifiedAPIKey(r.Context())
+func (s *Server) handleRegenerateAPIKey(w http.ResponseWriter, r *http.Request) {
+	key, err := s.settings.regenerateUnifiedAPIKey(r.Context())
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, TypeServer, "could not regenerate the api key")
 		return
 	}
+	if err := s.refreshInjectedHarnessCredentials(r.Context(), key.Reveal()); err != nil {
+		slog.WarnContext(r.Context(), "Could not refresh injected harness credentials after key regeneration", "error", err)
+	}
 	WriteJSON(w, http.StatusOK, map[string]any{"apiKey": key.Reveal()})
+}
+
+// RefreshInjectedHarnessCredentials updates intact targets that carry an old
+// unified key. Services call it once before accepting requests.
+func (s *Server) RefreshInjectedHarnessCredentials(ctx context.Context) error {
+	key, err := s.UnifiedAPIKey(ctx)
+	if err != nil {
+		return err
+	}
+	return s.refreshInjectedHarnessCredentials(ctx, key)
+}
+
+func (s *Server) refreshInjectedHarnessCredentials(ctx context.Context, currentKey string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	refreshed, err := inject.RefreshStale(inject.RefreshOptions{
+		Home:       home,
+		LocalToken: s.localToken,
+		UnifiedKey: currentKey,
+	})
+	for _, harness := range refreshed {
+		slog.InfoContext(ctx, "Refreshed gateway credential in harness", "harness", harness)
+	}
+	return err
 }
 
 // settingsAppVersion is the running release, or nil when it is not honestly

@@ -129,43 +129,47 @@ func withInjectLock(home string, fn func() error) error {
 // transaction: if the record cannot be published, the mutation is rolled back
 // to its immediate pre-apply state rather than left orphaned and unremovable.
 func Apply(o Options, harness string) (Target, error) {
+	var t Target
+	err := withInjectLock(o.Home, func() error {
+		var err error
+		t, err = applyLocked(o, harness)
+		return err
+	})
+	if err != nil {
+		return Target{}, err
+	}
+	return t, nil
+}
+
+// applyLocked performs one normal injection while its caller holds the
+// per-home lock.
+func applyLocked(o Options, harness string) (Target, error) {
 	w, err := writerFor(harness)
 	if err != nil {
 		return Target{}, err
 	}
 	tx := newApplyTx()
 	o.tx = tx
-	var t Target
-	err = withInjectLock(o.Home, func() error {
-		var aerr error
-		t, aerr = w.apply(o)
-		if aerr != nil {
-			tx.rollback()
-			return aerr
-		}
-		if o.Activate {
-			activeEntries, activeFiles, note, activateErr := applyActivation(o, harness)
-			if activateErr != nil {
-				tx.rollback()
-				return activateErr
-			}
-			t.Ledger = append(t.Ledger, activeEntries...)
-			t.Files = appendUnique(t.Files, activeFiles...)
-			if note != "" {
-				t.Note = note
-			}
-		}
-		if serr := saveRecord(o.Home, t, tx); serr != nil {
-			// The mutation is on disk but unrecorded, so it could never be
-			// cleanly removed. Undo it to the pre-apply state rather than
-			// leave an orphaned injection.
-			tx.rollback()
-			return fmt.Errorf("injected %s but could not record it for removal; rolled back the change: %w", harness, serr)
-		}
-		return nil
-	})
+	t, err := w.apply(o)
 	if err != nil {
+		tx.rollback()
 		return Target{}, err
+	}
+	if o.Activate {
+		activeEntries, activeFiles, note, activateErr := applyActivation(o, harness)
+		if activateErr != nil {
+			tx.rollback()
+			return Target{}, activateErr
+		}
+		t.Ledger = append(t.Ledger, activeEntries...)
+		t.Files = appendUnique(t.Files, activeFiles...)
+		if note != "" {
+			t.Note = note
+		}
+	}
+	if err := saveRecord(o.Home, t, tx); err != nil {
+		tx.rollback()
+		return Target{}, fmt.Errorf("injected %s but could not record it for removal; rolled back the change: %w", harness, err)
 	}
 	return t, nil
 }

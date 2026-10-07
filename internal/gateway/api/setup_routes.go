@@ -15,14 +15,15 @@ import (
 )
 
 type harnessRow struct {
-	ID       string                 `json:"id"`
-	Name     string                 `json:"name"`
-	Detected bool                   `json:"detected"`
-	Injected bool                   `json:"injected"`
-	Active   bool                   `json:"active"`
-	Files    []string               `json:"files"`
-	Note     string                 `json:"note,omitempty"`
-	Skills   setupstate.SkillStatus `json:"skills"`
+	ID              string                 `json:"id"`
+	Name            string                 `json:"name"`
+	Detected        bool                   `json:"detected"`
+	Injected        bool                   `json:"injected"`
+	Active          bool                   `json:"active"`
+	CredentialStale bool                   `json:"credentialStale"`
+	Files           []string               `json:"files"`
+	Note            string                 `json:"note,omitempty"`
+	Skills          setupstate.SkillStatus `json:"skills"`
 }
 
 type setupHarnessesResponse struct {
@@ -56,10 +57,15 @@ func (s *Server) registerSetupRoutes() {
 	s.mux.HandleFunc("POST /api/setup/skills", s.RequireKey(s.handleSetupSkills))
 }
 
-func (s *Server) handleSetupHarnesses(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleSetupHarnesses(w http.ResponseWriter, r *http.Request) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, TypeServer, "could not find the user home directory")
+		return
+	}
+	currentKey, err := s.UnifiedAPIKey(r.Context())
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, TypeServer, "could not read the gateway api key")
 		return
 	}
 	routable, reason := s.setupRoutability()
@@ -67,7 +73,7 @@ func (s *Server) handleSetupHarnesses(w http.ResponseWriter, _ *http.Request) {
 	response := setupHarnessesResponse{
 		Routable:  routable,
 		Reason:    reason,
-		Harnesses: setupHarnessRows(home, state),
+		Harnesses: setupHarnessRows(home, state, s.localToken, currentKey),
 	}
 	if state.SkillsErr != nil {
 		response.SkillsError = state.SkillsErr.Error()
@@ -109,7 +115,12 @@ func (s *Server) handleSetupHarness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := setupstate.Load(home, version.Version)
-	WriteJSON(w, http.StatusOK, map[string]any{"harness": setupHarnessRow(home, state, id)})
+	currentKey, keyErr := s.UnifiedAPIKey(r.Context())
+	if keyErr != nil {
+		WriteError(w, http.StatusInternalServerError, TypeServer, "could not read the gateway api key")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"harness": setupHarnessRow(home, state, id, s.localToken, currentKey)})
 }
 
 func (s *Server) handleRemoveHarness(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +139,12 @@ func (s *Server) handleRemoveHarness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := setupstate.Load(home, version.Version)
-	WriteJSON(w, http.StatusOK, map[string]any{"harness": setupHarnessRow(home, state, id)})
+	currentKey, keyErr := s.UnifiedAPIKey(r.Context())
+	if keyErr != nil {
+		WriteError(w, http.StatusInternalServerError, TypeServer, "could not read the gateway api key")
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"harness": setupHarnessRow(home, state, id, s.localToken, currentKey)})
 }
 
 func (s *Server) handleSetupSkills(w http.ResponseWriter, r *http.Request) {
@@ -181,34 +197,40 @@ func (s *Server) setupRoutability() (bool, string) {
 	return true, ""
 }
 
-func setupHarnessRows(home string, state setupstate.State) []harnessRow {
+func setupHarnessRows(home string, state setupstate.State, localToken, currentKey string) []harnessRow {
 	rows := make([]harnessRow, 0, len(state.Supported))
 	for _, id := range state.Supported {
-		rows = append(rows, setupHarnessRow(home, state, id))
+		rows = append(rows, setupHarnessRow(home, state, id, localToken, currentKey))
 	}
 	return rows
 }
 
-func setupHarnessRow(home string, state setupstate.State, id string) harnessRow {
+func setupHarnessRow(home string, state setupstate.State, id, localToken, currentKey string) harnessRow {
 	target, injected := state.Targets[id]
 	active, activeNote := inject.Active(home, id)
 	note := target.Note
 	if activeNote != "" {
 		note = activeNote
 	}
+	stale := injected && inject.CredentialStale(target, localToken, currentKey)
+	if stale {
+		active = false
+		note = "The gateway key in this harness no longer works. Reconnecting refreshes it."
+	}
 	files := target.Files
 	if files == nil {
 		files = []string{}
 	}
 	return harnessRow{
-		ID:       id,
-		Name:     harnessName(id),
-		Detected: state.Installed[id],
-		Injected: injected,
-		Active:   active,
-		Files:    files,
-		Note:     note,
-		Skills:   setupstate.StatusFor(state, id),
+		ID:              id,
+		Name:            harnessName(id),
+		Detected:        state.Installed[id],
+		Injected:        injected,
+		Active:          active,
+		CredentialStale: stale,
+		Files:           files,
+		Note:            note,
+		Skills:          setupstate.StatusFor(state, id),
 	}
 }
 

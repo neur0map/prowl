@@ -1831,3 +1831,77 @@ func TestReapplyThenRemoveRestoresOriginalManualBlock(t *testing.T) {
 		t.Errorf("re-apply then remove did not restore the user's original block:\ngot:\n%q\nwant:\n%q", restored, user)
 	}
 }
+
+func TestCredentialStaleRecognizesOnlyOldUnifiedKeys(t *testing.T) {
+	t.Parallel()
+	oldKey := "prowlag-" + strings.Repeat("1", 48)
+	currentKey := "prowlag-" + strings.Repeat("2", 48)
+	localToken := "local-token"
+
+	target := func(content string) Target {
+		return Target{Ledger: []writtenEntry{{YamlAuthored: content}}}
+	}
+	tests := []struct {
+		name    string
+		content string
+		stale   bool
+	}{
+		{name: "old unified key", content: "api_key: " + oldKey, stale: true},
+		{name: "current unified key", content: "api_key: " + currentKey},
+		{name: "local token", content: "api_key: " + localToken},
+		{name: "no credential", content: "discover_models: false"},
+		{name: "longer token", content: "api_key: " + oldKey + "a"},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := CredentialStale(target(tt.content), localToken, currentKey); got != tt.stale {
+				t.Fatalf("CredentialStale() = %v, want %v", got, tt.stale)
+			}
+		})
+	}
+}
+
+func TestRefreshStaleLeavesDivergedTargetUntouched(t *testing.T) {
+	t.Parallel()
+	home := testHome(t)
+	oldKey := "prowlag-" + strings.Repeat("3", 48)
+	currentKey := "prowlag-" + strings.Repeat("4", 48)
+	opts := optsFor(home, "hermes")
+	opts.Token = oldKey
+	opts.Activate = true
+	if _, err := Apply(opts, "hermes"); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	path := hermesConfigPath(home)
+	injected := read(t, path)
+	edited := strings.Replace(injected, "    discover_models: false\n",
+		"    discover_models: false\n    request_timeout: 90\n", 1)
+	if edited == injected {
+		t.Fatal("managed block edit did not apply")
+	}
+	if err := os.WriteFile(path, []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshed, err := RefreshStale(RefreshOptions{
+		Home:       home,
+		LocalToken: "local-token",
+		UnifiedKey: currentKey,
+	})
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if len(refreshed) != 0 {
+		t.Fatalf("refreshed diverged targets: %v", refreshed)
+	}
+	if got := read(t, path); got != edited {
+		t.Fatalf("refresh rewrote a user-edited target:\ngot:\n%s\nwant:\n%s", got, edited)
+	}
+	targets := Targets(home)
+	if len(targets) != 1 || !CredentialStale(targets[0], "local-token", currentKey) {
+		t.Fatalf("diverged target no longer reports its stale recorded credential: %#v", targets)
+	}
+}

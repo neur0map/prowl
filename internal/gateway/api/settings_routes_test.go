@@ -7,11 +7,14 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/neur0map/prowl/internal/gateway/inject"
 )
 
 func newSettingsStore(t *testing.T) *settingsStore {
@@ -172,7 +175,7 @@ func TestMaskedFormNeverLeaksTheKey(t *testing.T) {
 // the explicit reveal - the dashboard's Show/Copy affordances need the
 // plaintext - and regenerate returns a different whole key.
 func TestAPIKeyEndpointRevealsWholeKeyForTheDashboard(t *testing.T) {
-	t.Parallel()
+	setupRouteHome(t)
 	s := testServer(t, Options{})
 	auth := settingsSession(t, s)
 
@@ -197,6 +200,68 @@ func TestAPIKeyEndpointRevealsWholeKeyForTheDashboard(t *testing.T) {
 	_, body = do(t, s, http.MethodGet, "/api/settings/api-key", "", auth)
 	require.NoError(t, json.Unmarshal([]byte(body), &first))
 	require.Equal(t, rotated.APIKey, first.APIKey)
+}
+
+func TestRegenerateRefreshesUnifiedHarnessesWithoutActivatingOthers(t *testing.T) {
+	home := setupRouteHome(t)
+	const localToken = "machine-local-token"
+	s := testServer(t, Options{MachineKey: compatMachineKey, LocalToken: localToken})
+	oldKey, err := s.UnifiedAPIKey(context.Background())
+	require.NoError(t, err)
+
+	hermesOpts := inject.Options{
+		Home:     home,
+		BaseURL:  "http://127.0.0.1:9911/v1",
+		Token:    oldKey,
+		Activate: true,
+		Models:   inject.RoutingModels(),
+	}
+	_, err = inject.Apply(hermesOpts, "hermes")
+	require.NoError(t, err)
+	hermesPath := filepath.Join(home, ".hermes", "config.yaml")
+	hermesBefore := requireReadFile(t, hermesPath)
+
+	ompOpts := inject.Options{
+		Home:    home,
+		BaseURL: "http://127.0.0.1:9911/v1",
+		Token:   oldKey,
+		Models:  inject.RoutingModels(),
+	}
+	_, err = inject.Apply(ompOpts, "omp")
+	require.NoError(t, err)
+	ompPath := filepath.Join(home, ".omp", "agent", "models.yml")
+	ompBefore := requireReadFile(t, ompPath)
+
+	piOpts := inject.Options{
+		Home:    home,
+		BaseURL: "http://127.0.0.1:9911/v1",
+		Token:   localToken,
+		Models:  inject.RoutingModels(),
+	}
+	_, err = inject.Apply(piOpts, "pi")
+	require.NoError(t, err)
+	piPath := filepath.Join(home, ".pi", "agent", "models.json")
+	piBefore := requireReadFile(t, piPath)
+
+	resp, body := do(t, s, http.MethodPost, "/api/settings/api-key/regenerate", "", settingsSession(t, s))
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	var rotated struct {
+		APIKey string `json:"apiKey"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &rotated))
+	require.NotEqual(t, oldKey, rotated.APIKey)
+
+	hermesAfter := requireReadFile(t, hermesPath)
+	require.Equal(t, strings.ReplaceAll(string(hermesBefore), oldKey, rotated.APIKey), string(hermesAfter),
+		"rotation must change only the managed credential and preserve the active model selection")
+	ompAfter := requireReadFile(t, ompPath)
+	require.Equal(t, strings.ReplaceAll(string(ompBefore), oldKey, rotated.APIKey), string(ompAfter),
+		"rotation must refresh a non-active harness without changing its activation state")
+	require.NotContains(t, string(ompAfter), "modelRoles:")
+	require.Equal(t, piBefore, requireReadFile(t, piPath),
+		"a machine-local token target must remain byte-identical")
+	require.Contains(t, string(hermesAfter), "  provider: prowl\n")
+	require.Contains(t, string(hermesAfter), "  default: auto\n")
 }
 
 // TestUpdateCheckOptInRoundTrips: the Settings dialog toggle writes and reads

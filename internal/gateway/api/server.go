@@ -31,12 +31,11 @@ type Server struct {
 	// the stored value so a regenerate takes effect at once.
 	machineKey string
 
-	// localToken is the machine-local bootstrap credential. It exists because
-	// Prowl registers the gateway into harnesses using this token,
-	// while the unified key is what external applications hold; a stored copy
-	// of the unified key would go stale the moment the operator regenerates
-	// it, whereas this token is never regenerated. It grants everything this
-	// surface does, and it lives at mode 0600 in the gateway state directory.
+	// localToken is the machine-local bootstrap credential. The setup API can
+	// register the gateway into harnesses with this token, while the unified key
+	// is what other injectors and external applications hold. The local token is
+	// never regenerated, grants everything this surface does, and lives at mode
+	// 0600 in the gateway state directory.
 	localToken string
 
 	// signIn, when set, runs the interactive subscription flows. The

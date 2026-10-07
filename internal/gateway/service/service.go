@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -101,6 +102,9 @@ func (s *Service) Listen(port int) (net.Listener, error) {
 func (s *Service) Serve(ctx context.Context, ln net.Listener) error {
 	if s.listener == nil {
 		s.listener = ln
+	}
+	if err := s.server.RefreshInjectedHarnessCredentials(ctx); err != nil {
+		slog.WarnContext(ctx, "Could not refresh injected harness credentials at gateway startup", "error", err)
 	}
 	s.stopBackground = s.engine.StartBackground(ctx)
 	httpSrv := &http.Server{

@@ -115,6 +115,10 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- Rotating the unified gateway key now refreshes every intact harness injection,
+  and gateway startup repairs injections left on an older key. User-edited
+  managed blocks stay untouched and setup reports their stale credential
+  instead of claiming the harness is active.
 - A model removed from an upstream now fails over to the next candidate instead
   of ending an `auto` request after one 404. The missing route is held out of
   subsequent requests, while a concrete model that is missing everywhere still
