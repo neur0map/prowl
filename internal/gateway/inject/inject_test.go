@@ -62,6 +62,9 @@ func TestApplyThenRemoveIsByteExact(t *testing.T) {
 	if !strings.Contains(after, `"ANTHROPIC_MODEL": "auto"`) {
 		t.Errorf("Claude was pinned to a provider id instead of the routable auto alias:\n%s", after)
 	}
+	if got := jsonString(objectMember(readJSONObject(path), "env"), "ANTHROPIC_BASE_URL"); got != "http://127.0.0.1:8788" {
+		t.Errorf("Claude base URL = %q, want gateway root", got)
+	}
 
 	if _, err := Remove(home, "claude"); err != nil {
 		t.Fatalf("remove: %v", err)
@@ -83,6 +86,55 @@ func TestApplyThenRemoveIsByteExact(t *testing.T) {
 	}
 }
 
+func TestClaudeReapplyUpgradesLegacyBaseURLAndRemovesCleanly(t *testing.T) {
+	t.Parallel()
+	home := testHome(t)
+	path := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts := optsFor(home, "")
+	oldBaseURL := opts.BaseURL
+	oldSettings := "{\n  \"env\": {\n    \"ANTHROPIC_BASE_URL\": " + jsonStr(oldBaseURL) + ",\n    \"ANTHROPIC_AUTH_TOKEN\": " + jsonStr(opts.Token) + ",\n    \"ANTHROPIC_MODEL\": \"auto\"\n  }\n}\n"
+	if err := os.WriteFile(path, []byte(oldSettings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldEntry := writtenEntry{
+		Path:            path,
+		Container:       "env",
+		ContainerWasNew: true,
+		Nested: map[string]string{
+			"ANTHROPIC_BASE_URL":   jsonStr(oldBaseURL),
+			"ANTHROPIC_AUTH_TOKEN": jsonStr(opts.Token),
+			"ANTHROPIC_MODEL":      jsonStr("auto"),
+		},
+	}
+	record := Record{Targets: map[string]Target{
+		"claude": {Harness: "claude", Files: []string{path}, Ledger: []writtenEntry{oldEntry}},
+	}}
+	if err := publishRecord(home, record); err != nil {
+		t.Fatal(err)
+	}
+	if active, _ := Active(home, "claude"); !active {
+		t.Fatal("legacy Claude injection was not detected as active")
+	}
+	if _, err := Apply(opts, "claude"); err != nil {
+		t.Fatalf("re-apply: %v", err)
+	}
+	if got := jsonString(objectMember(readJSONObject(path), "env"), "ANTHROPIC_BASE_URL"); got != "http://127.0.0.1:8788" {
+		t.Fatalf("re-apply kept legacy base URL %q", got)
+	}
+	if active, _ := Active(home, "claude"); !active {
+		t.Fatal("upgraded Claude injection was not detected as active")
+	}
+	if _, err := Remove(home, "claude"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if strings.Contains(read(t, path), "ANTHROPIC_") {
+		t.Errorf("removal left legacy injection keys:\n%s", read(t, path))
+	}
+}
+
 func TestRemoveNeverRevertsAUserEdit(t *testing.T) {
 	t.Parallel()
 	home := testHome(t)
@@ -99,7 +151,7 @@ func TestRemoveNeverRevertsAUserEdit(t *testing.T) {
 	}
 	// The user repoints the base URL at another gateway after injection.
 	body := read(t, path)
-	edited := strings.Replace(body, "http://127.0.0.1:8788/v1", "http://127.0.0.1:9999/v1", 1)
+	edited := strings.Replace(body, "http://127.0.0.1:8788", "http://127.0.0.1:9999", 1)
 	if edited == body {
 		t.Fatal("edit did not apply")
 	}
@@ -111,7 +163,7 @@ func TestRemoveNeverRevertsAUserEdit(t *testing.T) {
 		t.Fatalf("remove: %v", err)
 	}
 	after := read(t, path)
-	if !strings.Contains(after, "http://127.0.0.1:9999/v1") {
+	if !strings.Contains(after, "http://127.0.0.1:9999") {
 		t.Errorf("removal rolled back the user's edit; the changed value must survive:\n%s", after)
 	}
 	// The value the user never touched is still ours to remove.
@@ -183,6 +235,20 @@ func TestCodexNeverOverwritesExistingDefaults(t *testing.T) {
 	if idx := strings.Index(after, "model_provider"); idx > strings.Index(after, "[tui]") {
 		t.Errorf("model_provider was appended inside/after a table (invalid TOML):\n%s", after)
 	}
+	if strings.Contains(after, "env_key") {
+		t.Errorf("Codex provider still depends on a shell environment key:\n%s", after)
+	}
+	if !strings.Contains(after, `experimental_bearer_token = "`+optsFor(home, "").Token+`"`) {
+		t.Errorf("Codex provider did not embed the gateway token:\n%s", after)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".codex", "prowl.env")); !os.IsNotExist(err) {
+		t.Errorf("Codex apply wrote a retired environment file: %v", err)
+	}
+	if info, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	} else if info.Mode().Perm() != 0o600 {
+		t.Errorf("Codex credential config mode = %o, want 0600", info.Mode().Perm())
+	}
 
 	if _, err := Remove(home, "codex"); err != nil {
 		t.Fatalf("remove: %v", err)
@@ -241,8 +307,8 @@ func TestApplyMigratesLegacyProviderIdentity(t *testing.T) {
 	if _, err := os.Stat(legacyEnv); !os.IsNotExist(err) {
 		t.Fatalf("legacy Codex environment file survived migration: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".codex", "prowl.env")); err != nil {
-		t.Fatalf("new Codex environment file missing: %v", err)
+	if _, err := os.Stat(filepath.Join(home, ".codex", "prowl.env")); !os.IsNotExist(err) {
+		t.Fatalf("Codex migration wrote a retired environment file: %v", err)
 	}
 }
 
@@ -1247,10 +1313,9 @@ func TestFailedReapplyRestoresImmediatePreState(t *testing.T) {
 	}
 }
 
-// TestCodexPreservesPreexistingEnv proves a pre-existing env file is restored,
-// not destroyed: removal must give back the user's own prowl.env, never blindly
-// unlink a file they already had.
-func TestCodexPreservesPreexistingEnv(t *testing.T) {
+// TestCodexLeavesPreexistingEnvUnchanged proves a user-owned prowl.env is
+// outside the new config-only injection and survives both apply and removal.
+func TestCodexLeavesPreexistingEnvUnchanged(t *testing.T) {
 	t.Parallel()
 	home := testHome(t)
 	envPath := filepath.Join(home, ".codex", "prowl.env")
@@ -1264,14 +1329,14 @@ func TestCodexPreservesPreexistingEnv(t *testing.T) {
 	if _, err := Apply(optsFor(home, ""), "codex"); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	if got := read(t, envPath); !strings.Contains(got, codexEnvKey) {
-		t.Fatalf("apply did not write the gateway key into the env file:\n%s", got)
+	if got := read(t, envPath); got != userEnv {
+		t.Fatalf("apply changed an environment file it does not own:\n%s", got)
 	}
 	if _, err := Remove(home, "codex"); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
 	if got := read(t, envPath); got != userEnv {
-		t.Errorf("removal did not restore the user's pre-existing env file:\n%s", got)
+		t.Errorf("removal changed an environment file it does not own:\n%s", got)
 	}
 }
 
@@ -1307,34 +1372,61 @@ func TestCodexCreatedConfigDivergenceKeepsEdits(t *testing.T) {
 	}
 }
 
-// TestCodexApplyRollsBackAllOnEnvFailure proves the config+env mutation is one
-// transaction: if the env write fails after the config was written, the config
-// is rolled back too rather than left half-injected.
-func TestCodexApplyRollsBackAllOnEnvFailure(t *testing.T) {
+func TestCodexReapplyUpgradesEnvKeyAndRestoresPriorProvider(t *testing.T) {
 	t.Parallel()
 	home := testHome(t)
 	path := filepath.Join(home, ".codex", "config.toml")
+	envPath := filepath.Join(home, ".codex", "prowl.env")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	user := "model = \"gpt-5.6-sol\"\n"
-	if err := os.WriteFile(path, []byte(user), 0o644); err != nil {
+	userTable := "[model_providers.prowl]\nname = \"My provider\"\nbase_url = \"http://mine/v1\"\nenv_key = \"USER_TOKEN\"\n\n"
+	user := "model = \"gpt-5.6-sol\"\n\n" + userTable + "[tui]\nx = 1\n"
+	oldTable := "[model_providers.prowl]\nname = \"Prowl\"\nbase_url = \"http://127.0.0.1:8788/v1\"\nenv_key = \"PROWL_GATEWAY_API_KEY\"\nwire_api = \"responses\"\n\n"
+	injected := "model_provider = \"prowl\"\nmodel = \"gpt-5.6-sol\"\n\n" + oldTable + "[tui]\nx = 1\n"
+	oldEnv := "export PROWL_GATEWAY_API_KEY='old-token'\n"
+	if err := os.WriteFile(path, []byte(injected), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// A directory at the env's temp path makes the env write fail AFTER the
-	// config has already been rewritten.
-	if err := os.Mkdir(filepath.Join(home, ".codex", "prowl.env.tmp"), 0o755); err != nil {
+	if err := os.WriteFile(envPath, []byte(oldEnv), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Apply(optsFor(home, ""), "codex"); err == nil {
-		t.Fatal("apply must fail when the env file cannot be written")
+	record := Record{Targets: map[string]Target{
+		"codex": {
+			Harness: "codex",
+			Files:   []string{path, envPath},
+			Ledger: []writtenEntry{
+				{Path: path, TomlTable: "[model_providers.prowl]", TomlAuthored: oldTable, TomlPrior: userTable},
+				{Path: path, TomlTop: "model_provider", TomlVal: `"prowl"`},
+				{Path: envPath, EnvFile: true, EnvCreated: true, CreatedContent: oldEnv},
+			},
+		},
+	}}
+	if err := publishRecord(home, record); err != nil {
+		t.Fatal(err)
+	}
+	opts := optsFor(home, "")
+	if _, err := Apply(opts, "codex"); err != nil {
+		t.Fatalf("re-apply: %v", err)
 	}
 	after := read(t, path)
-	if strings.TrimSpace(after) != strings.TrimSpace(user) {
-		t.Errorf("config was left mutated after the env write failed:\n%s", after)
+	if strings.Contains(after, "env_key") {
+		t.Fatalf("re-apply kept the retired env_key:\n%s", after)
 	}
-	if exists(filepath.Join(home, ".codex", "prowl.env")) {
-		t.Error("a partial env file survived the failed apply")
+	if !strings.Contains(after, `experimental_bearer_token = "`+opts.Token+`"`) {
+		t.Fatalf("re-apply did not embed the current token:\n%s", after)
+	}
+	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
+		t.Fatalf("re-apply left the retired environment file: %v", err)
+	}
+	if _, err := Remove(home, "codex"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if restored := read(t, path); restored != user {
+		t.Errorf("remove did not restore the prior provider exactly:\ngot:\n%q\nwant:\n%q", restored, user)
+	}
+	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
+		t.Errorf("remove recreated the retired environment file: %v", err)
 	}
 }
 

@@ -279,6 +279,16 @@ Pass `--activate` when the selected harness should also use `prowl/auto` as its
 default. Removal restores the prior default only while it still holds the value
 Prowl wrote, so a later user selection is retained.
 
+Claude Code injection writes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and
+`ANTHROPIC_MODEL` in `~/.claude/settings.json`. The base URL is the gateway root
+because the client appends `/v1/messages`.
+
+Codex injection writes `base_url`, `wire_api = "responses"`, and
+`experimental_bearer_token` in `[model_providers.prowl]` inside
+`~/.codex/config.toml`. Its base URL keeps the `/v1` prefix because the client
+appends `/responses`. The config contains a credential and is kept at mode
+`0600`; injection does not require or write a shell environment file.
+
 ```sh
 prowl gateway inject --activate hermes
 prowl skills --clients hermes

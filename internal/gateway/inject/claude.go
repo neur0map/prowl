@@ -3,6 +3,7 @@ package inject
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 )
 
 // ── Claude Code ──────────────────────────────────────────────────────────────
@@ -13,8 +14,8 @@ import (
 // The model pin is the gateway's plain `auto` alias; using the harness provider
 // id here would ask the gateway for a model that does not exist.
 //
-// ANTHROPIC_BASE_URL is only honest with the /v1 suffix (the client appends
-// /messages), so it points at the gateway root including /v1.
+// Claude Code's Anthropic SDK appends /v1/messages, so the configured base
+// URL must be the gateway root rather than its /v1 API prefix.
 
 type claudeWriter struct{}
 
@@ -25,7 +26,7 @@ func (claudeWriter) apply(o Options) (Target, error) {
 		// mergeContainer records any pre-existing env var we overwrite and a
 		// non-object `env` it had to replace, so removal restores them.
 		entry = mergeContainer(obj, "env", []kv{
-			{"ANTHROPIC_BASE_URL", json.RawMessage(jsonStr(o.BaseURL))},
+			{"ANTHROPIC_BASE_URL", json.RawMessage(jsonStr(claudeBaseURL(o.BaseURL)))},
 			{"ANTHROPIC_AUTH_TOKEN", json.RawMessage(jsonStr(o.Token))},
 			{"ANTHROPIC_MODEL", json.RawMessage(jsonStr("auto"))},
 		})
@@ -42,6 +43,10 @@ func (claudeWriter) apply(o Options) (Target, error) {
 		Note:   "claude now routes through the gateway; restart claude to pick up settings",
 		Ledger: []writtenEntry{entry}}
 	return t, nil
+}
+
+func claudeBaseURL(baseURL string) string {
+	return strings.TrimSuffix(baseURL, "/v1")
 }
 
 func (claudeWriter) remove(home, _ string) (Target, error) {

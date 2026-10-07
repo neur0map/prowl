@@ -50,7 +50,7 @@ func applyActivation(o Options, harness string) ([]writtenEntry, []string, strin
 		// model_provider and model keys for its persistent default.
 		path := filepath.Join(o.Home, ".codex", "config.toml")
 		entries, err := activateTOML(o, path, []kv{{"model_provider", json.RawMessage(`"prowl"`)}, {"model", json.RawMessage(`"auto"`)}})
-		return entries, []string{path}, "codex is active on Prowl auto; source " + filepath.Join(o.Home, ".codex", "prowl.env"), err
+		return entries, []string{path}, "codex is active on Prowl auto", err
 	case "opencode":
 		// https://opencode.ai/docs/models/ defines top-level model as the
 		// provider/model selector used for the default model.

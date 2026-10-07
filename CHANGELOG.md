@@ -115,6 +115,21 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- Claude Code routed through the gateway works. Injection pointed
+  `ANTHROPIC_BASE_URL` at `/v1`, but the client appends `/v1/messages` itself,
+  so every turn hit a 404 and Claude reported a problem with the `auto` model.
+  The injector now writes the gateway root and upgrades an older `/v1` value on
+  the next apply.
+- Codex routed through the gateway works without a shell setup step. The
+  injector exported the key through `~/.codex/prowl.env` and `env_key`, which
+  nothing sources, so `codex exec` stopped at a missing environment variable.
+  The provider block now carries the machine token as
+  `experimental_bearer_token` in the private `config.toml`, and an older
+  injection is migrated on the next apply.
+- A streamed request is recorded even when the client hangs up right after the
+  final event. Codex closes its connection the moment a response completes,
+  which canceled the bookkeeping, so its turns never reached Activity or the
+  usage totals.
 - Streamed Claude requests with reasoning no longer fail with "the provider
   accepted the request and then sent no content". Extended thinking on a large
   prompt pushes time-to-first-token past the old 25s first-content deadline (a

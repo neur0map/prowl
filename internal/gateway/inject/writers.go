@@ -11,32 +11,44 @@ import (
 // ── Codex CLI ────────────────────────────────────────────────────────────────
 //
 // Codex reads custom providers from the `[model_providers.<id>]` table in
-// ~/.codex/config.toml and authenticates with a key taken from the environment
-// variable named by env_key. Injection also writes a sourceable env file.
+// ~/.codex/config.toml. The provider embeds the machine-local gateway token
+// with experimental_bearer_token, so no shell environment setup is required.
 // The top-level `model_provider` and `model` keys are additive by default.
 // Options.Activate is the explicit exception: activation replaces those two
 // defaults and the ledger restores their prior values on removal.
 
 type codexWriter struct{}
 
-const codexEnvKey = "PROWL_GATEWAY_API_KEY"
-
 func (codexWriter) apply(o Options) (Target, error) {
 	path := filepath.Join(o.Home, ".codex", "config.toml")
 	envPath := filepath.Join(o.Home, ".codex", "prowl.env")
 	legacyEnvPath := filepath.Join(o.Home, ".codex", legacyProviderID+".env")
 
+	previous, err := loadRecord(o.Home)
+	if err != nil {
+		return Target{}, err
+	}
+	prior := previous.Targets["codex"]
+	var priorEnv *writtenEntry
+	for i := range prior.Ledger {
+		if prior.Ledger[i].EnvFile &&
+			filepath.Clean(prior.Ledger[i].Path) == filepath.Clean(envPath) {
+			priorEnv = &prior.Ledger[i]
+			break
+		}
+	}
+	if priorEnv != nil {
+		if err := refuseSymlink(envPath); err != nil {
+			return Target{}, err
+		}
+	}
+
 	table := "[model_providers." + ProviderID + "]\n" +
 		"name = \"" + ProviderName + "\"\n" +
 		"base_url = \"" + o.BaseURL + "\"\n" +
-		"env_key = \"" + codexEnvKey + "\"\n" +
+		"experimental_bearer_token = \"" + o.Token + "\"\n" +
 		"wire_api = \"responses\"\n"
 
-	// Refuse a symlinked env before touching anything: writing through it would
-	// clobber the link target. writeBackup enforces the same for the config.
-	if err := refuseSymlink(envPath); err != nil {
-		return Target{}, err
-	}
 	created, err := writeBackup(o.tx, path)
 	if err != nil {
 		return Target{}, err
@@ -74,54 +86,53 @@ func (codexWriter) apply(o Options) (Target, error) {
 		}
 		text += "\n" + table
 	}
-	// Defaults, only when the user has not set them: silently replacing
-	// someone's default model or provider is not an addition, it is a hijack.
+	// Defaults are added only when the user has not set them. A value still
+	// owned by the previous injection remains in the ledger across re-apply.
+	providerValue := `"` + ProviderID + `"`
 	if !lineHasKey(text, "model_provider") {
-		text = "model_provider = \"" + ProviderID + "\"\n" + text
-		added = append(added, writtenEntry{Path: path, TomlTop: "model_provider", TomlVal: "\"" + ProviderID + "\""})
+		text = "model_provider = " + providerValue + "\n" + text
+		added = append(added, writtenEntry{Path: path, TomlTop: "model_provider", TomlVal: providerValue})
+	} else if tomlTopValue(text, "model_provider") == providerValue {
+		if entry, ok := priorTomlTopEntry(prior.Ledger, path, "model_provider", providerValue); ok {
+			added = append(added, entry)
+		}
 	}
 	if !lineHasKey(text, "model") {
 		text = "model = \"auto\"\n" + text
 		added = append(added, writtenEntry{Path: path, TomlTop: "model", TomlVal: `"auto"`})
+	} else if tomlTopValue(text, "model") == `"auto"` {
+		if entry, ok := priorTomlTopEntry(prior.Ledger, path, "model", `"auto"`); ok {
+			added = append(added, entry)
+		}
 	}
 
-	// Capture the env file's pre-apply state so removal restores a pre-existing
-	// one instead of destroying it, then snapshot everything this apply mutates
-	// (config, env, legacy env) so a partial failure rolls all three back as
-	// one transaction.
-	envEntry := writtenEntry{Path: envPath, EnvFile: true}
-	if exists(envPath) {
-		prior, rerr := os.ReadFile(envPath)
-		if rerr != nil {
-			return Target{}, rerr
-		}
-		envEntry.EnvPrior = string(prior)
-	} else {
-		envEntry.EnvCreated = true
-	}
 	if err := o.tx.snapshot(legacyEnvPath); err != nil {
 		return Target{}, err
 	}
-	if err := o.tx.snapshot(envPath); err != nil {
+	if priorEnv != nil {
+		if err := o.tx.snapshot(envPath); err != nil {
+			return Target{}, err
+		}
+	}
+	if err := writeFile(path, []byte(text), credentialMode(path)); err != nil {
 		return Target{}, err
+	}
+	if priorEnv != nil {
+		if err := removeEnvFile(*priorEnv); err != nil {
+			return Target{}, fmt.Errorf("remove prior Codex environment file: %w", err)
+		}
 	}
 	if legacyEnvPath != envPath && exists(legacyEnvPath) {
 		if err := os.Remove(legacyEnvPath); err != nil {
 			return Target{}, fmt.Errorf("remove legacy Codex environment file: %w", err)
 		}
 	}
-	if err := writeFile(path, []byte(text), credentialMode(path)); err != nil {
-		return Target{}, err
-	}
-	envContent := "export " + codexEnvKey + "=" + quoteShell(o.Token) + "\n"
-	if err := writeFile(envPath, []byte(envContent), 0o600); err != nil {
-		return Target{}, err
-	}
-	envEntry.CreatedContent = envContent
 
-	t := Target{Harness: "codex", Files: []string{path, envPath},
-		Note: "codex reads the key from the environment: source " + envPath +
-			" (or add it to your shell profile)"}
+	t := Target{
+		Harness: "codex",
+		Files:   []string{path},
+		Note:    "codex stores the gateway credential in config.toml",
+	}
 	// The provider table's ownership carries the exact authored table and any
 	// pre-existing table it replaced, so removal restores a user's manual
 	// table byte-for-byte and never discards an edit the user made since.
@@ -134,8 +145,17 @@ func (codexWriter) apply(o Options) (Target, error) {
 		configEntry.CreatedFile = true
 	}
 	t.Ledger = append([]writtenEntry{configEntry}, added...)
-	t.Ledger = append(t.Ledger, envEntry)
 	return t, nil
+}
+
+func priorTomlTopEntry(entries []writtenEntry, path, key, value string) (writtenEntry, bool) {
+	for _, entry := range entries {
+		if filepath.Clean(entry.Path) == filepath.Clean(path) &&
+			entry.TomlTop == key && entry.TomlVal == value {
+			return entry, true
+		}
+	}
+	return writtenEntry{}, false
 }
 
 func (codexWriter) remove(home, _ string) (Target, error) {
@@ -148,16 +168,6 @@ func (codexWriter) remove(home, _ string) (Target, error) {
 	ent := loaded.Targets["codex"]
 	if len(ent.Ledger) == 0 {
 		return t, errNoRecord("codex")
-	}
-	// Refuse a symlink swapped in after apply for either the config or the env
-	// file, exactly as apply does, before any write; the error keeps the
-	// ledger intact for a retry once the user resolves it to a regular file.
-	envPath := filepath.Join(home, ".codex", "prowl.env")
-	if err := refuseSymlink(path); err != nil {
-		return t, err
-	}
-	if err := refuseSymlink(envPath); err != nil {
-		return t, err
 	}
 	var configLedger []writtenEntry
 	var envEntry *writtenEntry
@@ -175,6 +185,16 @@ func (codexWriter) remove(home, _ string) (Target, error) {
 			createdContent = e.CreatedContent
 		}
 		configLedger = append(configLedger, e)
+	}
+	// Refuse a symlink swapped in after apply before any write. The retired
+	// env file is checked only when its ledger proves this injection owns it.
+	if err := refuseSymlink(path); err != nil {
+		return t, err
+	}
+	if envEntry != nil {
+		if err := refuseSymlink(envEntry.Path); err != nil {
+			return t, err
+		}
 	}
 	switch {
 	case created && !exists(path):
@@ -215,12 +235,6 @@ func (codexWriter) remove(home, _ string) (Target, error) {
 	}
 	if envEntry != nil {
 		if err := removeEnvFile(*envEntry); err != nil {
-			return t, err
-		}
-	} else if exists(envPath) {
-		// A ledger recorded before env entries existed: fall back to the
-		// historical delete of the env file we always wrote.
-		if err := os.Remove(envPath); err != nil {
 			return t, err
 		}
 	}
@@ -281,10 +295,6 @@ func rewriteExactTOMLValue(text, key, oldValue, newValue string) (string, bool) 
 		return strings.Join(lines, ""), true
 	}
 	return text, false
-}
-
-func quoteShell(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // ── OpenCode ───────────────────────────────────────────────────────────────
