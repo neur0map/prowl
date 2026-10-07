@@ -115,6 +115,10 @@ All notable changes are recorded here. The format follows
   Code (a bundled keyless provider).
 
 ### Fixed
+- A model removed from an upstream now fails over to the next candidate instead
+  of ending an `auto` request after one 404. The missing route is held out of
+  subsequent requests, while a concrete model that is missing everywhere still
+  returns an honest `404 model_not_found`.
 - Re-running `prowl init` after an upgrade refreshes the project's integration
   files. The setup replay key covered only which files to touch, so an
   identical selection replayed the old result and kept legacy `prowl-agent`

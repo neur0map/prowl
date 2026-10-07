@@ -782,15 +782,18 @@ func (f *Failover) recordSuccess(route Route, sinceKnownAt time.Time) {
 
 // applyCooldown records the bench for a retryable failure, choosing the pricing
 // path from the classification (cooldownDecisionForError, fallback-loop.ts:
-// 205-222). Payment/tier honour the operator ceiling (#952); a message-detected
-// daily exhaustion benches authoritatively to the provider's own reset;
-// everything else defers to the escalation ladder.
+// 205-222). Payment, missing-model, and tier benches honour the operator
+// ceiling (#952); a message-detected daily exhaustion benches authoritatively
+// to the provider's own reset; everything else defers to the escalation ladder.
 func (f *Failover) applyCooldown(route Route, cls ErrorClass, retryAfter time.Duration) {
 	ceiling := f.currentCooldownCeiling()
 	switch cls.Cooldown {
 	case cooldownPayment:
 		f.deps.Cooldowns.Bench(route.Platform, route.ModelID, route.KeyID,
 			capByCeiling(paymentRequiredCooldown, ceiling), SourceCredit)
+	case cooldownModelNotFound:
+		f.deps.Cooldowns.Bench(route.Platform, route.ModelID, route.KeyID,
+			capByCeiling(modelForbiddenCooldown, ceiling), SourceAuthoritative)
 	case cooldownForbidden:
 		f.deps.Cooldowns.Bench(route.Platform, route.ModelID, route.KeyID,
 			capByCeiling(modelForbiddenCooldown, ceiling), SourceTier)

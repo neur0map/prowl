@@ -423,12 +423,18 @@ func IsPaymentRequiredError(err error) bool {
 // failure (error-classify.ts:500-509). MODEL-level: every key 404s the same
 // way, so skip the whole model for the request.
 func IsModelNotFoundError(err error) bool {
-	if s := errStatus(err); s == 404 || s == 410 {
+	status := errStatus(err)
+	if status == 404 || status == 410 {
 		return true
+	}
+	if status == 401 || status == 403 {
+		return false
 	}
 	m := strings.ToLower(errMsg(err))
 	return strings.Contains(m, "404") ||
 		strings.Contains(m, "not found") ||
+		strings.Contains(m, "does not exist") ||
+		strings.Contains(m, "model_not_found") ||
 		strings.Contains(m, "no endpoints found") ||
 		strings.Contains(m, "410") ||
 		strings.Contains(m, "gone")
@@ -567,12 +573,12 @@ func IsEdgeUnreachableError(err error) bool {
 
 // IsRetryableError reports whether a thrown error should fail over to the next
 // candidate rather than 502 the request (error-classify.ts:6-111). Status first
-// (408/409/410/422/429/5xx), then the message markers, then a buried transport
-// fault. A 400 or 401 with no matching rule is FATAL - it has no status branch
-// here and matches no marker.
+// (404/408/409/410/422/429/5xx), then the message markers, then a buried
+// transport fault. A 400 or 401 with no matching rule is FATAL - it has no
+// status branch here and matches no marker.
 func IsRetryableError(err error) bool {
 	m := strings.ToLower(errMsg(err))
-	if s := errStatus(err); s == 408 || s == 409 || s == 410 || s == 422 || s == 429 || s >= 500 {
+	if s := errStatus(err); s == 404 || s == 408 || s == 409 || s == 410 || s == 422 || s == 429 || s >= 500 {
 		return true
 	}
 	if IsTransportCutError(err) || IsEdgeUnreachableError(err) {
@@ -600,11 +606,7 @@ func IsRetryableError(err error) bool {
 		strings.Contains(m, "request entity too large") ||
 		strings.Contains(m, "content too large") ||
 		IsContextTooLargeError(err) ||
-		strings.Contains(m, "404") ||
-		strings.Contains(m, "not found") ||
-		strings.Contains(m, "no endpoints found") ||
-		strings.Contains(m, "410") ||
-		strings.Contains(m, "gone") ||
+		IsModelNotFoundError(err) ||
 		IsModelAccessForbiddenError(err) ||
 		strings.Contains(m, "api error 400") ||
 		strings.Contains(m, "api error 422") ||
@@ -713,6 +715,9 @@ const (
 	// cooldownTransient defers to the escalation ladder (CooldownEngine.Decide),
 	// honouring a provider Retry-After as a floor.
 	cooldownTransient
+	// cooldownModelNotFound keeps a removed or inaccessible model out of
+	// subsequent requests instead of restarting the transient ladder.
+	cooldownModelNotFound
 	// cooldownPayment benches a full day for an out-of-credits key ('credit').
 	cooldownPayment
 	// cooldownForbidden benches a full day for a tier-gated model ('tier').
@@ -881,12 +886,14 @@ func classifyNormalized(err *UpstreamError) ErrorClass {
 		c.Scope = SkipScopePlatform
 	}
 
-	// Cooldown pricing, most-specific first (payment, then tier, then daily,
-	// else the transient ladder).
+	// Cooldown pricing, most-specific first (payment, missing model, tier,
+	// daily, then the transient ladder).
 	c.QuotaSignal = IsRateLimitSignal(err)
 	switch {
 	case IsPaymentRequiredError(err):
 		c.Cooldown = cooldownPayment
+	case IsModelNotFoundError(err):
+		c.Cooldown = cooldownModelNotFound
 	case IsModelAccessForbiddenError(err):
 		c.Cooldown = cooldownForbidden
 	case IsDailyQuotaExhaustedError(err):

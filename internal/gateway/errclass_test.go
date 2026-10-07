@@ -81,10 +81,10 @@ func TestClassifyErrorTable(t *testing.T) {
 			},
 		},
 		{
-			name:   "model not found: model skip, light penalty",
-			status: 404, body: "model not found",
+			name:   "model not found: model skip, fixed bench, light penalty",
+			status: 404, body: "The model `x` does not exist or you do not have access to it.",
 			want: ErrorClass{
-				Retryable: true, SkipModel: true, Scope: SkipScopeModel, Cooldown: cooldownTransient,
+				Retryable: true, SkipModel: true, Scope: SkipScopeModel, Cooldown: cooldownModelNotFound,
 				Penalty: penaltyLight, LearnLimit: true, Attempt: AttemptModelNotFound,
 			},
 		},
@@ -113,14 +113,15 @@ func TestClassifyErrorTable(t *testing.T) {
 	}
 }
 
-// TestRetryableVsFatalStatuses guards the retry boundary the loop depends on: an
-// unmatched 400 and a bare 401 are fatal, while the transient statuses fail over.
+// TestRetryableVsFatalStatuses guards the retry boundary the loop depends on:
+// upstream and model failures fail over, while unmatched 400 and 401 stay fatal.
 func TestRetryableVsFatalStatuses(t *testing.T) {
 	retryable := []*UpstreamError{
 		{Status: 429, Message: "rate limited"},
 		{Status: 500, Message: "boom"},
 		{Status: 408, Message: "request timeout"},
 		{Status: 410, Message: "gone"},
+		{Status: 404, Message: "upstream returned an error"},
 		{Status: 0, Message: "connect ETIMEDOUT"},
 	}
 	for _, e := range retryable {
@@ -137,6 +138,34 @@ func TestRetryableVsFatalStatuses(t *testing.T) {
 			t.Fatalf("status %d %q must be fatal, not retryable", e.Status, e.Message)
 		}
 	}
+}
+
+func TestModelNotFoundTextFallbacks(t *testing.T) {
+	t.Parallel()
+
+	want := ErrorClass{
+		Retryable: true, SkipModel: true, Scope: SkipScopeModel, Cooldown: cooldownModelNotFound,
+		Penalty: penaltyLight, LearnLimit: true, Attempt: AttemptModelNotFound,
+	}
+	for _, message := range []string{
+		"The model `x` does not exist or you do not have access to it.",
+		`{"error":{"code":"model_not_found","message":"unknown model"}}`,
+	} {
+		require.Equal(t, want, ClassifyError(0, message, nil))
+	}
+}
+
+func TestModelNotFoundFallbackPreservesAuthStatuses(t *testing.T) {
+	t.Parallel()
+
+	keyAuth := ErrorClass{KeyAuth: true, Scope: SkipScopeKey, Attempt: AttemptAuth}
+	require.Equal(t, keyAuth, ClassifyError(401, "Invalid API key; model x does not exist", nil))
+
+	forbidden := ErrorClass{
+		Retryable: true, SkipModel: true, Scope: SkipScopeModel, Cooldown: cooldownForbidden,
+		Penalty: penaltyLight, LearnLimit: true, Attempt: AttemptForbidden,
+	}
+	require.Equal(t, forbidden, ClassifyError(403, "The model x does not exist", nil))
 }
 
 // TestTransportCauseRetryable proves a transport fault buried in the cause chain

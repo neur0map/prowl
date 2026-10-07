@@ -46,6 +46,20 @@ func newFakeUpstream(t *testing.T, status int, content string) *fakeUpstream {
 	return f
 }
 
+func newModelNotFoundUpstream(t *testing.T) *fakeUpstream {
+	t.Helper()
+	f := &fakeUpstream{}
+	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		const message = "The model `x` does not exist or you do not have access to it."
+		_, _ = fmt.Fprintf(w, `{"error":{"message":%q,"code":"model_not_found"}}`, message)
+	}))
+	t.Cleanup(f.Close)
+	return f
+}
+
 // seedRoute registers a custom-endpoint key and model so the chain has a
 // candidate pointing at a fake upstream. Custom endpoints are the only way to
 // aim a real provider adapter at a test server.
@@ -203,6 +217,59 @@ func TestFailoverMovesToTheNextProvider(t *testing.T) {
 	require.Equal(t, "1", resp.Header.Get("X-Fallback-Attempts"),
 		"the caller must be told a hop was needed")
 	require.NotEmpty(t, resp.Header.Get("X-Fallback-Trail"))
+}
+
+func TestModelNotFoundFailsOverAndBenchesRoute(t *testing.T) {
+	t.Parallel()
+
+	const machineKey = "prowl-test-machine-key"
+	s := testServer(t, Options{MachineKey: machineKey})
+	missing := newModelNotFoundUpstream(t)
+	working := newFakeUpstream(t, http.StatusOK, "the available model answered")
+	seedRoute(t, s, "missing", missing.URL, "missing-model", 1)
+	seedRoute(t, s, "working", working.URL, "working-model", 2)
+	usePriorityOrder(t, s)
+
+	resp, body := postChat(t, s, machineKey, chatBody)
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	require.Contains(t, body, "the available model answered")
+	require.Equal(t, int64(1), missing.calls.Load())
+	require.Equal(t, int64(1), working.calls.Load())
+
+	var outcome string
+	var status, attempts int
+	require.NoError(t, s.engine.DB().QueryRow(
+		`SELECT outcome, status, attempts FROM requests ORDER BY id DESC LIMIT 1`,
+	).Scan(&outcome, &status, &attempts))
+	require.Equal(t, "success", outcome)
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, 2, attempts)
+
+	resp, body = postChat(t, s, machineKey, chatBody)
+	require.Equal(t, http.StatusOK, resp.StatusCode, body)
+	require.Contains(t, body, "the available model answered")
+	require.Equal(t, int64(1), missing.calls.Load(),
+		"a model the upstream says is missing must stay benched on the next request")
+	require.Equal(t, int64(2), working.calls.Load())
+}
+
+func TestOnlyModelNotFoundReturnsHonest404(t *testing.T) {
+	t.Parallel()
+
+	const machineKey = "prowl-test-machine-key"
+	s := testServer(t, Options{MachineKey: machineKey})
+	missing := newModelNotFoundUpstream(t)
+	seedRoute(t, s, "missing", missing.URL, "missing-model", 1)
+
+	resp, body := postChat(t, s, machineKey,
+		`{"model":"missing-model","messages":[{"role":"user","content":"hello"}]}`)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode, body)
+	require.Equal(t, int64(1), missing.calls.Load())
+
+	var envelope errorBody
+	require.NoError(t, json.Unmarshal([]byte(body), &envelope))
+	require.Equal(t, TypeNotFound, envelope.Error.Type)
+	require.Equal(t, "model_not_found", envelope.Error.Code)
 }
 
 // TestProviderLevelFailureSkipsThePlatform documents a deliberate and
