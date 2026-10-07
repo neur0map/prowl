@@ -396,6 +396,11 @@ func (c *chatRelay) Dispatch(ctx context.Context, route gateway.Route, attempt i
 		res = c.buffered(ctx, prov, apiKey, upstream, route, attempt)
 	}
 
+	// A client may close as soon as it receives the terminal event. Keep final
+	// accounting independent of that connection so a completed upstream call
+	// still updates health, usage, the trail, and session affinity.
+	recordCtx := context.WithoutCancel(ctx)
+
 	switch {
 	case res.Outcome == gateway.OutcomeCommitted && res.Err != nil:
 		// The bytes are out and cannot be retracted, so the lease settles and
@@ -404,11 +409,11 @@ func (c *chatRelay) Dispatch(ctx context.Context, route gateway.Route, attempt i
 		// client showed an error while the logs showed 200.
 		settled = true
 		lease.Settle(int64(res.total()))
-		c.recordBrokenStream(ctx, route, res)
+		c.recordBrokenStream(recordCtx, route, res)
 	case res.succeeded():
 		settled = true
 		lease.Settle(int64(res.total()))
-		c.recordSuccess(ctx, route, res)
+		c.recordSuccess(recordCtx, route, res)
 	default:
 		// A pre-commit failure that still reached the provider and carries a
 		// usage reading - a rejected 200 (empty choices, a malformed tool call,

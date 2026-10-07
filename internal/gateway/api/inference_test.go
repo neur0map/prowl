@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -465,6 +467,161 @@ func TestStreamedChatRecordsUsageSplit(t *testing.T) {
 	in, out := lastRequestTokens(t, s)
 	require.Equal(t, 5, in)
 	require.Equal(t, 3, out)
+}
+
+type disconnectOnMarkerWriter struct {
+	*httptest.ResponseRecorder
+	marker       []byte
+	cancel       context.CancelFunc
+	disconnected bool
+}
+
+func (w *disconnectOnMarkerWriter) Write(p []byte) (int, error) {
+	if w.disconnected {
+		return 0, io.ErrClosedPipe
+	}
+	if bytes.Contains(p, w.marker) {
+		n, err := w.ResponseRecorder.Write(p)
+		if err != nil {
+			return n, err
+		}
+		w.disconnected = true
+		w.cancel()
+		return n, io.ErrClosedPipe
+	}
+	return w.ResponseRecorder.Write(p)
+}
+
+func (w *disconnectOnMarkerWriter) Flush() {
+	w.ResponseRecorder.Flush()
+}
+
+// TestStreamingCompletionIsRecordedAfterClientDisconnect covers clients that
+// close immediately after their terminal event. The failed final write cancels
+// the request context before accounting starts, but the completed upstream call
+// must still leave one successful row with its reported token counts.
+func TestStreamingCompletionIsRecordedAfterClientDisconnect(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		path   string
+		body   string
+		marker string
+	}{
+		{
+			name:   "chat",
+			path:   "/v1/chat/completions",
+			body:   `{"model":"auto","stream":true,"messages":[{"role":"user","content":"hi"}]}`,
+			marker: "data: [DONE]",
+		},
+		{
+			name:   "responses",
+			path:   "/v1/responses",
+			body:   `{"model":"auto","stream":true,"input":"hi"}`,
+			marker: "event: response.completed",
+		},
+		{
+			name:   "messages",
+			path:   "/v1/messages",
+			body:   `{"model":"auto","max_tokens":64,"stream":true,"messages":[{"role":"user","content":"hi"}]}`,
+			marker: "event: message_stop",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := testServer(t, Options{MachineKey: compatMachineKey})
+			upstream := newStreamingUpstream(t, "hel", "lo")
+			seedRoute(t, s, "only", upstream.URL, "test-model", 1)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body)).WithContext(ctx)
+			req.RemoteAddr = "127.0.0.1:50000"
+			req.Header.Set("Authorization", "Bearer "+compatMachineKey)
+			req.Header.Set("Content-Type", "application/json")
+			rec := &disconnectOnMarkerWriter{
+				ResponseRecorder: httptest.NewRecorder(),
+				marker:           []byte(tt.marker),
+				cancel:           cancel,
+			}
+
+			s.Handler().ServeHTTP(rec, req)
+
+			require.True(t, rec.disconnected, "terminal event must trigger the simulated disconnect")
+			var outcome string
+			var inputTokens, outputTokens int
+			require.Contains(t, rec.Body.String(), tt.marker, "the client must receive the terminal event")
+			require.NoError(t, s.engine.DB().QueryRow(
+				`SELECT outcome, input_tokens, output_tokens FROM requests ORDER BY id DESC LIMIT 1`,
+			).Scan(&outcome, &inputTokens, &outputTokens))
+			require.Equal(t, "success", outcome)
+			require.Equal(t, 5, inputTokens)
+			require.Equal(t, 3, outputTokens)
+		})
+	}
+}
+
+func newMidStreamDisconnectUpstream(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		frame, _ := json.Marshal(map[string]any{
+			"id": "chatcmpl-partial", "object": "chat.completion.chunk", "model": "m",
+			"choices": []map[string]any{{
+				"index": 0, "delta": map[string]any{"content": "partial"},
+			}},
+		})
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", frame)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestMidStreamClientDisconnectIsRecorded covers the nonterminal case. The
+// partial answer has already been relayed, so the trail must retain that work
+// as a broken stream even though the client canceled the request context.
+func TestMidStreamClientDisconnectIsRecorded(t *testing.T) {
+	t.Parallel()
+
+	s := testServer(t, Options{MachineKey: compatMachineKey})
+	upstream := newMidStreamDisconnectUpstream(t)
+	seedRoute(t, s, "only", upstream.URL, "test-model", 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(
+		`{"model":"auto","stream":true,"messages":[{"role":"user","content":"hi"}]}`,
+	)).WithContext(ctx)
+	req.RemoteAddr = "127.0.0.1:50000"
+	req.Header.Set("Authorization", "Bearer "+compatMachineKey)
+	req.Header.Set("Content-Type", "application/json")
+	rec := &disconnectOnMarkerWriter{
+		ResponseRecorder: httptest.NewRecorder(),
+		marker:           []byte(`"partial"`),
+		cancel:           cancel,
+	}
+
+	s.Handler().ServeHTTP(rec, req)
+
+	require.True(t, rec.disconnected, "the content frame must trigger the simulated disconnect")
+	var outcome, errorKind string
+	var inputTokens, outputTokens, estimated int
+	require.NoError(t, s.engine.DB().QueryRow(
+		`SELECT outcome, COALESCE(error_kind, ''), input_tokens, output_tokens, estimated
+		   FROM requests ORDER BY id DESC LIMIT 1`,
+	).Scan(&outcome, &errorKind, &inputTokens, &outputTokens, &estimated))
+	require.Equal(t, "error", outcome)
+	require.Equal(t, "stream_broken", errorKind)
+	require.Positive(t, inputTokens)
+	require.Positive(t, outputTokens)
+	require.Equal(t, 1, estimated)
 }
 
 // TestChatWithoutUsageRecordsAnExplicitEstimate protects accounting from a
